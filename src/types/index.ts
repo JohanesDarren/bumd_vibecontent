@@ -239,6 +239,7 @@ export type ActiveTab =
   | 'brief_studio' 
   | 'editor' 
   | 'visual_studio' 
+  | 'content_scheduling'
   | 'review_approval' 
   | 'library' 
   | 'knowledge_base' 

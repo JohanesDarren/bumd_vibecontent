@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   BrandProfile, 
   KnowledgeDocument, 
@@ -16,11 +16,16 @@ import {
   BookOpen, 
   AlertCircle, 
   CheckCircle2, 
-  HelpCircle, 
-  ArrowRight,
   Send,
-  Layers,
-  FileCheck
+  ChevronDown,
+  ChevronUp,
+  Type,
+  Minus,
+  Plus,
+  MessageSquare,
+  Wand2,
+  Loader2,
+  CornerDownLeft
 } from 'lucide-react';
 
 interface BriefStudioViewProps {
@@ -53,6 +58,22 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
   const [matchedDocsCount, setMatchedDocsCount] = useState<number>(0);
   const [matchedDocTitles, setMatchedDocTitles] = useState<string[]>([]);
   const [unsupportedWarning, setUnsupportedWarning] = useState<string[]>([]);
+
+  // Editor & Streaming state
+  const [editorContent, setEditorContent] = useState('');
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingDone, setStreamingDone] = useState(false);
+  const editorRef = useRef<HTMLDivElement>(null);
+  const streamTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // RAG Radar collapsible state
+  const [ragRadarOpen, setRagRadarOpen] = useState(false);
+
+  // Inline AI popup state
+  const [showInlineAI, setShowInlineAI] = useState(false);
+  const [inlineAIPos, setInlineAIPos] = useState({ top: 0, left: 0 });
+  const [inlineAIInput, setInlineAIInput] = useState('');
+  const [selectedText, setSelectedText] = useState('');
 
   useEffect(() => {
     if (keyMessage.trim().length > 3 || title.trim().length > 3) {
@@ -99,6 +120,41 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
     }
   };
 
+  // Streaming text simulation
+  const streamText = useCallback((fullText: string) => {
+    setEditorContent('');
+    setIsStreaming(true);
+    setStreamingDone(false);
+    let idx = 0;
+    const chunkSize = () => Math.floor(Math.random() * 4) + 1; // 1-4 chars
+
+    const tick = () => {
+      if (idx >= fullText.length) {
+        setIsStreaming(false);
+        setStreamingDone(true);
+        return;
+      }
+      const cs = chunkSize();
+      const next = Math.min(idx + cs, fullText.length);
+      const chunk = fullText.slice(0, next);
+      setEditorContent(chunk);
+      idx = next;
+
+      // Variable speed for realistic effect
+      const delay = fullText[idx - 1] === '\n' ? 80 : (Math.random() * 18 + 8);
+      streamTimerRef.current = setTimeout(tick, delay);
+    };
+
+    streamTimerRef.current = setTimeout(tick, 300);
+  }, []);
+
+  // Cleanup streaming on unmount
+  useEffect(() => {
+    return () => {
+      if (streamTimerRef.current) clearTimeout(streamTimerRef.current);
+    };
+  }, []);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !keyMessage.trim()) {
@@ -125,11 +181,58 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
       createdBy: activeUser.id
     };
 
-    // Simulate RAG generation latency
+    // Generate content then stream it into editor
     setTimeout(() => {
+      const output = generateContentFromBrief(brief, brandProfile, documents, activeWorkspace.id);
       setIsGenerating(false);
-      onGenerateDraft(brief);
-    }, 900);
+      streamText(output.content);
+
+      // Auto-open RAG radar if results found
+      if (matchedDocsCount > 0 || unsupportedWarning.length > 0) {
+        setRagRadarOpen(true);
+      }
+    }, 600);
+  };
+
+  // Track text selection in editor for inline AI popup
+  const handleEditorMouseUp = useCallback(() => {
+    const selection = window.getSelection();
+    if (selection && selection.toString().trim().length > 2 && editorRef.current) {
+      const range = selection.getRangeAt(0);
+      const rect = range.getBoundingClientRect();
+      const editorRect = editorRef.current.getBoundingClientRect();
+      setSelectedText(selection.toString());
+      setInlineAIPos({
+        top: rect.top - editorRect.top - 52,
+        left: Math.max(0, Math.min(rect.left - editorRect.left + rect.width / 2 - 140, editorRect.width - 290)),
+      });
+      setShowInlineAI(true);
+    } else {
+      // Only hide if we click away without selection
+      setTimeout(() => {
+        const sel = window.getSelection();
+        if (!sel || sel.toString().trim().length < 3) {
+          setShowInlineAI(false);
+        }
+      }, 200);
+    }
+  }, []);
+
+  // Handle inline AI action (mockup)
+  const handleInlineAction = (action: string) => {
+    if (!selectedText) return;
+    // This is a UI mockup - show a brief visual feedback
+    setShowInlineAI(false);
+
+    // Simulate brief processing then replace selection
+    const mockReplacement = action === 'shorten'
+      ? selectedText.split(' ').slice(0, Math.ceil(selectedText.split(' ').length * 0.6)).join(' ') + '...'
+      : action === 'extend'
+        ? selectedText + ' Hal ini sejalan dengan kebijakan resmi yang telah ditetapkan oleh direksi, guna memastikan transparansi dan akuntabilitas kepada masyarakat.'
+        : selectedText; // for custom AI, just keep same
+
+    // Replace in editor content
+    setEditorContent(prev => prev.replace(selectedText, mockReplacement));
   };
 
   return (
@@ -171,8 +274,8 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.8fr) minmax(320px, 1fr)', gap: '28px', alignItems: 'start' }}>
-        {/* Main Brief Form */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.5fr) minmax(400px, 1fr)', gap: '24px', alignItems: 'start' }}>
+        {/* ─── Left: Brief Form (preserved) ─── */}
         <form onSubmit={handleSubmit} className="card-panel" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '14px' }}>
             <Sparkles size={20} color="var(--primary)" />
@@ -181,7 +284,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
 
           {/* Title & Campaign */}
           <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '16px' }}>
-            <div className="form-group">
+            <div className="form-group" style={{ minWidth: 0 }}>
               <label className="form-label">
                 <span>Judul Inisiatif / Konten *</span>
               </label>
@@ -195,7 +298,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
               />
             </div>
 
-            <div className="form-group">
+            <div className="form-group" style={{ minWidth: 0 }}>
               <label className="form-label">
                 <span>Nama Kampanye / Program</span>
               </label>
@@ -211,7 +314,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
 
           {/* Format & Target Channel */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            <div className="form-group">
+            <div className="form-group" style={{ minWidth: 0 }}>
               <label className="form-label">
                 <span>Format Output Naskah *</span>
               </label>
@@ -227,7 +330,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
               </select>
             </div>
 
-            <div className="form-group">
+            <div className="form-group" style={{ minWidth: 0 }}>
               <label className="form-label">
                 <span>Kanal Distribusi Resmi</span>
               </label>
@@ -245,7 +348,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
 
           {/* Target Audience & Tone */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            <div className="form-group">
+            <div className="form-group" style={{ minWidth: 0 }}>
               <label className="form-label">
                 <span>Target Audiens</span>
               </label>
@@ -257,7 +360,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
               />
             </div>
 
-            <div className="form-group">
+            <div className="form-group" style={{ minWidth: 0 }}>
               <label className="form-label">
                 <span>Tone of Voice (Panduan Merek)</span>
               </label>
@@ -275,7 +378,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
 
           {/* Key Message */}
           <div className="form-group">
-            <label className="form-label">
+            <label className="form-label" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'baseline', gap: '8px' }}>
               <span>Pesan Utama & Fakta yang Ingin Disampaikan *</span>
               <span style={{ fontSize: '0.72rem', color: 'var(--accent-cyan)' }}>RAG mencocokkan fakta ini ke dokumen aktif</span>
             </label>
@@ -335,12 +438,12 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
             <button 
               type="submit" 
               className="btn btn-primary"
-              disabled={isGenerating}
+              disabled={isGenerating || isStreaming}
               style={{ padding: '12px 24px', fontSize: '0.95rem' }}
             >
               {isGenerating ? (
                 <>
-                  <Sparkles size={18} className="animate-spin" />
+                  <Loader2 size={18} className="brief-spin-icon" />
                   <span>Memproses RAG & Membuat Naskah...</span>
                 </>
               ) : (
@@ -353,96 +456,195 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
           </div>
         </form>
 
-        {/* Right Side: Live Brief Summary & RAG Grounding Inspector */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {/* Live RAG Match Status */}
-          <div className="card-panel">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
-              <BookOpen size={18} color="var(--primary)" />
-              <h4 style={{ fontSize: '0.95rem', fontWeight: 700 }}>Radar RAG Knowledge Base</h4>
-            </div>
+        {/* ─── Right: Editor Canvas + Collapsible RAG Radar ─── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0', position: 'sticky', top: '92px' }}>
 
-            {matchedDocsCount > 0 ? (
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
-                  <span className="grounding-badge verified">
-                    <CheckCircle2 size={12} /> {matchedDocsCount} Bagian Cocok
-                  </span>
-                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                    dari {matchedDocTitles.length} dokumen aktif
-                  </span>
-                </div>
+          {/* RAG Radar Toggle Button / Collapsible */}
+          <div className="rag-radar-toggle-bar">
+            <button
+              className="rag-radar-toggle-btn"
+              onClick={() => setRagRadarOpen(!ragRadarOpen)}
+              type="button"
+            >
+              <BookOpen size={14} />
+              <span>Radar RAG Knowledge Base</span>
+              {matchedDocsCount > 0 && (
+                <span className="grounding-badge verified" style={{ fontSize: '0.68rem', padding: '2px 6px' }}>
+                  <CheckCircle2 size={10} /> {matchedDocsCount} Cocok
+                </span>
+              )}
+              {unsupportedWarning.length > 0 && (
+                <span className="grounding-badge warning" style={{ fontSize: '0.68rem', padding: '2px 6px' }}>
+                  <AlertCircle size={10} /> {unsupportedWarning.length} Peringatan
+                </span>
+              )}
+              <span style={{ marginLeft: 'auto', color: 'var(--text-muted)' }}>
+                {ragRadarOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </span>
+            </button>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {matchedDocTitles.map((t, idx) => (
-                    <div 
-                      key={idx} 
-                      style={{ 
-                        padding: '8px 10px', 
-                        borderRadius: '8px', 
-                        background: 'var(--bg-tertiary)', 
-                        fontSize: '0.75rem', 
-                        borderLeft: '3px solid var(--accent-emerald)',
-                        color: 'var(--text-secondary)'
-                      }}
-                    >
-                      📑 {t}
+            {ragRadarOpen && (
+              <div className="rag-radar-content">
+                {matchedDocsCount > 0 ? (
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
+                        {matchedDocsCount} bagian cocok dari {matchedDocTitles.length} dokumen aktif
+                      </span>
                     </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div style={{ padding: '16px', background: 'var(--bg-tertiary)', borderRadius: '10px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                Ketikkan pesan utama di sebelah kiri untuk melihat dokumen resmi yang relevan secara real-time.
-              </div>
-            )}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                      {matchedDocTitles.map((t, idx) => (
+                        <div 
+                          key={idx} 
+                          style={{ 
+                            padding: '6px 10px', 
+                            borderRadius: '6px', 
+                            background: 'var(--bg-primary)', 
+                            fontSize: '0.72rem', 
+                            borderLeft: '3px solid var(--accent-emerald)',
+                            color: 'var(--text-secondary)'
+                          }}
+                        >
+                          📑 {t}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ padding: '10px', background: 'var(--bg-primary)', borderRadius: '8px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.76rem' }}>
+                    Ketikkan pesan utama di sebelah kiri untuk melihat dokumen resmi yang relevan secara real-time.
+                  </div>
+                )}
 
-            {/* Unsupported Claims Detection Warning (PRD F-04) */}
-            {unsupportedWarning.length > 0 && (
-              <div style={{ marginTop: '14px', padding: '12px', borderRadius: '10px', background: 'rgba(244, 63, 94, 0.12)', border: '1px solid rgba(244, 63, 94, 0.35)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#fb7185', fontSize: '0.78rem', fontWeight: 700, marginBottom: '6px' }}>
-                  <AlertCircle size={14} />
-                  <span>Peringatan Grounding: Sumber Belum Cukup</span>
-                </div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-primary)', lineHeight: 1.4 }}>
-                  Topik berikut tidak didukung oleh dokumen resmi aktif:
-                  <ul style={{ paddingLeft: '16px', marginTop: '4px' }}>
-                    {unsupportedWarning.map((w, idx) => (
-                      <li key={idx} style={{ color: '#fb7185', fontWeight: 600 }}>{w}</li>
-                    ))}
-                  </ul>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', display: 'block', marginTop: '6px' }}>
-                    * Sistem akan menandai draf sebagai <code>[Perlu Verifikasi]</code> dan menolak klaim palsu.
-                  </span>
-                </div>
+                {/* Unsupported Claims Detection Warning (PRD F-04) */}
+                {unsupportedWarning.length > 0 && (
+                  <div style={{ marginTop: '10px', padding: '10px', borderRadius: '8px', background: 'rgba(244, 63, 94, 0.12)', border: '1px solid rgba(244, 63, 94, 0.35)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#fb7185', fontSize: '0.75rem', fontWeight: 700, marginBottom: '4px' }}>
+                      <AlertCircle size={13} />
+                      <span>Peringatan Grounding: Sumber Belum Cukup</span>
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-primary)', lineHeight: 1.4 }}>
+                      <ul style={{ paddingLeft: '16px', margin: 0 }}>
+                        {unsupportedWarning.map((w, idx) => (
+                          <li key={idx} style={{ color: '#fb7185', fontWeight: 600 }}>{w}</li>
+                        ))}
+                      </ul>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.68rem', display: 'block', marginTop: '4px' }}>
+                        * Sistem akan menandai draf sebagai <code>[Perlu Verifikasi]</code> dan menolak klaim palsu.
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
 
-          {/* Live Brief Card Snapshot */}
-          <div className="card-panel">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-              <FileCheck size={18} color="var(--accent-cyan)" />
-              <h4 style={{ fontSize: '0.95rem', fontWeight: 700 }}>Ringkasan Brief Konten</h4>
+          {/* ─── Rich Text Editor Canvas ─── */}
+          <div className="brief-editor-canvas-wrapper">
+            {/* Editor Toolbar */}
+            <div className="brief-editor-toolbar">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Type size={14} color="var(--primary)" />
+                <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>Editor Naskah AI</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                {isStreaming && (
+                  <span className="brief-streaming-indicator">
+                    <Loader2 size={12} className="brief-spin-icon" />
+                    <span>AI sedang menulis...</span>
+                  </span>
+                )}
+                {streamingDone && (
+                  <span className="brief-done-indicator">
+                    <CheckCircle2 size={12} />
+                    <span>Generasi selesai</span>
+                  </span>
+                )}
+                {editorContent && (
+                  <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginLeft: '8px' }}>
+                    {editorContent.length} karakter
+                  </span>
+                )}
+              </div>
             </div>
 
-            <div style={{ fontSize: '0.82rem', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <div>
-                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase' }}>Judul</span>
-                <strong>{title || '(Belum diisi)'}</strong>
+            {/* Editor Content Area */}
+            <div
+              ref={editorRef}
+              className={`brief-editor-content ${isStreaming ? 'brief-editor-streaming' : ''} ${!editorContent ? 'brief-editor-empty' : ''}`}
+              contentEditable={!isStreaming}
+              suppressContentEditableWarning
+              onMouseUp={handleEditorMouseUp}
+              onInput={(e) => {
+                if (!isStreaming) {
+                  setEditorContent((e.target as HTMLDivElement).innerText);
+                }
+              }}
+              dangerouslySetInnerHTML={{
+                __html: editorContent
+                  ? editorContent
+                      .replace(/&/g, '&amp;')
+                      .replace(/</g, '&lt;')
+                      .replace(/>/g, '&gt;')
+                      .replace(/\n/g, '<br/>')
+                      // Highlight grounding markers
+                      .replace(/\[Rujukan:([^\]]+)\]/g, '<span class="brief-citation-tag">[Rujukan:$1]</span>')
+                      .replace(/\[Perlu Verifikasi([^\]]*)\]/g, '<span class="brief-warning-tag">[Perlu Verifikasi$1]</span>')
+                      .replace(/\[DRAFT[^\]]*\]/g, '<span class="brief-draft-tag">[DRAFT KORPORAT - BELUM DISETUJUI]</span>')
+                      + (isStreaming ? '<span class="brief-cursor-blink">▊</span>' : '')
+                  : ''
+              }}
+              data-placeholder="Hasil naskah AI akan muncul di sini. Anda dapat langsung mengeditnya..."
+            />
+
+            {/* ─── Inline AI Floating Popup (Notion-style) ─── */}
+            {showInlineAI && editorContent && !isStreaming && (
+              <div
+                className="brief-inline-ai-popup"
+                style={{ top: `${inlineAIPos.top}px`, left: `${inlineAIPos.left}px` }}
+                onMouseDown={(e) => e.preventDefault()} // Prevent blur
+              >
+                <button
+                  className="brief-inline-ai-btn"
+                  onClick={() => handleInlineAction('shorten')}
+                  title="Perpendek teks yang dipilih"
+                >
+                  <Minus size={13} />
+                  <span>Perpendek</span>
+                </button>
+                <div className="brief-inline-ai-divider" />
+                <button
+                  className="brief-inline-ai-btn"
+                  onClick={() => handleInlineAction('extend')}
+                  title="Perpanjang teks yang dipilih"
+                >
+                  <Plus size={13} />
+                  <span>Perpanjang</span>
+                </button>
+                <div className="brief-inline-ai-divider" />
+                <div className="brief-inline-ai-input-wrap">
+                  <Wand2 size={12} style={{ color: 'var(--accent-cyan)', flexShrink: 0 }} />
+                  <input
+                    className="brief-inline-ai-input"
+                    placeholder="Ask AI to edit..."
+                    value={inlineAIInput}
+                    onChange={(e) => setInlineAIInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleInlineAction('custom');
+                        setInlineAIInput('');
+                      }
+                    }}
+                  />
+                  <CornerDownLeft size={11} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                </div>
               </div>
-              <div>
-                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase' }}>Format & Kanal</span>
-                <span>{format.replace('_', ' ').toUpperCase()} • {channel}</span>
-              </div>
-              <div>
-                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase' }}>Nada Bahasa</span>
-                <span>{tone}</span>
-              </div>
-              <div>
-                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase' }}>Audiens</span>
-                <span>{targetAudience}</span>
-              </div>
+            )}
+
+            {/* Editor footer hint */}
+            <div className="brief-editor-footer">
+              <MessageSquare size={12} />
+              <span>Sorot/select teks di atas untuk memunculkan menu AI inline editing</span>
             </div>
           </div>
         </div>

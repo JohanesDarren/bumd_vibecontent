@@ -32,6 +32,7 @@ import { ExportModal } from './components/ExportModal';
 import { LoginAccessView } from './components/LoginAccessView';
 import { UserManagementView } from './components/UserManagementView';
 import { SettingsHelpView } from './components/SettingsHelpView';
+import { ContentSchedulingView } from './components/ContentSchedulingView';
 import { canAccessTab, canTransitionDraft, filterUsersForWorkspace } from './services/policies';
 
 export function App() {
@@ -371,6 +372,13 @@ export function App() {
             <VisualStudioView 
               draft={selectedDraft}
               brandProfile={brandProfile}
+              activeWorkspace={activeWorkspace}
+            />
+          )}
+
+          {currentTab === 'content_scheduling' && (
+            <ContentSchedulingView 
+              drafts={drafts}
               activeWorkspace={activeWorkspace}
             />
           )}
