@@ -18,6 +18,7 @@ test('only reviewer/admin can approve a waiting draft', () => {
   assert.equal(canTransitionDraft(creator.role, 'menunggu_review', 'disetujui'), false);
   assert.equal(canTransitionDraft(reviewer.role, 'menunggu_review', 'disetujui'), true);
   assert.equal(canTransitionDraft(admin.role, 'menunggu_review', 'revisi_diminta'), true);
+  assert.equal(canTransitionDraft(reviewer.role, 'menunggu_review', 'ditolak'), true);
   assert.equal(canTransitionDraft(reviewer.role, 'draft', 'disetujui'), false);
 });
 

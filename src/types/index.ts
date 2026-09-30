@@ -169,7 +169,7 @@ export interface DraftVersion {
   changeSummary: string;
 }
 
-export type DraftStatus = 'draft' | 'menunggu_review' | 'revisi_diminta' | 'disetujui' | 'diarsipkan';
+export type DraftStatus = 'draft' | 'menunggu_review' | 'revisi_diminta' | 'disetujui' | 'ditolak' | 'diarsipkan';
 
 export interface ReviewComment {
   id: string;

@@ -233,6 +233,9 @@ export function generateContentFromBrief(
 
   const citations = rag.groundedCitations;
   const unsupported = rag.unsupportedClaims;
+  const groundedKeyMessage = rag.isAdequate
+    ? brief.keyMessage
+    : 'Informasi yang diminta belum tersedia di sumber resmi aktif. Tambahkan atau konfirmasikan sumber melalui Knowledge Owner sebelum menggunakan klaim ini.';
 
   const citationSummary = citations.length > 0
     ? citations.map((c, i) => `[${i + 1}] ${c.documentTitle} (${c.section})`).join('\n')
@@ -250,7 +253,7 @@ export function generateContentFromBrief(
 
 Sahabat ${brandProfile.organizationName},
 
-${brief.keyMessage}
+${groundedKeyMessage}
 
 ${citations.length > 0 ? `Berdasarkan ketentuan resmi:\n${citations.map(c => `• ${c.excerpt.slice(0, 140)}... [Rujukan: ${c.documentTitle}, Hal ${c.page || 1}]`).join('\n')}` : 'Informasi lebih lanjut akan diumumkan sesuai kebijakan resmi perumda.'}
 
@@ -271,7 +274,7 @@ ${brandProfile.unitDepartment.toUpperCase()} — ${todayStr}
 Dalam rangka memberikan pelayanan publik yang prima dan transparan bagi masyarakat ${brandProfile.organizationName}, kami menyampaikan pokok-pokok kebijakan dan informasi layanan sebagai berikut:
 
 1. LATAR BELAKANG & TUJUAN
-${brief.keyMessage} Target program ini ditujukan bagi ${brief.targetAudience} guna mewujudkan tata kelola layanan daerah yang akuntabel dan berkesinambungan.
+${groundedKeyMessage} Target program ini ditujukan bagi ${brief.targetAudience} guna mewujudkan tata kelola layanan daerah yang akuntabel dan berkesinambungan.
 
 2. KETENTUAN RESMI BERDASARKAN DOKUMEN KNOWLEDGE BASE
 ${citations.length > 0 ? citations.map((c, i) => `2.${i + 1}. ${c.excerpt} (Sumber: ${c.documentTitle}, ${c.section})`).join('\n\n') : '2.1. Ketentuan rinci menunggu pengesahan dokumen rujukan resmi.'}
@@ -288,7 +291,7 @@ Kanal Komunikasi Resmi Terdaftar: ${brandProfile.approvedChannels.slice(0, 2).jo
 Judul: ${brief.title}
 Target Durasi: 45 - 60 Detik
 Format: Reels / TikTok / YouTube Shorts (9:16)
-Pesan Utama: ${brief.keyMessage}
+Pesan Utama: ${groundedKeyMessage}
 Rujukan Fakta Terkait:
 ${citationSummary}${ungroundedNotice}`;
 
@@ -334,7 +337,7 @@ ${citationSummary}${ungroundedNotice}`;
     generatedText = `[DRAFT PANDUAN VISUAL & GRAFIS KORPORAT]
 Tema Desain: ${brief.title}
 Warna Utama: ${brandProfile.organizationName} Official Color
-Pesan Kunci: ${brief.keyMessage}
+Pesan Kunci: ${groundedKeyMessage}
 Ketentuan Brand: Logo resmi BUMD wajib ditempatkan di pojok kanan atas, tidak diubah proporsi atau warnanya.`;
   }
 

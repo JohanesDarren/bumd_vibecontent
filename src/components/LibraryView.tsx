@@ -193,6 +193,11 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                         <Share2 size={14} />
                         <span>Ekspor</span>
                       </button>
+                      {draft.status !== 'diarsipkan' && (
+                        <button className="btn btn-secondary btn-sm" onClick={() => onArchiveDraft(draft.id)} title="Arsipkan draft">
+                          <Archive size={14}/><span>Arsipkan</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

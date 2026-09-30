@@ -281,6 +281,15 @@ export function App() {
     showToast('Panduan merek dan profil BUMD berhasil diperbarui.');
   };
 
+  const handleOpenExport = (draft: ContentDraft) => {
+    storageService.addAuditLog({
+      action: 'Ekspor Konten Dibuka', objectType: 'ekspor', objectId: draft.id,
+      objectName: draft.title, details: `Ekspor dibuka pada status ${draft.status.toUpperCase()}; status tidak diubah.`
+    });
+    setAuditLogs(storageService.getAuditLogs());
+    setExportModalDraft(draft);
+  };
+
   if (!activeWorkspace || !activeUser || !brandProfile) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
@@ -301,10 +310,10 @@ export function App() {
     <div className="app-container">
       {/* Top Header */}
       <Header 
-        workspaces={workspaces}
+        workspaces={workspaces.filter(workspace => workspace.id === activeUser.workspaceId)}
         activeWorkspace={activeWorkspace}
         onSelectWorkspace={handleSelectWorkspace}
-        users={users}
+        users={filterUsersForWorkspace(users, activeWorkspace.id)}
         activeUser={activeUser}
         onSelectUser={handleSelectUser}
         theme={theme}
@@ -354,7 +363,7 @@ export function App() {
               activeUser={activeUser}
               onSaveNewVersion={handleSaveNewVersion}
               onSubmitForReview={handleSubmitForReview}
-              onOpenExportModal={(d) => setExportModalDraft(d)}
+              onOpenExportModal={handleOpenExport}
             />
           )}
 
@@ -388,7 +397,7 @@ export function App() {
                 setSelectedDraftId(id);
                 setCurrentTab('editor');
               }}
-              onOpenExportModal={(d) => setExportModalDraft(d)}
+              onOpenExportModal={handleOpenExport}
               onArchiveDraft={(id) => {
                 storageService.updateDraftStatus(id, 'diarsipkan');
                 setDrafts(storageService.getWorkspaceDrafts(activeWorkspace.id));
@@ -423,6 +432,12 @@ export function App() {
               activeUser={activeUser}
             />
           )}
+
+          {currentTab === 'user_management' && (
+            <UserManagementView users={filterUsersForWorkspace(users, activeWorkspace.id)} activeWorkspace={activeWorkspace} />
+          )}
+
+          {currentTab === 'settings_help' && <SettingsHelpView />}
         </main>
       </div>
 

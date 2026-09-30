@@ -15,7 +15,7 @@ export function canTransitionDraft(role: UserRole, current: DraftStatus, next: D
     return (current === 'draft' || current === 'revisi_diminta') && next === 'menunggu_review';
   }
   if (role === 'reviewer' || role === 'admin') {
-    return current === 'menunggu_review' && (next === 'disetujui' || next === 'revisi_diminta');
+    return current === 'menunggu_review' && (next === 'disetujui' || next === 'revisi_diminta' || next === 'ditolak');
   }
   return false;
 }

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { retrieveKnowledge } from './ragEngine.ts';
-import type { KnowledgeDocument } from '../types/index.ts';
+import { generateContentFromBrief, retrieveKnowledge } from './ragEngine.ts';
+import type { BrandProfile, ContentBrief, KnowledgeDocument } from '../types/index.ts';
 
 const base = { category: 'sop_layanan' as const, owner: 'Owner', version: '1', effectiveDate: '2026', uploadDate: '2026', fileSize: '1 KB', summary: '' };
 const documents: KnowledgeDocument[] = [
@@ -20,4 +20,12 @@ test('unsupported query returns explicit inadequate fallback', () => {
   assert.equal(result.isAdequate, false);
   assert.match(result.explanation, /tidak memuat rujukan resmi/i);
   assert.ok(result.unsupportedClaims.length > 0);
+});
+
+test('generation never repeats an unsupported factual claim as fact', () => {
+  const brief = { id:'b', workspaceId:'ws-a', title:'Promo', targetAudience:'Publik', format:'copy_caption', channel:'Instagram', tone:'Formal', keyMessage:'Diskon 50% tiket dan hadiah undian mobil', cta:'Periksa kanal resmi', language:'Bahasa Indonesia', createdAt:'2026', createdBy:'u' } satisfies ContentBrief;
+  const brand = { workspaceId:'ws-a', organizationName:'BUMD Contoh', unitDepartment:'Humas', defaultLanguage:'Bahasa Indonesia', toneOfVoice:['Formal'], terminology:[], bannedWords:[], officialCTAs:[], approvedChannels:['Instagram'], brandGuidelinesSummary:'', officialDisclaimer:'' } satisfies BrandProfile;
+  const output = generateContentFromBrief(brief, brand, documents, 'ws-a');
+  assert.doesNotMatch(output.content, /Diskon 50% tiket dan hadiah undian mobil/i);
+  assert.match(output.content, /belum tersedia di sumber resmi/i);
 });

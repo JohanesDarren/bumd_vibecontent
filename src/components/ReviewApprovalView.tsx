@@ -130,7 +130,7 @@ export const ReviewApprovalView: React.FC<ReviewApprovalViewProps> = ({
               <button 
                 className="btn btn-warning"
                 onClick={() => setShowRevisionModal(true)}
-                disabled={currentDraft.status === 'disetujui'}
+                disabled={currentDraft.status !== 'menunggu_review'}
               >
                 <AlertCircle size={16} />
                 <span>Minta Revisi</span>
@@ -139,7 +139,7 @@ export const ReviewApprovalView: React.FC<ReviewApprovalViewProps> = ({
               <button 
                 className="btn btn-success"
                 onClick={() => setShowApproveModal(true)}
-                disabled={currentDraft.status === 'disetujui'}
+                disabled={currentDraft.status !== 'menunggu_review'}
               >
                 <CheckCircle2 size={16} />
                 <span>Setujui Naskah (Disposisi)</span>
