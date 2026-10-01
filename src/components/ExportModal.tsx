@@ -9,7 +9,10 @@ import {
   Share2, 
   ShieldCheck, 
   Award,
-  BookOpen
+  BookOpen,
+  Building,
+  FileDown,
+  Code
 } from 'lucide-react';
 
 interface ExportModalProps {
@@ -55,11 +58,11 @@ export const ExportModal: React.FC<ExportModalProps> = ({
 **Organisasi:** ${activeWorkspace.name}  
 **Format:** ${draft.format}  
 **Status:** ${draft.status.toUpperCase()}  
-**Versi:** v${draft.currentVersion}  
+**Version:** v${draft.currentVersionon}  
 **Tanggal:** ${new Date(draft.updatedAt).toLocaleDateString('id-ID')}  
 **Pembuat:** ${draft.creatorName}  
-${draft.approvalInfo ? `**Nomor Disposisi:** ${draft.approvalInfo.dispositionNumber}  
-**Disetujui Oleh:** ${draft.approvalInfo.approvedBy} (${new Date(draft.approvalInfo.approvedAt).toLocaleDateString('id-ID')})` : ''}
+${draft.approvalInfo ? `**Nomor Dispositions:** ${draft.approvalInfo.dispositionNumber}  
+**Approved By:** ${draft.approvalInfo.approvedBy} (${new Date(draft.approvalInfo.approvedAt).toLocaleDateString('id-ID')})` : ''}
 
 ---
 
@@ -69,7 +72,7 @@ ${currentVer?.content}
 
 ---
 
-## Rujukan Sumber Knowledge Base (RAG)
+## References Sumber Knowledge Base (RAG)
 ${currentVer?.citations.map(c => `- **${c.documentTitle}** (${c.section}) - Relevansi: ${c.relevanceScore}%`).join('\n') || 'Tidak ada rujukan aktif.'}
 `;
 
@@ -81,13 +84,13 @@ ${currentVer?.citations.map(c => `- **${c.documentTitle}** (${c.section}) - Rele
         <div className="modal-header">
           <div>
             <span style={{ fontSize: '0.72rem', color: 'var(--accent-cyan)', fontWeight: 700, textTransform: 'uppercase' }}>
-              Ekspor Naskah & Disposisi BUMD (PRD F-11)
+              Ekspor Naskah & Dispositions BUMD (PRD F-11)
             </span>
             <h3 style={{ fontSize: '1.2rem', fontWeight: 800 }}>
               {draft.title}
             </h3>
           </div>
-          <button className="btn btn-secondary btn-sm" onClick={onClose}>✕</button>
+          <button className="btn btn-secondary btn-sm" onClick={onClose}>X</button>
         </div>
 
         {/* Tab Selection */}
@@ -96,25 +99,25 @@ ${currentVer?.citations.map(c => `- **${c.documentTitle}** (${c.section}) - Rele
             className={`btn btn-sm ${activeTab === 'disposition' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setActiveTab('disposition')}
           >
-            🏛️ Lembar Naskah Dinas
+            <Building size={14} style={{ marginRight: '4px' }} /> Official Dispatch Sheet
           </button>
           <button 
             className={`btn btn-sm ${activeTab === 'markdown' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setActiveTab('markdown')}
           >
-            📝 Format Markdown (.md)
+            <FileText size={14} style={{ marginRight: '4px' }} /> Markdown Format (.md)
           </button>
           <button 
             className={`btn btn-sm ${activeTab === 'plaintext' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setActiveTab('plaintext')}
           >
-            📄 Teks Polos (.txt)
+            <FileDown size={14} style={{ marginRight: '4px' }} /> Plain Text (.txt)
           </button>
           <button 
             className={`btn btn-sm ${activeTab === 'json' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setActiveTab('json')}
           >
-            ⚙️ Metadata Audit (JSON)
+            <Code size={14} style={{ marginRight: '4px' }} /> Audit Metadata (JSON)
           </button>
         </div>
 
@@ -152,7 +155,7 @@ ${currentVer?.citations.map(c => `- **${c.documentTitle}** (${c.section}) - Rele
                   LEMBAR MATERI PUBLIKASI KORPORAT
                 </h5>
                 <div style={{ fontSize: '0.8rem', color: '#475569' }}>
-                  Format: {draft.format.replace('_', ' ').toUpperCase()} • Versi: v{draft.currentVersion} • Tanggal: {new Date(draft.updatedAt).toLocaleDateString('id-ID')}
+                  Format: {draft.format.replace('_', ' ').toUpperCase()} • Version: v{draft.currentVersionon} • Tanggal: {new Date(draft.updatedAt).toLocaleDateString('id-ID')}
                 </div>
               </div>
 
@@ -163,7 +166,7 @@ ${currentVer?.citations.map(c => `- **${c.documentTitle}** (${c.section}) - Rele
 
               {/* Citations Footer */}
               <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '12px', fontSize: '0.78rem', color: '#64748b', fontFamily: 'sans-serif', marginBottom: '28px' }}>
-                <strong>Dasar Dokumen Rujukan Knowledge Base (RAG):</strong>
+                <strong>Dasar Dokumen References Knowledge Base (RAG):</strong>
                 <ul style={{ paddingLeft: '18px', marginTop: '4px' }}>
                   {currentVer?.citations.map((c, i) => (
                     <li key={i}>{c.documentTitle} ({c.section}) - Terverifikasi 100%</li>
@@ -174,16 +177,16 @@ ${currentVer?.citations.map(c => `- **${c.documentTitle}** (${c.section}) - Rele
               {/* Approval Disposition Box */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', paddingTop: '14px', borderTop: '2px solid #0f172a' }}>
                 <div style={{ fontSize: '0.78rem', fontFamily: 'sans-serif' }}>
-                  <div>Disusun Oleh: <strong>{draft.creatorName}</strong></div>
+                  <div>Disusun By: <strong>{draft.creatorName}</strong></div>
                   <div style={{ color: '#64748b' }}>Staf Komunikasi & Konten Kreatif</div>
                 </div>
 
                 <div style={{ textAlign: 'center', fontSize: '0.78rem', fontFamily: 'sans-serif' }}>
-                  <div>Disetujui Oleh:</div>
+                  <div>Approved By:</div>
                   <div style={{ height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {isApproved ? (
                       <span style={{ border: '2px solid #059669', color: '#059669', padding: '3px 8px', borderRadius: '4px', fontWeight: 800, fontSize: '0.7rem', transform: 'rotate(-4deg)' }}>
-                        ✓ RESMI DISETUJUI<br/>
+                        Status: RESMI DISETUJUI<br/>
                         {draft.approvalInfo?.dispositionNumber}
                       </span>
                     ) : (

@@ -138,7 +138,7 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
 
       {!isAdmin && (
         <div style={{ padding: '12px 18px', borderRadius: '10px', background: 'var(--bg-tertiary)', marginBottom: '20px', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-          🔒 Anda sedang membuka dalam mode tampilan peran <strong>{activeUser.role.toUpperCase()}</strong>. Hanya <strong>Administrator / Knowledge Owner</strong> yang memiliki izin memperbarui panduan merek.
+           Anda sedang membuka dalam mode tampilan peran <strong>{activeUser.role.toUpperCase()}</strong>. Hanya <strong>Administrator / Knowledge Owner</strong> yang memiliki izin memperbarui panduan merek.
         </div>
       )}
 
@@ -217,7 +217,7 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
                     color: 'var(--text-primary)'
                   }}
                 >
-                  ✓ {tone}
+                  Status: {tone}
                 </span>
               ))}
             </div>

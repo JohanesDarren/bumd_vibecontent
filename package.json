@@ -5,22 +5,34 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "server": "tsx server/index.ts",
+    "db:migrate": "tsx server/migrate.ts",
+    "db:clear": "tsx server/clear.ts",
+    "test:db": "tsx --test --test-concurrency=1 server/empty.integration.test.ts server/database.integration.test.ts server/crud.integration.test.ts",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "test": "node --experimental-strip-types --experimental-specifier-resolution=node --test src/services/*.test.ts",
     "preview": "vite preview"
   },
   "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.5",
+    "express": "^5.2.1",
     "lucide-react": "^1.49.0",
+    "pg": "^8.23.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
     "@types/node": "^24.13.3",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
     "oxlint": "^1.81.0",
+    "tsx": "^4.23.15",
     "typescript": "~6.0.2",
     "vite": "^8.3.0"
   }

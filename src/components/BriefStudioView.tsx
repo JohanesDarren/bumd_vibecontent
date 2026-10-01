@@ -25,7 +25,9 @@ import {
   MessageSquare,
   Wand2,
   Loader2,
-  CornerDownLeft
+  CornerDownLeft,
+  Zap,
+  AlertTriangle
 } from 'lucide-react';
 
 interface BriefStudioViewProps {
@@ -70,10 +72,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
   const [ragRadarOpen, setRagRadarOpen] = useState(false);
 
   // Inline AI popup state
-  const [showInlineAI, setShowInlineAI] = useState(false);
-  const [inlineAIPos, setInlineAIPos] = useState({ top: 0, left: 0 });
-  const [inlineAIInput, setInlineAIInput] = useState('');
-  const [selectedText, setSelectedText] = useState('');
+
 
   useEffect(() => {
     if (keyMessage.trim().length > 3 || title.trim().length > 3) {
@@ -90,35 +89,6 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
     }
   }, [title, keyMessage, documents, activeWorkspace.id]);
 
-  // Preset Template Loader
-  const loadPreset = (type: 'sambungan_baru' | 'tarif_subsidi' | 'unsupported_test') => {
-    if (type === 'sambungan_baru') {
-      setTitle('Pendaftaran Sambungan Rumah Baru Cicilan 0% 2026');
-      setCampaign('Air Bersih Menjangkau Semua');
-      setTargetAudience('Masyarakat Kota Metro, Penghuni Rumah Baru & UMKM');
-      setFormat('copy_caption');
-      setKeyMessage('Perumda Air Minum Tirta Sejahtera membuka pendaftaran sambungan rumah baru biaya Rp 1.250.000 dengan kemudahan cicilan 3x tanpa bunga dan instalasi selesai dalam 3 hari kerja.');
-      setLimitations('Persyaratan wajib melampirkan Fotokopi KTP, Bukti PBB, dan rekening listrik.');
-      setSelectedCta(brandProfile.officialCTAs[0]?.text || 'Daftar melalui portal resmi pasang.tirtasejahtera.co.id');
-    } else if (type === 'tarif_subsidi') {
-      setTitle('Sosialisasi Tarif Khusus Rp 0 Pelajar, Lansia dan Disabilitas');
-      setCampaign('Konektivitas Inklusif Ramah Publik');
-      setTargetAudience('Pelajar SD/SMP/SMA, Warga Senior Lansia, dan Disabilitas');
-      setFormat('teks_promosi');
-      setKeyMessage('Pengoperasian Koridor 7 bus listrik ramah disabilitas dengan jaminan tarif Rp 0 (gratis) bagi pelajar terdaftar, lansia di atas 60 tahun, dan penyandang disabilitas.');
-      setLimitations('Pendaftaran kartu wajib membawa KTP/Kartu Pelajar di loket halte utama.');
-      setSelectedCta('Unduh aplikasi TransGo untuk pantauan jadwal bus terintegrasi.');
-    } else {
-      // Test Unsupported Claim (PRD F-04 Acceptance Criteria: Knowledge base does not contain the answer)
-      setTitle('Program Diskon Tiket Liburan Akhir Pekan 50% & Hadiah Undian Mobil');
-      setCampaign('Promo Spesial Liburan');
-      setTargetAudience('Wisatawan Umum');
-      setFormat('copy_caption');
-      setKeyMessage('Dapatkan diskon 50% tiket liburan serta kesempatan memenangkan hadiah undian mobil gratis seumur hidup.');
-      setLimitations('Tidak ada pembatasan kuota.');
-      setSelectedCta('Kunjungi loket wisata terdekat.');
-    }
-  };
 
   // Streaming text simulation
   const streamText = useCallback((fullText: string) => {
@@ -194,84 +164,19 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
     }, 600);
   };
 
-  // Track text selection in editor for inline AI popup
-  const handleEditorMouseUp = useCallback(() => {
-    const selection = window.getSelection();
-    if (selection && selection.toString().trim().length > 2 && editorRef.current) {
-      const range = selection.getRangeAt(0);
-      const rect = range.getBoundingClientRect();
-      const editorRect = editorRef.current.getBoundingClientRect();
-      setSelectedText(selection.toString());
-      setInlineAIPos({
-        top: rect.top - editorRect.top - 52,
-        left: Math.max(0, Math.min(rect.left - editorRect.left + rect.width / 2 - 140, editorRect.width - 290)),
-      });
-      setShowInlineAI(true);
-    } else {
-      // Only hide if we click away without selection
-      setTimeout(() => {
-        const sel = window.getSelection();
-        if (!sel || sel.toString().trim().length < 3) {
-          setShowInlineAI(false);
-        }
-      }, 200);
-    }
-  }, []);
 
-  // Handle inline AI action (mockup)
-  const handleInlineAction = (action: string) => {
-    if (!selectedText) return;
-    // This is a UI mockup - show a brief visual feedback
-    setShowInlineAI(false);
-
-    // Simulate brief processing then replace selection
-    const mockReplacement = action === 'shorten'
-      ? selectedText.split(' ').slice(0, Math.ceil(selectedText.split(' ').length * 0.6)).join(' ') + '...'
-      : action === 'extend'
-        ? selectedText + ' Hal ini sejalan dengan kebijakan resmi yang telah ditetapkan oleh direksi, guna memastikan transparansi dan akuntabilitas kepada masyarakat.'
-        : selectedText; // for custom AI, just keep same
-
-    // Replace in editor content
-    setEditorContent(prev => prev.replace(selectedText, mockReplacement));
-  };
 
   return (
     <div>
       <div className="page-header-row">
         <div>
-          <h2 className="page-title">Brief Konten & RAG Generasi</h2>
+          <h2 className="page-title">Content Brief & RAG Generation</h2>
           <p className="page-subtitle">
-            Susun panduan konten terstruktur. AI hanya menggunakan fakta dari knowledge base resmi <strong>{activeWorkspace.name}</strong> tanpa pencarian web bebas.
+            Draft structured content guides. AI only uses facts from the official knowledge base of <strong>{activeWorkspace.name}</strong> without unrestricted web search.
           </p>
         </div>
 
-        {/* Quick Presets for Demo */}
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <button 
-            type="button" 
-            className="btn btn-secondary btn-sm"
-            onClick={() => loadPreset('sambungan_baru')}
-            title="Muat preset pasang sambungan air baru"
-          >
-            ⚡ Contoh: Pasang Baru
-          </button>
-          <button 
-            type="button" 
-            className="btn btn-secondary btn-sm"
-            onClick={() => loadPreset('tarif_subsidi')}
-            title="Muat preset tarif khusus subsidi"
-          >
-            ⚡ Contoh: Tarif Subsidi
-          </button>
-          <button 
-            type="button" 
-            className="btn btn-warning btn-sm"
-            onClick={() => loadPreset('unsupported_test')}
-            title="Uji skenario PRD: Klaim tanpa dukungan sumber resmi"
-          >
-            ⚠️ Uji Coba: Klaim Tanpa Sumber (PRD F-04)
-          </button>
-        </div>
+
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.5fr) minmax(400px, 1fr)', gap: '24px', alignItems: 'start' }}>
@@ -279,14 +184,14 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
         <form onSubmit={handleSubmit} className="card-panel" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '14px' }}>
             <Sparkles size={20} color="var(--primary)" />
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Parameter Brief Konten BUMD</h3>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>BUMD Content Brief Parameters</h3>
           </div>
 
           {/* Title & Campaign */}
           <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '16px' }}>
             <div className="form-group" style={{ minWidth: 0 }}>
               <label className="form-label">
-                <span>Judul Inisiatif / Konten *</span>
+                <span>Initiative / Content Title *</span>
               </label>
               <input 
                 type="text" 
@@ -300,7 +205,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
 
             <div className="form-group" style={{ minWidth: 0 }}>
               <label className="form-label">
-                <span>Nama Kampanye / Program</span>
+                <span>Campaign / Program Name</span>
               </label>
               <input 
                 type="text" 
@@ -316,23 +221,23 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             <div className="form-group" style={{ minWidth: 0 }}>
               <label className="form-label">
-                <span>Format Output Naskah *</span>
+                <span>Draft Output Format *</span>
               </label>
               <select 
                 className="form-select"
                 value={format}
                 onChange={e => setFormat(e.target.value as ContentFormat)}
               >
-                <option value="copy_caption">📱 Copy & Caption Media Sosial (Feed / Carousel)</option>
-                <option value="teks_promosi">📰 Teks Promosi & Siaran Pers Resmi</option>
-                <option value="naskah_singkat">🎬 Naskah Video Singkat 9:16 (Reels/TikTok/Shorts)</option>
-                <option value="brief_visual">🎨 Panduan Brief Visual & Grafis Informasi</option>
+                <option value="copy_caption">Copy & Social Media Caption (Feed / Carousel)</option>
+                <option value="teks_promosi">Teks Promosi & Siaran Pers Resmi</option>
+                <option value="naskah_singkat">Naskah Video Singkat 9:16 (Reels/TikTok/Shorts)</option>
+                <option value="brief_visual">Panduan Brief Visual & Grafis Informasi</option>
               </select>
             </div>
 
             <div className="form-group" style={{ minWidth: 0 }}>
               <label className="form-label">
-                <span>Kanal Distribusi Resmi</span>
+                <span>Official Distribution Channel</span>
               </label>
               <select 
                 className="form-select"
@@ -350,7 +255,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             <div className="form-group" style={{ minWidth: 0 }}>
               <label className="form-label">
-                <span>Target Audiens</span>
+                <span>Target Audience</span>
               </label>
               <input 
                 type="text" 
@@ -362,7 +267,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
 
             <div className="form-group" style={{ minWidth: 0 }}>
               <label className="form-label">
-                <span>Tone of Voice (Panduan Merek)</span>
+                <span>Tone of Voice (Brand Guidelines)</span>
               </label>
               <select 
                 className="form-select"
@@ -379,13 +284,13 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
           {/* Key Message */}
           <div className="form-group">
             <label className="form-label" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'baseline', gap: '8px' }}>
-              <span>Pesan Utama & Fakta yang Ingin Disampaikan *</span>
-              <span style={{ fontSize: '0.72rem', color: 'var(--accent-cyan)' }}>RAG mencocokkan fakta ini ke dokumen aktif</span>
+              <span>Key Message & Facts to Convey *</span>
+              <span style={{ fontSize: '0.72rem', color: 'var(--accent-cyan)' }}>RAG matches these facts to active documents</span>
             </label>
             <textarea 
               className="form-textarea" 
               rows={4}
-              placeholder="Tuliskan pokok informasi. Misalnya: tarif sambungan baru Rp 1.250.000 dengan cicilan 3x dan syarat KTP/PBB..."
+              placeholder="Write key info. E.g., new connection rate Rp 1,250,000 with 3x installments and ID/Tax requirements..."
               value={keyMessage}
               onChange={e => setKeyMessage(e.target.value)}
               required
@@ -395,7 +300,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
           {/* Call to Action */}
           <div className="form-group">
             <label className="form-label">
-              <span>Pilihan Call to Action (CTA) Resmi</span>
+              <span>Official Call to Action (CTA) Choice</span>
             </label>
             <select 
               className="form-select"
@@ -408,12 +313,12 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
                   [{c.label}] {c.text}
                 </option>
               ))}
-              <option value="">-- Kustom CTA Sendiri --</option>
+              <option value="">-- Custom CTA --</option>
             </select>
             <input 
               type="text"
               className="form-input"
-              placeholder="Atau ketik Call to Action khusus..."
+              placeholder="Or type a custom Call to Action..."
               value={selectedCta}
               onChange={e => setSelectedCta(e.target.value)}
             />
@@ -422,12 +327,12 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
           {/* Limitations */}
           <div className="form-group">
             <label className="form-label">
-              <span>Batasan, Syarat & Peringatan Penting (Opsional)</span>
+              <span>Limitations, Conditions & Important Warnings (Optional)</span>
             </label>
             <input 
               type="text" 
               className="form-input"
-              placeholder="Contoh: Hanya berlaku untuk pelanggan daya listrik hingga 900 VA"
+              placeholder="E.g., Only valid for customers with up to 900 VA electrical capacity"
               value={limitations}
               onChange={e => setLimitations(e.target.value)}
             />
@@ -444,12 +349,12 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
               {isGenerating ? (
                 <>
                   <Loader2 size={18} className="brief-spin-icon" />
-                  <span>Memproses RAG & Membuat Naskah...</span>
+                  <span>Processing RAG & Generating Draft...</span>
                 </>
               ) : (
                 <>
                   <Send size={18} />
-                  <span>Jalankan Generasi Berbasis RAG</span>
+                  <span>Run RAG-Based Generation</span>
                 </>
               )}
             </button>
@@ -467,15 +372,15 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
               type="button"
             >
               <BookOpen size={14} />
-              <span>Radar RAG Knowledge Base</span>
+              <span>RAG Knowledge Base Radar</span>
               {matchedDocsCount > 0 && (
                 <span className="grounding-badge verified" style={{ fontSize: '0.68rem', padding: '2px 6px' }}>
-                  <CheckCircle2 size={10} /> {matchedDocsCount} Cocok
+                  <CheckCircle2 size={10} /> {matchedDocsCount} Match
                 </span>
               )}
               {unsupportedWarning.length > 0 && (
                 <span className="grounding-badge warning" style={{ fontSize: '0.68rem', padding: '2px 6px' }}>
-                  <AlertCircle size={10} /> {unsupportedWarning.length} Peringatan
+                  <AlertCircle size={10} /> {unsupportedWarning.length} Warnings
                 </span>
               )}
               <span style={{ marginLeft: 'auto', color: 'var(--text-muted)' }}>
@@ -489,7 +394,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
                       <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
-                        {matchedDocsCount} bagian cocok dari {matchedDocTitles.length} dokumen aktif
+                        {matchedDocsCount} sections matched from {matchedDocTitles.length} active documents
                       </span>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
@@ -505,14 +410,14 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
                             color: 'var(--text-secondary)'
                           }}
                         >
-                          📑 {t}
+                          {t}
                         </div>
                       ))}
                     </div>
                   </div>
                 ) : (
                   <div style={{ padding: '10px', background: 'var(--bg-primary)', borderRadius: '8px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.76rem' }}>
-                    Ketikkan pesan utama di sebelah kiri untuk melihat dokumen resmi yang relevan secara real-time.
+                    Type key message on the left to see relevant official documents in real-time.
                   </div>
                 )}
 
@@ -521,7 +426,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
                   <div style={{ marginTop: '10px', padding: '10px', borderRadius: '8px', background: 'rgba(244, 63, 94, 0.12)', border: '1px solid rgba(244, 63, 94, 0.35)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#fb7185', fontSize: '0.75rem', fontWeight: 700, marginBottom: '4px' }}>
                       <AlertCircle size={13} />
-                      <span>Peringatan Grounding: Sumber Belum Cukup</span>
+                      <span>Warnings Grounding: Sumber Belum Cukup</span>
                     </div>
                     <div style={{ fontSize: '0.72rem', color: 'var(--text-primary)', lineHeight: 1.4 }}>
                       <ul style={{ paddingLeft: '16px', margin: 0 }}>
@@ -530,7 +435,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
                         ))}
                       </ul>
                       <span style={{ color: 'var(--text-muted)', fontSize: '0.68rem', display: 'block', marginTop: '4px' }}>
-                        * Sistem akan menandai draf sebagai <code>[Perlu Verifikasi]</code> dan menolak klaim palsu.
+                        * System will mark draft as <code>[Perlu Verifikasi]</code> and reject false claims.
                       </span>
                     </div>
                   </div>
@@ -545,24 +450,24 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
             <div className="brief-editor-toolbar">
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <Type size={14} color="var(--primary)" />
-                <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>Editor Naskah AI</span>
+                <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>AI Draft Editor</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                 {isStreaming && (
                   <span className="brief-streaming-indicator">
                     <Loader2 size={12} className="brief-spin-icon" />
-                    <span>AI sedang menulis...</span>
+                    <span>AI is writing...</span>
                   </span>
                 )}
                 {streamingDone && (
                   <span className="brief-done-indicator">
                     <CheckCircle2 size={12} />
-                    <span>Generasi selesai</span>
+                    <span>Generation complete</span>
                   </span>
                 )}
                 {editorContent && (
                   <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginLeft: '8px' }}>
-                    {editorContent.length} karakter
+                    {editorContent.length} characters
                   </span>
                 )}
               </div>
@@ -574,7 +479,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
               className={`brief-editor-content ${isStreaming ? 'brief-editor-streaming' : ''} ${!editorContent ? 'brief-editor-empty' : ''}`}
               contentEditable={!isStreaming}
               suppressContentEditableWarning
-              onMouseUp={handleEditorMouseUp}
+
               onInput={(e) => {
                 if (!isStreaming) {
                   setEditorContent((e.target as HTMLDivElement).innerText);
@@ -588,64 +493,16 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
                       .replace(/>/g, '&gt;')
                       .replace(/\n/g, '<br/>')
                       // Highlight grounding markers
-                      .replace(/\[Rujukan:([^\]]+)\]/g, '<span class="brief-citation-tag">[Rujukan:$1]</span>')
+                      .replace(/\[References:([^\]]+)\]/g, '<span class="brief-citation-tag">[References:$1]</span>')
                       .replace(/\[Perlu Verifikasi([^\]]*)\]/g, '<span class="brief-warning-tag">[Perlu Verifikasi$1]</span>')
                       .replace(/\[DRAFT[^\]]*\]/g, '<span class="brief-draft-tag">[DRAFT KORPORAT - BELUM DISETUJUI]</span>')
                       + (isStreaming ? '<span class="brief-cursor-blink">▊</span>' : '')
                   : ''
               }}
-              data-placeholder="Hasil naskah AI akan muncul di sini. Anda dapat langsung mengeditnya..."
+              data-placeholder="AI draft result will appear here. You can edit it directly..."
             />
 
-            {/* ─── Inline AI Floating Popup (Notion-style) ─── */}
-            {showInlineAI && editorContent && !isStreaming && (
-              <div
-                className="brief-inline-ai-popup"
-                style={{ top: `${inlineAIPos.top}px`, left: `${inlineAIPos.left}px` }}
-                onMouseDown={(e) => e.preventDefault()} // Prevent blur
-              >
-                <button
-                  className="brief-inline-ai-btn"
-                  onClick={() => handleInlineAction('shorten')}
-                  title="Perpendek teks yang dipilih"
-                >
-                  <Minus size={13} />
-                  <span>Perpendek</span>
-                </button>
-                <div className="brief-inline-ai-divider" />
-                <button
-                  className="brief-inline-ai-btn"
-                  onClick={() => handleInlineAction('extend')}
-                  title="Perpanjang teks yang dipilih"
-                >
-                  <Plus size={13} />
-                  <span>Perpanjang</span>
-                </button>
-                <div className="brief-inline-ai-divider" />
-                <div className="brief-inline-ai-input-wrap">
-                  <Wand2 size={12} style={{ color: 'var(--accent-cyan)', flexShrink: 0 }} />
-                  <input
-                    className="brief-inline-ai-input"
-                    placeholder="Ask AI to edit..."
-                    value={inlineAIInput}
-                    onChange={(e) => setInlineAIInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        handleInlineAction('custom');
-                        setInlineAIInput('');
-                      }
-                    }}
-                  />
-                  <CornerDownLeft size={11} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-                </div>
-              </div>
-            )}
 
-            {/* Editor footer hint */}
-            <div className="brief-editor-footer">
-              <MessageSquare size={12} />
-              <span>Sorot/select teks di atas untuk memunculkan menu AI inline editing</span>
-            </div>
           </div>
         </div>
       </div>

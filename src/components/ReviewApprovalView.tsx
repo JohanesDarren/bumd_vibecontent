@@ -142,12 +142,12 @@ export const ReviewApprovalView: React.FC<ReviewApprovalViewProps> = ({
                 disabled={currentDraft.status !== 'menunggu_review'}
               >
                 <CheckCircle2 size={16} />
-                <span>Setujui Naskah (Disposisi)</span>
+                <span>Setujui Naskah (Dispositions)</span>
               </button>
             </>
           ) : (
             <div style={{ padding: '8px 14px', borderRadius: '10px', background: 'var(--bg-tertiary)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-              🔒 Mode Baca: Hanya Reviewer / Admin yang berwenang menerbitkan persetujuan.
+               Mode Baca: Hanya Reviewer / Admin yang berwenang menerbitkan persetujuan.
             </div>
           )}
         </div>
@@ -182,7 +182,7 @@ export const ReviewApprovalView: React.FC<ReviewApprovalViewProps> = ({
                     {d.status === 'menunggu_review' ? 'Perlu Review' : d.status}
                   </span>
                   <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                    v{d.currentVersion}
+                    v{d.currentVersionon}
                   </span>
                 </div>
               </div>
@@ -196,7 +196,7 @@ export const ReviewApprovalView: React.FC<ReviewApprovalViewProps> = ({
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '14px' }}>
             <div>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                Dibuat oleh <strong>{currentDraft.creatorName}</strong> • {new Date(currentDraft.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                Created oleh <strong>{currentDraft.creatorName}</strong> • {new Date(currentDraft.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
               </span>
               <h3 style={{ fontSize: '1.25rem', fontWeight: 800, marginTop: '4px' }}>
                 {currentDraft.title}
@@ -206,7 +206,7 @@ export const ReviewApprovalView: React.FC<ReviewApprovalViewProps> = ({
             {/* Official Approval Stamp if Approved */}
             {currentDraft.status === 'disetujui' && currentDraft.approvalInfo && (
               <div className="disposition-stamp">
-                ✓ DISETUJUI RESMI<br/>
+                Status: DISETUJUI RESMI<br/>
                 <span style={{ fontSize: '0.65rem', fontWeight: 500 }}>
                   {currentDraft.approvalInfo.dispositionNumber}
                 </span>
@@ -219,8 +219,8 @@ export const ReviewApprovalView: React.FC<ReviewApprovalViewProps> = ({
             <div style={{ padding: '14px', borderRadius: '12px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.35)', display: 'flex', gap: '12px', alignItems: 'center' }}>
               <Award size={24} color="#10b981" />
               <div style={{ fontSize: '0.82rem' }}>
-                <strong style={{ color: '#10b981' }}>Disposisi Resmi Diterbitkan:</strong> {currentDraft.approvalInfo.dispositionNumber}<br/>
-                Disetujui oleh <strong>{currentDraft.approvalInfo.approvedBy}</strong> pada {new Date(currentDraft.approvalInfo.approvedAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}.<br/>
+                <strong style={{ color: '#10b981' }}>Dispositions Resmi Diterbitkan:</strong> {currentDraft.approvalInfo.dispositionNumber}<br/>
+                Approved oleh <strong>{currentDraft.approvalInfo.approvedBy}</strong> pada {new Date(currentDraft.approvalInfo.approvedAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}.<br/>
                 <span style={{ fontStyle: 'italic', color: 'var(--text-secondary)' }}>"{currentDraft.approvalInfo.notes}"</span>
               </div>
             </div>
@@ -235,7 +235,7 @@ export const ReviewApprovalView: React.FC<ReviewApprovalViewProps> = ({
           <div>
             <h4 style={{ fontSize: '0.88rem', fontWeight: 700, marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <BookOpen size={16} color="var(--primary)" />
-              <span>Daftar Rujukan Faktual Terkait Naskah Ini:</span>
+              <span>Daftar References Faktual Terkait Naskah Ini:</span>
             </h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {latestVer?.citations?.map((c, idx) => (
@@ -250,7 +250,7 @@ export const ReviewApprovalView: React.FC<ReviewApprovalViewProps> = ({
                   }}
                 >
                   <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
-                    📑 {c.documentTitle} ({c.section})
+                     {c.documentTitle} ({c.section})
                   </div>
                   <div style={{ color: 'var(--text-secondary)', fontStyle: 'italic', marginTop: '2px' }}>
                     "{c.excerpt}"
@@ -336,15 +336,15 @@ export const ReviewApprovalView: React.FC<ReviewApprovalViewProps> = ({
             <div className="modal-header">
               <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#10b981', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <CheckCircle2 size={20} />
-                <span>Penerbitan Lembar Disposisi Persetujuan</span>
+                <span>Penerbitan Lembar Dispositions Persetujuan</span>
               </h3>
             </div>
             <div className="modal-body">
               <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)' }}>
-                Dengan menyetujui naskah ini, status draft akan berubah menjadi <strong>Disetujui (Approved)</strong> dan siap dipublikasikan atau diekspor ke format resmi.
+                Dengan menyetujui naskah ini, status draft akan berubah menjadi <strong>Approved (Approved)</strong> dan siap dipublikasikan atau diekspor ke format resmi.
               </p>
               <div className="form-group">
-                <label className="form-label">Catatan Disposisi / Instruksi Humas *</label>
+                <label className="form-label">Catatan Dispositions / Instruksi Humas *</label>
                 <textarea 
                   className="form-textarea"
                   value={approvalNotes}
@@ -360,7 +360,7 @@ export const ReviewApprovalView: React.FC<ReviewApprovalViewProps> = ({
                 className="btn btn-secondary"
                 onClick={() => setShowApproveModal(false)}
               >
-                Batal
+                Cancel
               </button>
               <button 
                 type="button" 
@@ -386,7 +386,7 @@ export const ReviewApprovalView: React.FC<ReviewApprovalViewProps> = ({
             </div>
             <div className="modal-body">
               <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)' }}>
-                Status naskah akan berubah menjadi <strong>Revisi Diminta</strong>. Creator akan menerima instruksi perbaikan ini pada workspace editor.
+                Status naskah akan berubah menjadi <strong>Revision Requested</strong>. Creator akan menerima instruksi perbaikan ini pada workspace editor.
               </p>
               <div className="form-group">
                 <label className="form-label">Poin-Poin yang Perlu Diperbaiki *</label>
@@ -406,7 +406,7 @@ export const ReviewApprovalView: React.FC<ReviewApprovalViewProps> = ({
                 className="btn btn-secondary"
                 onClick={() => setShowRevisionModal(false)}
               >
-                Batal
+                Cancel
               </button>
               <button 
                 type="button" 

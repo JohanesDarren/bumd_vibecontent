@@ -5,7 +5,7 @@ import {
   PenTool, 
   FileEdit, 
   Image as ImageIcon, 
-  CalendarDays,
+
   CheckSquare, 
   FolderArchive, 
   BookOpen, 
@@ -37,48 +37,47 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const navButton = (tab: ActiveTab, label: string, Icon: React.ComponentType<{size?: number}>, badge?: React.ReactNode) => {
     if (!canAccessTab(userRole, tab)) return null;
     return <button className={`nav-item-btn ${currentTab === tab ? 'active' : ''}`} onClick={() => onSelectTab(tab)}>
-      <Icon size={18}/><span>{label}</span>{badge}
+      <span>{label}</span>{badge}
     </button>;
   };
   return (
     <aside className="app-sidebar">
       <div>
         {/* Creation & Content Section */}
-        <div className="nav-section-title">Produksi Konten</div>
+        <div className="nav-section-title">Content Production</div>
         <div className="nav-group">
           {navButton('dashboard', 'Dashboard', LayoutDashboard)}
-          {navButton('brief_studio', 'Brief & Generasi', PenTool)}
-          {navButton('editor', 'Editor & Versi', FileEdit)}
-          {navButton('visual_studio', 'Studio Visual', ImageIcon)}
-          {navButton('content_scheduling', 'Penjadwalan Konten', CalendarDays)}
+          {navButton('brief_studio', 'Brief & Generation', PenTool)}
+          {navButton('editor', 'Editor & Versions', FileEdit)}
+          {navButton('visual_studio', 'Visual Studio', ImageIcon)}
+
         </div>
 
         {/* Governance & Review Section */}
-        <div className="nav-section-title">Tata Kelola & Review</div>
+        <div className="nav-section-title">Governance & Review</div>
         <div className="nav-group">
           {navButton('review_approval', 'Review & Approval', CheckSquare, pendingReviewCount > 0 ? <span className="nav-badge alert">{pendingReviewCount}</span> : null)}
-          {navButton('library', 'Pustaka & Ekspor', FolderArchive)}
+          {navButton('library', 'Library & Export', FolderArchive)}
         </div>
 
         {/* Knowledge & Administration Section */}
-        <div className="nav-section-title">Knowledge & Pengaturan</div>
+        <div className="nav-section-title">Knowledge & Settings</div>
         <div className="nav-group">
-          {navButton('knowledge_base', 'Knowledge Base RAG', BookOpen, <span className="nav-badge">{activeDocCount} Aktif</span>)}
-          {navButton('brand_profile', 'Profil & Brand', Sparkles)}
-          {navButton('user_management', 'Pengguna & Peran', Users)}
+          {navButton('knowledge_base', 'RAG Knowledge Base', BookOpen, <span className="nav-badge">{activeDocCount} Active</span>)}
+          {navButton('brand_profile', 'Profile & Brand', Sparkles)}
+          {navButton('user_management', 'Users & Roles', Users)}
           {navButton('audit_log', 'Audit Trail', ShieldAlert)}
-          {navButton('settings_help', 'Pengaturan & Bantuan', CircleHelp)}
+          {navButton('settings_help', 'Settings & Help', CircleHelp)}
         </div>
       </div>
 
       {/* Tenant Status Footer */}
       <div className="tenant-status-box">
         <div className="tenant-status-header">
-          <Database size={14} />
-          <span>Isolasi Tenant Aktif</span>
+          <span>Active Tenant Isolation</span>
         </div>
         <div className="tenant-status-body">
-          Data terikat pada <strong>{activeWorkspace.code}</strong>. Dokumen dan naskah terisolasi aman.
+          Data bound to <strong>{activeWorkspace.code}</strong>. Documents and drafts are securely isolated.
         </div>
       </div>
     </aside>

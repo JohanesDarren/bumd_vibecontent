@@ -43,9 +43,9 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({
     <div>
       <div className="page-header-row">
         <div>
-          <h2 className="page-title">Jejak Audit Aktivitas (Audit Trail)</h2>
+          <h2 className="page-title">Activity Audit Trail</h2>
           <p className="page-subtitle">
-            Pencatatan transparan seluruh perubahan naskah, keputusan persetujuan, dan pengunggahan dokumen untuk akuntabilitas tata kelola BUMD <strong>{activeWorkspace.name}</strong>.
+            Transparent recording of all draft changes, approval decisions, and document uploads for BUMD governance accountability of <strong>{activeWorkspace.name}</strong>.
           </p>
         </div>
       </div>
@@ -68,11 +68,11 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <Lock size={20} color="#10b981" />
           <span style={{ fontSize: '0.85rem' }}>
-            <strong>Kepatuhan Isolasi Tenant (PRD F-01 & F-12):</strong> Seluruh peristiwa audit terenkripsi dan terikat ketat pada ID ruang kerja <code>{activeWorkspace.id}</code>. Tidak ada pembocoran metadata lintas entitas BUMD.
+            <strong>Tenant Isolation Compliance (PRD F-01 & F-12):</strong> All audit events are encrypted and strictly bound to the workspace ID <code>{activeWorkspace.id}</code>. No metadata leakage across BUMD entities.
           </span>
         </div>
-        <span style={{ fontSize: '0.78rem', color: '#34d399', fontWeight: 700 }}>
-          ✓ Status: Terisolasi Sempurna
+        <span style={{ fontSize: '0.78rem', color: '#34d399', fontWeight: 700, display: 'flex', alignItems: 'center' }}>
+          <CheckCircle2 size={14} style={{ marginRight: '6px' }} /> Status: Perfectly Isolated
         </span>
       </div>
 
@@ -85,7 +85,7 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({
               type="text" 
               className="form-input" 
               style={{ paddingLeft: '36px' }}
-              placeholder="Cari aktivitas, nama staf, objek, atau nomor disposisi..."
+              placeholder="Search activity, staff name, object, or disposition number..."
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
@@ -96,10 +96,10 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({
             value={filterType}
             onChange={e => setFilterType(e.target.value)}
           >
-            <option value="all">Semua Jenis Objek</option>
-            <option value="draft">Draf Naskah</option>
+            <option value="all">All Object Types</option>
+            <option value="draft">Content Drafts</option>
             <option value="review">Penelaahan & Persetujuan</option>
-            <option value="dokumen">Dokumen Knowledge Base</option>
+            <option value="dokumen">Knowledge Base Documents</option>
             <option value="brand_profile">Panduan Merek</option>
             <option value="ekspor">Pengeksporan</option>
           </select>

@@ -63,14 +63,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 Portal Kerja BUMD Terpadu
               </span>
               <span className="status-pill disetujui" style={{ fontSize: '0.68rem', padding: '2px 8px' }}>
-                <ShieldCheck size={12} /> Grounding Terverifikasi
+                <ShieldCheck size={12} /> Grounding Verified
               </span>
             </div>
             <h2 style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '6px', color: 'var(--text-primary)' }}>
-              Selamat datang, {activeUser.name}
+              Welcome, {activeUser.name}
             </h2>
             <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', maxWidth: '650px' }}>
-              Workspace resmi <strong>{activeWorkspace.name}</strong>. Pembuatan naskah promosi, siaran pers, dan konten multimedia dijamin bersumber hanya dari dokumen resmi yang telah disahkan direksi.
+              Official workspace of <strong>{activeWorkspace.name}</strong>. Production of promotional drafts, press releases, and multimedia content is guaranteed to source only from officially approved documents by the board.
             </p>
           </div>
 
@@ -80,14 +80,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               onClick={() => onNavigate('brief_studio')}
             >
               <PlusCircle size={16} />
-              <span>Buat Konten Baru</span>
+              <span>Create New Content</span>
             </button>
             <button 
               className="btn btn-secondary"
               onClick={() => onNavigate('knowledge_base')}
             >
               <BookOpen size={16} />
-              <span>Cek Knowledge RAG</span>
+              <span>Check RAG Knowledge</span>
             </button>
           </div>
         </div>
@@ -100,7 +100,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <FileText size={24} />
           </div>
           <div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>Total Draf Naskah</div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>Total Drafts</div>
             <div style={{ fontSize: '1.65rem', fontWeight: 800 }}>{drafts.length}</div>
             <div style={{ fontSize: '0.72rem', color: 'var(--accent-cyan)' }}>{drafts.filter(d => d.format === 'copy_caption').length} Caption • {drafts.filter(d => d.format === 'naskah_singkat').length} Video</div>
           </div>
@@ -111,9 +111,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <Clock size={24} />
           </div>
           <div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>Menunggu Review</div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>Pending Review</div>
             <div style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--accent-amber)' }}>{pendingReviewDrafts.length}</div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Perlu disposisi reviewer</div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Needs reviewer disposition</div>
           </div>
         </div>
 
@@ -122,9 +122,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <CheckCircle2 size={24} />
           </div>
           <div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>Disetujui Siap Pakai</div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>Approved Ready to Use</div>
             <div style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--accent-emerald)' }}>{approvedDrafts.length}</div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Telah ditandatangani disposisi</div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Disposition signed</div>
           </div>
         </div>
 
@@ -133,9 +133,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <BookOpen size={24} />
           </div>
           <div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>Dokumen RAG Aktif</div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>Dokumen RAG Active</div>
             <div style={{ fontSize: '1.65rem', fontWeight: 800 }}>{activeDocs.length}</div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--accent-emerald)' }}>100% Grounded resmi</div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--accent-emerald)' }}>100% Officially grounded</div>
           </div>
         </div>
       </div>
@@ -147,13 +147,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Clock size={18} color="var(--accent-amber)" />
-              <h3 style={{ fontSize: '1.05rem', fontWeight: 700 }}>Antrean Penelaahan (Review Queue)</h3>
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 700 }}>Review Queue</h3>
             </div>
             <button 
               className="btn btn-secondary btn-sm"
               onClick={() => onNavigate('review_approval')}
             >
-              <span>Buka Review</span>
+              <span>Open Review</span>
               <ArrowRight size={14} />
             </button>
           </div>
@@ -184,7 +184,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       {d.title}
                     </div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      Oleh: <strong>{d.creatorName}</strong> • Versi {d.currentVersion} • {d.format.replace('_', ' ').toUpperCase()}
+                      By: <strong>{d.creatorName}</strong> • Version {d.currentVersionon} • {d.format.replace('_', ' ').toUpperCase()}
                     </div>
                   </div>
                   <button 
@@ -194,7 +194,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       onNavigate('review_approval');
                     }}
                   >
-                    <span>Periksa</span>
+                    <span>Review</span>
                     <ArrowRight size={12} />
                   </button>
                 </div>
@@ -208,13 +208,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Sparkles size={18} color="var(--primary)" />
-              <h3 style={{ fontSize: '1.05rem', fontWeight: 700 }}>Pedoman Nada & Istilah Resmi</h3>
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 700 }}>Official Tone & Terminology Guidelines</h3>
             </div>
             <button 
               className="btn btn-secondary btn-sm"
               onClick={() => onNavigate('brand_profile')}
             >
-              <span>Ubah Profil</span>
+              <span>Edit Profile</span>
               <ArrowRight size={14} />
             </button>
           </div>
@@ -222,7 +222,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div>
               <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '6px' }}>
-                Tone of Voice Disetujui
+                Tone of Voice Approved
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                 {brandProfile.toneOfVoice.map((tone, idx) => (
@@ -248,7 +248,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
 
             <div style={{ marginTop: '4px', padding: '10px 12px', borderRadius: '8px', background: 'rgba(2, 132, 199, 0.08)', border: '1px dashed rgba(2, 132, 199, 0.3)', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-              <strong>Prinsip Anti-Halusinasi BUMD:</strong> VibeContent menolak klaim publik tanpa rujukan SK atau SOP resmi. Jika data belum terdaftar, naskah akan ditandai <code>[Perlu Verifikasi]</code>.
+              <strong>BUMD Anti-Hallucination Principle:</strong> VibeContent rejects public claims without official SK or SOP references. If data is unregistered, draft will be marked <code>[Perlu Verifikasi]</code>.
             </div>
           </div>
         </div>
@@ -258,14 +258,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       <div className="card-panel">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
           <div>
-            <h3 style={{ fontSize: '1.05rem', fontWeight: 700 }}>Draf Konten Terbaru</h3>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Seluruh draf yang dibuat dalam ruang kerja {activeWorkspace.name}</p>
+            <h3 style={{ fontSize: '1.05rem', fontWeight: 700 }}>Latest Content Drafts</h3>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>All drafts created in the workspace of {activeWorkspace.name}</p>
           </div>
           <button 
             className="btn btn-secondary btn-sm"
             onClick={() => onNavigate('library')}
           >
-            <span>Buka Semua di Pustaka</span>
+            <span>Open All in Library</span>
             <ArrowRight size={14} />
           </button>
         </div>
@@ -278,7 +278,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <th style={{ padding: '12px 14px' }}>Format</th>
                 <th style={{ padding: '12px 14px' }}>Status Alur</th>
                 <th style={{ padding: '12px 14px' }}>Grounding</th>
-                <th style={{ padding: '12px 14px' }}>Versi</th>
+                <th style={{ padding: '12px 14px' }}>Version</th>
                 <th style={{ padding: '12px 14px', textAlign: 'right' }}>Aksi</th>
               </tr>
             </thead>
@@ -293,22 +293,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <td style={{ padding: '12px 14px', color: 'var(--text-secondary)' }}>
                       {d.format === 'copy_caption' && 'Caption Sosmed'}
                       {d.format === 'teks_promosi' && 'Siaran Pers'}
-                      {d.format === 'naskah_singkat' && 'Naskah Video 9:16'}
+                      {d.format === 'naskah_singkat' && '9:16 Video Script'}
                       {d.format === 'brief_visual' && 'Grafis Visual'}
                     </td>
                     <td style={{ padding: '12px 14px' }}>
                       <span className={`status-pill ${d.status}`}>
                         {d.status === 'draft' && 'Draft'}
-                        {d.status === 'menunggu_review' && 'Menunggu Review'}
-                        {d.status === 'revisi_diminta' && 'Revisi Diminta'}
-                        {d.status === 'disetujui' && 'Disetujui'}
-                        {d.status === 'diarsipkan' && 'Diarsipkan'}
+                        {d.status === 'menunggu_review' && 'Pending Review'}
+                        {d.status === 'revisi_diminta' && 'Revision Requested'}
+                        {d.status === 'disetujui' && 'Approved'}
+                        {d.status === 'diarsipkan' && 'Archived'}
                       </span>
                     </td>
                     <td style={{ padding: '12px 14px' }}>
                       {latestVer?.unsupportedClaims?.length === 0 ? (
                         <span className="grounding-badge verified">
-                          <CheckCircle2 size={12} /> {latestVer.citations.length} Rujukan
+                          <CheckCircle2 size={12} /> {latestVer.citations.length} References
                         </span>
                       ) : (
                         <span className="grounding-badge warning">
@@ -317,7 +317,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       )}
                     </td>
                     <td style={{ padding: '12px 14px', fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>
-                      v{d.currentVersion}
+                      v{d.currentVersionon}
                     </td>
                     <td style={{ padding: '12px 14px', textAlign: 'right' }}>
                       <button 
@@ -328,7 +328,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         }}
                       >
                         <Eye size={12} />
-                        <span>Buka</span>
+                        <span>Open</span>
                       </button>
                     </td>
                   </tr>

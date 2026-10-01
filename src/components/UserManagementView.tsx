@@ -1,10 +1,9 @@
-import React from 'react';
-import type { User, Workspace } from '../types';
-import { ShieldCheck, UserCog, Users } from 'lucide-react';
+import React, { useState } from 'react';
+import type { User, UserRole, Workspace } from '../types';
+import { ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react';
 
-interface Props { users: User[]; activeWorkspace: Workspace; }
-export const UserManagementView: React.FC<Props> = ({ users, activeWorkspace }) => <div>
-  <div className="page-header-row"><div><h2 className="page-title">Manajemen Pengguna & Peran</h2><p className="page-subtitle">Keanggotaan lokal untuk <strong>{activeWorkspace.name}</strong>. Provisioning dan SSO masih TBD.</p></div></div>
-  <div className="role-summary-grid">{[['Creator','Membuat dan mengedit draft'],['Reviewer','Meninjau dan memberi keputusan'],['Admin','Mengelola knowledge dan merek']].map(([role,text])=><div className="card-panel" key={role}><UserCog size={20}/><strong>{role}</strong><small>{text}</small></div>)}</div>
-  <div className="card-panel"><div className="table-scroll"><table className="data-table"><thead><tr><th>Pengguna</th><th>Email</th><th>Jabatan</th><th>Peran</th><th>Status akses</th></tr></thead><tbody>{users.map(user=><tr key={user.id}><td><strong>{user.name}</strong></td><td>{user.email}</td><td>{user.title}</td><td><span className="status-pill disetujui">{user.role}</span></td><td><span className="member-active"><ShieldCheck size={13}/>Aktif</span></td></tr>)}</tbody></table></div>{users.length===0&&<div className="empty-state"><Users size={36}/><p>Belum ada anggota workspace.</p></div>}</div>
-</div>;
+interface Props { users:User[]; activeWorkspace:Workspace; onCreate:(input:{name:string;email:string;role:UserRole;title:string;department:string})=>Promise<void>; onDelete:(id:string)=>Promise<void>; }
+export const UserManagementView:React.FC<Props>=({users,activeWorkspace,onCreate,onDelete})=>{
+ const [form,setForm]=useState({name:'',email:'',role:'creator' as UserRole,title:'',department:''});
+ return <div><div className="page-header-row"><div><h2 className="page-title">Users & Roles</h2><p className="page-subtitle">PostgreSQL memberships for <strong>{activeWorkspace.name}</strong>.</p></div></div><form className="card-panel" style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,marginBottom:18}} onSubmit={async e=>{e.preventDefault();await onCreate(form);setForm({...form,name:'',email:'',title:'',department:''});}}>{(['name','email','title','department'] as const).map(key=><input key={key} className="form-input" type={key==='email'?'email':'text'} placeholder={key} value={form[key]} onChange={e=>setForm({...form,[key]:e.target.value})} required={key==='name'||key==='email'}/>)}<select className="form-select" value={form.role} onChange={e=>setForm({...form,role:e.target.value as UserRole})}><option value="creator">Creator</option><option value="reviewer">Reviewer</option><option value="admin">Admin</option></select><button className="btn btn-primary"><UserPlus size={16}/>Add user</button></form><div className="card-panel"><div className="table-scroll"><table className="data-table"><thead><tr><th>User</th><th>Email</th><th>Title</th><th>Role</th><th>Access</th><th></th></tr></thead><tbody>{users.map(user=><tr key={user.id}><td><strong>{user.name}</strong></td><td>{user.email}</td><td>{user.title}</td><td>{user.role}</td><td><span className="member-active"><ShieldCheck size={13}/>Active</span></td><td><button className="btn btn-danger btn-sm" onClick={()=>onDelete(user.id)} disabled={users.length===1}><Trash2 size={14}/></button></td></tr>)}</tbody></table></div>{users.length===0&&<div className="empty-state"><Users size={36}/><p>No workspace members.</p></div>}</div></div>;
+};

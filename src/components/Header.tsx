@@ -13,7 +13,10 @@ import {
   RotateCcw, 
   CheckCircle2,
   Sparkles,
-  UserCheck
+  UserCheck,
+  PenTool,
+  ShieldAlert,
+  Crown
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -46,12 +49,10 @@ export const Header: React.FC<HeaderProps> = ({
     <header className="top-header">
       <div className="header-left">
         <div className="brand-logo-wrap" onClick={() => window.location.reload()}>
-          <div className="brand-icon-gem">
-            <Sparkles size={22} />
-          </div>
           <div className="brand-title-group">
             <h1>VibeContent <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--accent-cyan)', background: 'rgba(6, 182, 212, 0.15)', padding: '2px 6px', borderRadius: '4px', marginLeft: '6px' }}>BUMD</span></h1>
             <div className="brand-tagline">AI Workspace • Grounded RAG Knowledge Base</div>
+            <div className="brand-tagline" style={{ marginTop: '2px', opacity: 0.8, fontSize: '0.7rem' }}>Enterprise Content Engine</div>
           </div>
         </div>
 
@@ -60,7 +61,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button 
             className="org-switcher-pill"
             onClick={() => setShowWsMenu(!showWsMenu)}
-            title="Ganti Organisasi / BUMD"
+            title="Switch Organization / BUMD"
           >
             <Building2 size={16} color="var(--primary)" />
             <span className="org-name-text">{activeWorkspace.name}</span>
@@ -84,7 +85,7 @@ export const Header: React.FC<HeaderProps> = ({
               }}
             >
               <div style={{ padding: '8px 12px', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                Pilih Ruang Kerja BUMD (Tenant Terisolasi)
+                Select BUMD Workspace (Isolated Tenant)
               </div>
               {workspaces.map(ws => (
                 <div
@@ -139,7 +140,7 @@ export const Header: React.FC<HeaderProps> = ({
             color: '#10b981',
             border: '1px solid rgba(16, 185, 129, 0.25)'
           }}
-          title="Fakta BUMD hanya diambil dari dokumen resmi aktif (RAG-Only Grounding)"
+          title="BUMD facts are only pulled from active official documents (RAG-Only Grounding)"
         >
           <ShieldCheck size={14} />
           <span>RAG-Grounded Only</span>
@@ -150,21 +151,21 @@ export const Header: React.FC<HeaderProps> = ({
           onClick={onToggleTheme}
           className="btn btn-secondary btn-sm"
           style={{ padding: '8px' }}
-          title={theme === 'dark' ? 'Ganti ke Mode Terang' : 'Ganti ke Mode Gelap'}
+          title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
         >
           {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
         </button>
 
-        {/* Reset Demo Data */}
+        {/* Destructive data clear */}
         <button 
           onClick={() => {
-            if (window.confirm('Reset semua data demo ke kondisi awal sesuai PRD?')) {
+            if (window.confirm('Hapus seluruh data aplikasi? Tindakan ini tidak dapat dibatalkan.')) {
               onResetData();
             }
           }}
           className="btn btn-secondary btn-sm"
           style={{ padding: '8px' }}
-          title="Reset Data Demo PRD"
+          title="Hapus seluruh data"
         >
           <RotateCcw size={16} />
         </button>
@@ -174,7 +175,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button 
             className="role-badge-selector"
             onClick={() => setShowUserMenu(!showUserMenu)}
-            title="Ganti Peran Pengguna (Creator, Reviewer, Admin)"
+            title="Switch User Role (Creator, Reviewer, Admin)"
           >
             <img 
               src={activeUser.avatar} 
@@ -184,9 +185,9 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="user-meta-text">
               <span className="user-name-label">{activeUser.name}</span>
               <span className="user-role-tag">
-                {activeUser.role === 'creator' && '✍️ Creator'}
-                {activeUser.role === 'reviewer' && '🛡️ Reviewer / Approver'}
-                {activeUser.role === 'admin' && '👑 Knowledge Admin'}
+                {activeUser.role === 'creator' && <span style={{display: 'flex', alignItems: 'center'}}><PenTool size={12} style={{ marginRight: '4px' }} /> Creator</span>}
+                {activeUser.role === 'reviewer' && <span style={{display: 'flex', alignItems: 'center'}}><ShieldAlert size={12} style={{ marginRight: '4px' }} /> Reviewer / Approver</span>}
+                {activeUser.role === 'admin' && <span style={{display: 'flex', alignItems: 'center'}}><Crown size={12} style={{ marginRight: '4px' }} /> Knowledge Admin</span>}
               </span>
             </div>
             <ChevronDown size={14} color="var(--text-muted)" />
@@ -209,7 +210,7 @@ export const Header: React.FC<HeaderProps> = ({
               }}
             >
               <div style={{ padding: '8px 12px', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                Simulasi Peran Pengguna (PRD F-01)
+                Simulate User Role (PRD F-01)
               </div>
               {users.map(u => (
                 <div

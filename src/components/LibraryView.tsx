@@ -87,10 +87,10 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             >
               <option value="all">Semua Status Persetujuan</option>
               <option value="draft">Draft (Draf)</option>
-              <option value="menunggu_review">Menunggu Review</option>
-              <option value="revisi_diminta">Revisi Diminta</option>
-              <option value="disetujui">Disetujui (Approved)</option>
-              <option value="diarsipkan">Diarsipkan</option>
+              <option value="menunggu_review">Pending Review</option>
+              <option value="revisi_diminta">Revision Requested</option>
+              <option value="disetujui">Approved (Approved)</option>
+              <option value="diarsipkan">Archived</option>
             </select>
           </div>
 
@@ -101,11 +101,11 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               value={formatFilter}
               onChange={e => setFormatFilter(e.target.value as any)}
             >
-              <option value="all">Semua Format Konten</option>
-              <option value="copy_caption">📱 Caption Media Sosial</option>
-              <option value="teks_promosi">📰 Teks Siaran Pers</option>
-              <option value="naskah_singkat">🎬 Naskah Video 9:16</option>
-              <option value="brief_visual">🎨 Panduan Visual Grafis</option>
+              <option value="all">All Content Formats</option>
+              <option value="copy_caption">Social Media Caption</option>
+              <option value="teks_promosi">Press Release Text</option>
+              <option value="naskah_singkat">9:16 Video Script</option>
+              <option value="brief_visual">Visual Graphics Guide</option>
             </select>
           </div>
         </div>
@@ -140,13 +140,13 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                     <span className={`status-pill ${draft.status}`}>
                       {draft.status === 'draft' && 'Draft'}
-                      {draft.status === 'menunggu_review' && 'Menunggu Review'}
-                      {draft.status === 'revisi_diminta' && 'Revisi Diminta'}
-                      {draft.status === 'disetujui' && 'Disetujui'}
-                      {draft.status === 'diarsipkan' && 'Diarsipkan'}
+                      {draft.status === 'menunggu_review' && 'Pending Review'}
+                      {draft.status === 'revisi_diminta' && 'Revision Requested'}
+                      {draft.status === 'disetujui' && 'Approved'}
+                      {draft.status === 'diarsipkan' && 'Archived'}
                     </span>
                     <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                      v{draft.currentVersion}
+                      v{draft.currentVersionon}
                     </span>
                   </div>
 
@@ -161,14 +161,14 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
                 <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                    <span>Oleh: <strong>{draft.creatorName}</strong></span>
+                    <span>By: <strong>{draft.creatorName}</strong></span>
                     <span>{new Date(draft.updatedAt).toLocaleDateString('id-ID')}</span>
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
                     {latestVer?.citations?.length > 0 ? (
                       <span className="grounding-badge verified">
-                        <CheckCircle2 size={12} /> {latestVer.citations.length} Rujukan
+                        <CheckCircle2 size={12} /> {latestVer.citations.length} References
                       </span>
                     ) : (
                       <span className="grounding-badge warning">
@@ -180,10 +180,10 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                       <button 
                         className="btn btn-secondary btn-sm"
                         onClick={() => onOpenEditor(draft.id)}
-                        title="Buka di Editor"
+                        title="Open di Editor"
                       >
                         <Eye size={14} />
-                        <span>Buka</span>
+                        <span>Open</span>
                       </button>
                       <button 
                         className="btn btn-primary btn-sm"

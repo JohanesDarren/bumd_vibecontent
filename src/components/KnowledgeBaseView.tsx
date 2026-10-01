@@ -44,7 +44,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
   const [newTitle, setNewTitle] = useState('');
   const [newCategory, setNewCategory] = useState<DocumentCategory>('sop_layanan');
   const [newOwner, setNewOwner] = useState(activeUser.department);
-  const [newVersion, setNewVersion] = useState('v1.0');
+  const [newVersionon, setNewVersionon] = useState('v1.0');
   const [newEffectiveDate, setNewEffectiveDate] = useState('2026');
   const [newInitialStatus, setNewInitialStatus] = useState<DocumentStatus>('aktif');
   const [newContent, setNewContent] = useState('');
@@ -80,7 +80,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
       title: newTitle,
       category: newCategory,
       owner: newOwner,
-      version: newVersion,
+      version: newVersionon,
       effectiveDate: newEffectiveDate,
       status: newInitialStatus,
       uploadDate: new Date().toISOString(),
@@ -100,9 +100,9 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
     <div>
       <div className="page-header-row">
         <div>
-          <h2 className="page-title">Basis Pengetahuan Resmi (Knowledge Base RAG)</h2>
+          <h2 className="page-title">Basis Pengetahuan Resmi (RAG Knowledge Base)</h2>
           <p className="page-subtitle">
-            Pusat dokumen resmi BUMD <strong>{activeWorkspace.name}</strong>. RAG hanya mengambil informasi dari dokumen yang berstatus <strong>Aktif</strong>.
+            Pusat dokumen resmi BUMD <strong>{activeWorkspace.name}</strong>. RAG hanya mengambil informasi dari dokumen yang berstatus <strong>Active</strong>.
           </p>
         </div>
 
@@ -135,11 +135,11 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <ShieldCheck size={20} color="var(--primary)" />
           <span style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
-            <strong>Prinsip Anti-Halusinasi (PRD F-04):</strong> Hanya dokumen berstatus <strong>Aktif</strong> yang menjadi konteks retrieval AI. Dokumen <em>Menunggu Persetujuan</em> atau <em>Usang</em> diabaikan secara ketat oleh sistem.
+            <strong>Prinsip Anti-Halusinasi (PRD F-04):</strong> Hanya dokumen berstatus <strong>Active</strong> yang menjadi konteks retrieval AI. Dokumen <em>Menunggu Persetujuan</em> atau <em>Usang</em> diabaikan secara ketat oleh sistem.
           </span>
         </div>
         <span style={{ fontSize: '0.78rem', color: 'var(--accent-cyan)', fontWeight: 700 }}>
-          {documents.filter(d => d.status === 'aktif').length} Dokumen Aktif Terindeks
+          {documents.filter(d => d.status === 'aktif').length} Dokumen Active Terindeks
         </span>
       </div>
 
@@ -152,7 +152,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
                 <th style={{ padding: '12px 14px' }}>Judul Dokumen Resmi</th>
                 <th style={{ padding: '12px 14px' }}>Kategori</th>
                 <th style={{ padding: '12px 14px' }}>Penanggung Jawab</th>
-                <th style={{ padding: '12px 14px' }}>Versi / Berlaku</th>
+                <th style={{ padding: '12px 14px' }}>Version / Berlaku</th>
                 <th style={{ padding: '12px 14px' }}>Status RAG</th>
                 <th style={{ padding: '12px 14px' }}>Potongan (Chunks)</th>
                 <th style={{ padding: '12px 14px', textAlign: 'right' }}>Aksi</th>
@@ -207,13 +207,13 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
                         value={doc.status}
                         onChange={e => onUpdateStatus(doc.id, e.target.value as DocumentStatus)}
                       >
-                        <option value="aktif">✓ Aktif (Dipakai RAG)</option>
-                        <option value="menunggu_persetujuan">⏳ Menunggu Persetujuan</option>
-                        <option value="usang">🛑 Usang / Nonaktif</option>
+                        <option value="aktif">Status: Active (Dipakai RAG)</option>
+                        <option value="menunggu_persetujuan"> Menunggu Persetujuan</option>
+                        <option value="usang"> Usang / Nonaktif</option>
                       </select>
                     ) : (
                       <span className={`status-pill ${doc.status}`}>
-                        {doc.status === 'aktif' ? 'Aktif' : (doc.status === 'menunggu_persetujuan' ? 'Menunggu' : 'Usang')}
+                        {doc.status === 'aktif' ? 'Active' : (doc.status === 'menunggu_persetujuan' ? 'Menunggu' : 'Usang')}
                       </span>
                     )}
                   </td>
@@ -246,7 +246,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
             <div className="modal-header">
               <div>
                 <span style={{ fontSize: '0.72rem', color: 'var(--accent-cyan)', fontWeight: 700, textTransform: 'uppercase' }}>
-                  Detail Indeks Dokumen Knowledge Base
+                  Detail Indeks Knowledge Base Documents
                 </span>
                 <h3 style={{ fontSize: '1.15rem', fontWeight: 800, marginTop: '2px' }}>
                   {selectedDoc.title}
@@ -256,7 +256,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
                 className="btn btn-secondary btn-sm"
                 onClick={() => setSelectedDoc(null)}
               >
-                ✕
+                X
               </button>
             </div>
 
@@ -316,7 +316,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
                 className="btn btn-secondary"
                 onClick={() => setSelectedDoc(null)}
               >
-                Tutup
+                Close
               </button>
             </div>
           </div>
@@ -329,7 +329,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
           <div className="modal-card">
             <div className="modal-header">
               <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Unggah Dokumen Sumber Resmi Baru</h3>
-              <button className="btn btn-secondary btn-sm" onClick={() => setShowUploadModal(false)}>✕</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => setShowUploadModal(false)}>X</button>
             </div>
             <form onSubmit={handleConfirmUpload}>
               <div className="modal-body">
@@ -368,7 +368,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
                       value={newInitialStatus}
                       onChange={e => setNewInitialStatus(e.target.value as DocumentStatus)}
                     >
-                      <option value="aktif">Aktif (Langsung Bisa Dipakai RAG)</option>
+                      <option value="aktif">Active (Langsung Bisa Dipakai RAG)</option>
                       <option value="menunggu_persetujuan">Menunggu Persetujuan (Pending)</option>
                     </select>
                   </div>
@@ -399,7 +399,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
 
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setShowUploadModal(false)}>
-                  Batal
+                  Cancel
                 </button>
                 <button type="submit" className="btn btn-primary">
                   Indeks & Simpan ke Knowledge Base

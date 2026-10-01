@@ -157,7 +157,7 @@ export interface VideoScriptScene {
   citationNote?: string;
 }
 
-export interface DraftVersion {
+export interface DraftVersionon {
   versionNumber: number;
   content: string;
   scenes?: VideoScriptScene[];
@@ -210,8 +210,8 @@ export interface ContentDraft {
   title: string;
   format: ContentFormat;
   status: DraftStatus;
-  currentVersion: number;
-  versions: DraftVersion[];
+  currentVersionon: number;
+  versions: DraftVersionon[];
   comments: ReviewComment[];
   approvalInfo?: ApprovalInfo;
   visualAsset?: VisualAsset;
@@ -239,7 +239,7 @@ export type ActiveTab =
   | 'brief_studio' 
   | 'editor' 
   | 'visual_studio' 
-  | 'content_scheduling'
+
   | 'review_approval' 
   | 'library' 
   | 'knowledge_base' 

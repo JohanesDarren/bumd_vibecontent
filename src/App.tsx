@@ -8,12 +8,12 @@ import {
   ContentDraft, 
   AuditLog, 
   ContentBrief, 
-  DraftVersion, 
+  DraftVersionon, 
   ApprovalInfo, 
   ReviewComment, 
   DocumentStatus 
 } from './types';
-import { storageService } from './services/storageService';
+import { apiService } from './services/apiService';
 import { generateContentFromBrief } from './services/ragEngine';
 
 // Components
@@ -32,11 +32,13 @@ import { ExportModal } from './components/ExportModal';
 import { LoginAccessView } from './components/LoginAccessView';
 import { UserManagementView } from './components/UserManagementView';
 import { SettingsHelpView } from './components/SettingsHelpView';
-import { ContentSchedulingView } from './components/ContentSchedulingView';
+
+import { FirstRunSetupView } from './components/FirstRunSetupView';
 import { canAccessTab, canTransitionDraft, filterUsersForWorkspace } from './services/policies';
 
 export function App() {
   const [authenticated, setAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(true);
   // Theme state
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
 
@@ -56,34 +58,27 @@ export function App() {
   const [exportModalDraft, setExportModalDraft] = useState<ContentDraft | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Initialize and load data
-  const loadData = () => {
-    storageService.init();
-    const wsList = storageService.getWorkspaces();
-    const activeWs = storageService.getActiveWorkspace();
-    const userList = storageService.getUsers();
-    const curUser = storageService.getActiveUser();
-    const profile = storageService.getActiveBrandProfile();
-    const docs = storageService.getWorkspaceKnowledgeDocs(activeWs.id);
-    const dfts = storageService.getWorkspaceDrafts(activeWs.id);
-    const logs = storageService.getAuditLogs();
+  // Initialize and load data from PostgreSQL API
+  const loadData = async (workspaceId = activeWorkspace?.id) => {
+    const data = await apiService.bootstrap(workspaceId);
+    const activeWs = data.workspaces.find(workspace => workspace.id === workspaceId) || data.workspaces[0];
+    const curUser = data.users.find(user => user.id === activeUser?.id) || data.users[0];
 
-    setWorkspaces(wsList);
-    setActiveWorkspace(activeWs);
-    setUsers(userList);
+    setWorkspaces(data.workspaces);
+    setActiveWorkspace(activeWs || null);
+    setUsers(data.users);
     setActiveUser(curUser);
-    setBrandProfile(profile);
-    setDocuments(docs);
-    setDrafts(dfts);
-    setAuditLogs(logs);
+    setBrandProfile(data.brandProfile);
+    setDocuments(data.documents);
+    setDrafts(data.drafts);
+    setAuditLogs(data.auditLogs);
 
-    if (dfts.length > 0 && !selectedDraftId) {
-      setSelectedDraftId(dfts[0].id);
-    }
+    if (data.drafts.length > 0 && !selectedDraftId) setSelectedDraftId(data.drafts[0].id);
+    setLoading(false);
   };
 
   useEffect(() => {
-    loadData();
+    loadData().catch(error => { setToastMessage(`Database gagal dimuat: ${error.message}`); setLoading(false); });
   }, []);
 
   // Update theme on root DOM
@@ -98,29 +93,13 @@ export function App() {
   };
 
   // Workspace Switcher
-  const handleSelectWorkspace = (wsId: string) => {
+  const handleSelectWorkspace = async (wsId: string) => {
     if (!activeUser || activeUser.workspaceId !== wsId) {
       showToast('Akses workspace ditolak. Akun tidak memiliki keanggotaan tenant tersebut.');
       return;
     }
-    storageService.setActiveWorkspaceId(wsId);
-    const newWs = workspaces.find(w => w.id === wsId) || activeWorkspace!;
-    setActiveWorkspace(newWs);
-
-    // Reload workspace-isolated resources
-    const docs = storageService.getWorkspaceKnowledgeDocs(newWs.id);
-    const dfts = storageService.getWorkspaceDrafts(newWs.id);
-    const profiles = storageService.getBrandProfiles();
-    const profile = profiles[newWs.id] || profiles['ws-tirta'];
-    const logs = storageService.getAuditLogs();
-
-    setDocuments(docs);
-    setDrafts(dfts);
-    setBrandProfile(profile);
-    setAuditLogs(logs);
-    setSelectedDraftId(dfts[0]?.id);
-
-    showToast(`Beralih ke ruang kerja ${newWs.name}`);
+    await loadData(wsId);
+    showToast(`Beralih ke ruang kerja ${workspaces.find(w => w.id === wsId)?.name}`);
   };
 
   // User Role Switcher
@@ -130,29 +109,28 @@ export function App() {
       showToast('Akses pengguna ditolak untuk workspace aktif.');
       return;
     }
-    storageService.setActiveUserId(userId);
     const u = allowedUser;
     setActiveUser(u);
-    setAuditLogs(storageService.getAuditLogs());
     if (!canAccessTab(u.role, currentTab)) setCurrentTab('dashboard');
     showToast(`Peran pengguna aktif: ${u.name} (${u.role.toUpperCase()})`);
   };
 
   // Reset Demo Data
-  const handleResetData = () => {
-    storageService.resetAll();
-    loadData();
-    showToast('Seluruh data demo BUMD telah direset ke kondisi awal.');
+  const handleResetData = async () => {
+    await apiService.clearAll();
+    setAuthenticated(false);
+    await loadData();
+    showToast('Seluruh data aplikasi telah dihapus.');
   };
 
   // Content Generation from Brief
-  const handleGenerateDraft = (brief: ContentBrief) => {
+  const handleGenerateDraft = async (brief: ContentBrief) => {
     if (!brandProfile || !activeWorkspace || !activeUser) return;
 
     // Call RAG engine
     const output = generateContentFromBrief(brief, brandProfile, documents, activeWorkspace.id);
 
-    const initialVersion: DraftVersion = {
+    const initialVersionon: DraftVersionon = {
       versionNumber: 1,
       content: output.content,
       scenes: output.scenes,
@@ -171,8 +149,8 @@ export function App() {
       title: brief.title,
       format: brief.format,
       status: 'draft',
-      currentVersion: 1,
-      versions: [initialVersion],
+      currentVersionon: 1,
+      versions: [initialVersionon],
       comments: [],
       visualAsset: output.visualAsset,
       createdAt: new Date().toISOString(),
@@ -181,12 +159,10 @@ export function App() {
       creatorName: activeUser.name
     };
 
-    storageService.saveDraft(newDraft);
-
-    // Refresh state
-    const updatedDrafts = storageService.getWorkspaceDrafts(activeWorkspace.id);
-    setDrafts(updatedDrafts);
-    setAuditLogs(storageService.getAuditLogs());
+    await apiService.saveDraft(newDraft);
+    const refreshed = await apiService.bootstrap(activeWorkspace.id);
+    setDrafts(refreshed.drafts);
+    setAuditLogs(refreshed.auditLogs);
     setSelectedDraftId(newDraft.id);
 
     // Transition directly to editor
@@ -195,41 +171,40 @@ export function App() {
   };
 
   // Save new draft version
-  const handleSaveNewVersion = (draftId: string, version: DraftVersion, changeSummary: string) => {
-    storageService.addDraftVersion(draftId, version, changeSummary);
-    setDrafts(storageService.getWorkspaceDrafts(activeWorkspace?.id));
-    setAuditLogs(storageService.getAuditLogs());
-    showToast(`Versi ${version.versionNumber} berhasil disimpan dalam riwayat audit.`);
+  const handleSaveNewVersionon = async (draftId: string, version: DraftVersionon, changeSummary: string) => {
+    const draft = drafts.find(item => item.id === draftId);
+    if (!draft || !activeWorkspace) return;
+    await apiService.saveDraft({ ...draft, versions: [version, ...draft.versions], currentVersionon: version.versionNumber, updatedAt: new Date().toISOString() });
+    await loadData(activeWorkspace.id);
+    showToast(`Version ${version.versionNumber} berhasil disimpan dalam riwayat audit.`);
   };
 
   // Submit draft for review
-  const handleSubmitForReview = (draftId: string) => {
+  const handleSubmitForReview = async (draftId: string) => {
     const draft = drafts.find(item => item.id === draftId);
     if (!activeUser || !draft || !canTransitionDraft(activeUser.role, draft.status, 'menunggu_review')) {
       showToast('Transisi status tidak diizinkan untuk peran ini.');
       return;
     }
-    storageService.updateDraftStatus(draftId, 'menunggu_review');
-    setDrafts(storageService.getWorkspaceDrafts(activeWorkspace?.id));
-    setAuditLogs(storageService.getAuditLogs());
+    await apiService.saveDraft({ ...draft, status: 'menunggu_review', updatedAt: new Date().toISOString() });
+    if (activeWorkspace) await loadData(activeWorkspace.id);
     showToast('Naskah berhasil dikirim ke antrean review Humas/Approver.');
   };
 
   // Approve draft
-  const handleApproveDraft = (draftId: string, approvalInfo: ApprovalInfo) => {
+  const handleApproveDraft = async (draftId: string, approvalInfo: ApprovalInfo) => {
     const draft = drafts.find(item => item.id === draftId);
     if (!activeUser || !draft || !canTransitionDraft(activeUser.role, draft.status, 'disetujui')) {
-      showToast('Hanya Reviewer/Admin dapat menyetujui draft Menunggu Review.');
+      showToast('Hanya Reviewer/Admin dapat menyetujui draft Pending Review.');
       return;
     }
-    storageService.updateDraftStatus(draftId, 'disetujui', approvalInfo);
-    setDrafts(storageService.getWorkspaceDrafts(activeWorkspace?.id));
-    setAuditLogs(storageService.getAuditLogs());
-    showToast(`Naskah resmi Disetujui! No Disposisi: ${approvalInfo.dispositionNumber}`);
+    await apiService.saveDraft({ ...draft, status: 'disetujui', approvalInfo, updatedAt: new Date().toISOString() });
+    if (activeWorkspace) await loadData(activeWorkspace.id);
+    showToast(`Naskah resmi Approved! No Dispositions: ${approvalInfo.dispositionNumber}`);
   };
 
   // Request revision
-  const handleRequestRevision = (draftId: string, commentText: string) => {
+  const handleRequestRevision = async (draftId: string, commentText: string) => {
     const draft = drafts.find(item => item.id === draftId);
     if (!activeUser || !draft || !canTransitionDraft(activeUser.role, draft.status, 'revisi_diminta')) {
       showToast('Permintaan revisi tidak diizinkan untuk status/peran ini.');
@@ -243,61 +218,52 @@ export function App() {
       createdAt: new Date().toISOString(),
       resolved: false
     };
-    storageService.addReviewComment(draftId, comment);
-    storageService.updateDraftStatus(draftId, 'revisi_diminta');
-    setDrafts(storageService.getWorkspaceDrafts(activeWorkspace?.id));
-    setAuditLogs(storageService.getAuditLogs());
+    await apiService.saveDraft({ ...draft, comments: [...draft.comments, comment], status: 'revisi_diminta', updatedAt: new Date().toISOString() });
+    if (activeWorkspace) await loadData(activeWorkspace.id);
     showToast('Permintaan revisi berhasil dikirim ke pembuat konten.');
   };
 
   // Add review comment
-  const handleAddComment = (draftId: string, comment: ReviewComment) => {
-    storageService.addReviewComment(draftId, comment);
-    setDrafts(storageService.getWorkspaceDrafts(activeWorkspace?.id));
-    setAuditLogs(storageService.getAuditLogs());
+  const handleAddComment = async (draftId: string, comment: ReviewComment) => {
+    const draft = drafts.find(item => item.id === draftId);
+    if (!draft || !activeWorkspace) return;
+    await apiService.saveDraft({ ...draft, comments: [...draft.comments, comment], updatedAt: new Date().toISOString() });
+    await loadData(activeWorkspace.id);
     showToast('Catatan penelaahan berhasil ditambahkan.');
   };
 
   // Knowledge base document status toggle
-  const handleUpdateDocStatus = (docId: string, status: DocumentStatus) => {
-    storageService.updateDocStatus(docId, status);
-    setDocuments(storageService.getWorkspaceKnowledgeDocs(activeWorkspace?.id));
-    setAuditLogs(storageService.getAuditLogs());
+  const handleUpdateDocStatus = async (docId: string, status: DocumentStatus) => {
+    const document = documents.find(item => item.id === docId);
+    if (!document || !activeWorkspace) return;
+    await apiService.saveKnowledge({ ...document, status });
+    await loadData(activeWorkspace.id);
     showToast(`Status dokumen diubah menjadi: ${status.toUpperCase()}`);
   };
 
   // Upload new knowledge doc
-  const handleUploadDocument = (newDoc: KnowledgeDocument) => {
-    storageService.saveKnowledgeDoc(newDoc);
-    setDocuments(storageService.getWorkspaceKnowledgeDocs(activeWorkspace?.id));
-    setAuditLogs(storageService.getAuditLogs());
+  const handleUploadDocument = async (newDoc: KnowledgeDocument) => {
+    await apiService.saveKnowledge(newDoc);
+    if (activeWorkspace) await loadData(activeWorkspace.id);
     showToast(`Dokumen "${newDoc.title}" berhasil diindeks ke Knowledge Base.`);
   };
 
   // Save brand profile
-  const handleSaveBrandProfile = (newProfile: BrandProfile) => {
-    storageService.updateBrandProfile(newProfile);
+  const handleSaveBrandProfile = async (newProfile: BrandProfile) => {
+    await apiService.saveBrand(newProfile);
     setBrandProfile(newProfile);
-    setAuditLogs(storageService.getAuditLogs());
     showToast('Panduan merek dan profil BUMD berhasil diperbarui.');
   };
 
-  const handleOpenExport = (draft: ContentDraft) => {
-    storageService.addAuditLog({
-      action: 'Ekspor Konten Dibuka', objectType: 'ekspor', objectId: draft.id,
-      objectName: draft.title, details: `Ekspor dibuka pada status ${draft.status.toUpperCase()}; status tidak diubah.`
-    });
-    setAuditLogs(storageService.getAuditLogs());
-    setExportModalDraft(draft);
-  };
+  const handleOpenExport = (draft: ContentDraft) => setExportModalDraft(draft);
 
-  if (!activeWorkspace || !activeUser || !brandProfile) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
-        Memuat Workspace BUMD...
-      </div>
-    );
-  }
+  if (loading) return <div style={{display:'grid',placeItems:'center',height:'100vh'}}>Memuat PostgreSQL…</div>;
+
+  if (workspaces.length === 0) return <FirstRunSetupView onSubmit={async input=>{const created=await apiService.onboard(input);await loadData(created.workspace.id);}}/>;
+
+  if (!activeWorkspace || !activeUser) return <div className="empty-state">Workspace atau pengguna belum tersedia.</div>;
+
+  const effectiveBrandProfile: BrandProfile = brandProfile || {workspaceId:activeWorkspace.id,organizationName:activeWorkspace.name,unitDepartment:'',defaultLanguage:'Bahasa Indonesia',toneOfVoice:[],terminology:[],bannedWords:[],officialCTAs:[],approvedChannels:[],brandGuidelinesSummary:'',officialDisclaimer:''};
 
   if (!authenticated) {
     return <LoginAccessView users={users} workspaces={workspaces} onLogin={(userId) => { handleSelectUser(userId); setAuthenticated(true); }} />;
@@ -339,7 +305,7 @@ export function App() {
             <DashboardView 
               drafts={drafts}
               documents={documents}
-              brandProfile={brandProfile}
+              brandProfile={effectiveBrandProfile}
               activeUser={activeUser}
               activeWorkspace={activeWorkspace}
               onNavigate={setCurrentTab}
@@ -349,7 +315,7 @@ export function App() {
 
           {currentTab === 'brief_studio' && (
             <BriefStudioView 
-              brandProfile={brandProfile}
+              brandProfile={effectiveBrandProfile}
               documents={documents}
               activeWorkspace={activeWorkspace}
               activeUser={activeUser}
@@ -360,9 +326,9 @@ export function App() {
           {currentTab === 'editor' && selectedDraft && (
             <EditorWorkspaceView 
               draft={selectedDraft}
-              brandProfile={brandProfile}
+              brandProfile={effectiveBrandProfile}
               activeUser={activeUser}
-              onSaveNewVersion={handleSaveNewVersion}
+              onSaveNewVersionon={handleSaveNewVersionon}
               onSubmitForReview={handleSubmitForReview}
               onOpenExportModal={handleOpenExport}
             />
@@ -371,17 +337,11 @@ export function App() {
           {currentTab === 'visual_studio' && (
             <VisualStudioView 
               draft={selectedDraft}
-              brandProfile={brandProfile}
+              brandProfile={effectiveBrandProfile}
               activeWorkspace={activeWorkspace}
             />
           )}
 
-          {currentTab === 'content_scheduling' && (
-            <ContentSchedulingView 
-              drafts={drafts}
-              activeWorkspace={activeWorkspace}
-            />
-          )}
 
           {currentTab === 'review_approval' && (
             <ReviewApprovalView 
@@ -406,9 +366,11 @@ export function App() {
                 setCurrentTab('editor');
               }}
               onOpenExportModal={handleOpenExport}
-              onArchiveDraft={(id) => {
-                storageService.updateDraftStatus(id, 'diarsipkan');
-                setDrafts(storageService.getWorkspaceDrafts(activeWorkspace.id));
+              onArchiveDraft={async (id) => {
+                const draft = drafts.find(item => item.id === id);
+                if (!draft) return;
+                await apiService.saveDraft({ ...draft, status: 'diarsipkan', updatedAt: new Date().toISOString() });
+                await loadData(activeWorkspace.id);
                 showToast('Naskah berhasil dipindahkan ke arsip.');
               }}
             />
@@ -426,7 +388,7 @@ export function App() {
 
           {currentTab === 'brand_profile' && (
             <BrandProfileView 
-              brandProfile={brandProfile}
+              brandProfile={effectiveBrandProfile}
               activeWorkspace={activeWorkspace}
               activeUser={activeUser}
               onSaveProfile={handleSaveBrandProfile}

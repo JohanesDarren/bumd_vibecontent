@@ -174,10 +174,10 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
               value={visual.templateStyle}
               onChange={e => setVisual({ ...visual, templateStyle: e.target.value as any })}
             >
-              <option value="corporate">🏛️ Corporate BUMD (Navy & Cyan)</option>
-              <option value="modern_bold">⚡ Modern Bold (Emerald & Lime)</option>
-              <option value="clean_service">💧 Clean Public Service (Sky Blue)</option>
-              <option value="infographic">📊 Infografis Data Terverifikasi</option>
+              <option value="corporate">Corporate BUMD (Navy & Cyan)</option>
+              <option value="modern_bold">Modern Bold (Emerald & Lime)</option>
+              <option value="clean_service">Clean Public Service (Sky Blue)</option>
+              <option value="infographic">Infografis Data Terverifikasi</option>
             </select>
           </div>
 
