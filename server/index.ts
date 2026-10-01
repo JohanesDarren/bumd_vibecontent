@@ -1,6 +1,6 @@
 import './env.ts';
 import { ragConfigured } from './env.ts';
-import { knowledgeBaseIdFor, ragDeleteDocument, ragIndexDocument, ragQuery, ragSearch, ragStatus } from './rag.ts';
+import { knowledgeBaseIdFor, ragDeleteDocument, ragIndexDocument, ragListDocuments, ragQuery, ragSearch, ragStatus } from './rag.ts';
 import express from 'express';
 import cors from 'cors';
 import { authenticateUser, claimLegacyPassword, clearAllData, createDraft, createOrganizationWithAdmin, createUserMembership, deleteBrand, deleteDraft, deleteKnowledgeSource, deleteUserMembership, getUserWorkspaces, listBootstrap, listWorkspaceDrafts, organizationExists, pool, registerUser, replaceDraft, saveBrand, saveKnowledgeSource, updateOrganization } from './database.ts';
@@ -75,6 +75,8 @@ app.get('/api/rag/status',async(_req,res,next)=>{try{if(!ragConfigured())return 
 app.post('/api/rag/search',async(req,res,next)=>{try{const{workspaceId,query,topK}=req.body||{};if(!isNonEmptyString(workspaceId))return res.status(400).json({error:'workspaceId is required'});if(!isNonEmptyString(query))return res.status(400).json({error:'query is required'});res.json(await ragSearch(workspaceId,query,Number(topK)||5));}catch(error){next(error);}});
 app.post('/api/rag/query',async(req,res,next)=>{try{const{workspaceId,query,topK}=req.body||{};if(!isNonEmptyString(workspaceId))return res.status(400).json({error:'workspaceId is required'});if(!isNonEmptyString(query))return res.status(400).json({error:'query is required'});res.json(await ragQuery(workspaceId,query,Number(topK)||5));}catch(error){next(error);}});
 app.post('/api/rag/sync',async(req,res,next)=>{try{const{workspaceId}=req.body||{};if(!isNonEmptyString(workspaceId))return res.status(400).json({error:'workspaceId is required'});const data=await listBootstrap(workspaceId);let indexed=0,failed=0;for(const doc of data.documents){const ok=doc.status==='aktif'?await syncKnowledgeDocToRag(workspaceId,doc):await removeKnowledgeDocFromRag(workspaceId,doc.id);if(ok)indexed++;else failed++;}res.json({knowledgeBaseId:knowledgeBaseIdFor(workspaceId),indexed,failed,total:data.documents.length});}catch(error){next(error);}});
+// Remove remote-KB entries that no longer correspond to any DB document (e.g. after a demo reset).
+app.post('/api/rag/prune',async(req,res,next)=>{try{const{workspaceId}=req.body||{};if(!isNonEmptyString(workspaceId))return res.status(400).json({error:'workspaceId is required'});const data=await listBootstrap(workspaceId);const validIds=new Set(data.documents.map((d:any)=>d.id));const listed=await ragListDocuments(workspaceId);const docs=(listed as any)?.documents||[];let removed=0,failed=0;for(const entry of docs){const id=entry?.document_id||entry?.id;if(id&&!validIds.has(String(id))){const ok=await removeKnowledgeDocFromRag(workspaceId,String(id));if(ok)removed++;else failed++;}}res.json({knowledgeBaseId:knowledgeBaseIdFor(workspaceId),removed,failed,total:docs.length});}catch(error){next(error);}});
 app.use('/api',(_req,res)=>{res.status(404).json({error:'Endpoint not found'});});
 app.use((error:unknown,_req:express.Request,res:express.Response,_next:express.NextFunction)=>{console.error(error);res.status(500).json({error:error instanceof Error?error.message:'Internal server error'});});
 

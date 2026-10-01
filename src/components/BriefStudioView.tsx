@@ -5,12 +5,17 @@ import {
   ContentFormat, 
   ContentBrief, 
   Workspace,
-  User
+  User,
+  GroundedCitation,
+  ActiveTab
 } from '../types';
 import { 
   retrieveKnowledge, 
-  generateContentFromBrief 
+  generateContentFromBrief, 
+  RemoteGrounding, 
+  GeneratedOutput 
 } from '../services/ragEngine';
+import { apiService, RagHit, RagStatus } from '../services/apiService';
 import { 
   Sparkles, 
   BookOpen, 
@@ -27,7 +32,8 @@ import {
   Loader2,
   CornerDownLeft,
   Zap,
-  AlertTriangle
+  AlertTriangle,
+  ExternalLink
 } from 'lucide-react';
 
 interface BriefStudioViewProps {
@@ -35,7 +41,26 @@ interface BriefStudioViewProps {
   documents: KnowledgeDocument[];
   activeWorkspace: Workspace;
   activeUser: User;
-  onGenerateDraft: (brief: ContentBrief) => void;
+  onGenerateDraft: (brief: ContentBrief, output: GeneratedOutput) => Promise<void> | void;
+  onNavigate?: (tab: ActiveTab) => void;
+}
+
+/** Map a live RAG search hit to the citation shape the workspace expects. */
+function toCitation(hit: RagHit, index: number): GroundedCitation {
+  const content = typeof hit.content === 'string' ? hit.content : '';
+  const rawScore = typeof hit.score === 'number' ? hit.score : 0;
+  const relevanceScore = rawScore <= 1 ? Math.round(rawScore * 100) : Math.round(rawScore);
+  return {
+    id: `cit-${index}`,
+    documentId: hit.document_id || `unknown-${index}`,
+    documentTitle: hit.document_name || hit.document_id || 'Knowledge Base Source',
+    section: hit.section || 'Knowledge Base',
+    page: hit.page ?? undefined,
+    excerpt: content,
+    relevanceScore: Math.min(99, Math.max(60, relevanceScore)),
+    verified: true,
+    claimExcerpt: content.slice(0, 80) + (content.length > 80 ? '...' : '')
+  };
 }
 
 export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
@@ -43,7 +68,8 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
   documents,
   activeWorkspace,
   activeUser,
-  onGenerateDraft
+  onGenerateDraft,
+  onNavigate
 }) => {
   const [title, setTitle] = useState('');
   const [campaign, setCampaign] = useState('');
@@ -71,7 +97,18 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
   // RAG Radar collapsible state
   const [ragRadarOpen, setRagRadarOpen] = useState(false);
 
-  // Inline AI popup state
+  // Live remote RAG service + latest grounding metadata
+  const [ragService, setRagService] = useState<RagStatus | null>(null);
+  const [ragModel, setRagModel] = useState<string | null>(null);
+  const [usedRemoteRag, setUsedRemoteRag] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    apiService.ragStatus()
+      .then(s => { if (active) setRagService(s); })
+      .catch(error => { console.error('ragStatus failed:', error); if (active) setRagService({ configured: false, ready: false }); });
+    return () => { active = false; };
+  }, []);
 
 
   useEffect(() => {
@@ -125,7 +162,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
     };
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !keyMessage.trim()) {
       alert('Content title and key message are required.');
@@ -151,17 +188,42 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
       createdBy: activeUser.id
     };
 
-    // Generate content then stream it into editor
-    setTimeout(() => {
-      const output = generateContentFromBrief(brief, brandProfile, documents, activeWorkspace.id);
-      setIsGenerating(false);
-      streamText(output.content);
+    // 1. Try the live Multi-Tenant RAG service (grounded answer + real sources).
+    let remote: RemoteGrounding | undefined;
+    try {
+      const rag = await apiService.ragQuery(activeWorkspace.id, `${title} ${keyMessage}`, 5);
+      const citations = (rag.sources || []).map(toCitation);
+      const unsupported = rag.grounded
+        ? []
+        : [rag.no_answer_reason
+            ? `The knowledge base could not ground this claim (${rag.no_answer_reason}).`
+            : 'Specific factual claims in the brief were not found in the active documents.'];
+      remote = { answer: rag.answer || '', citations, unsupportedClaims: unsupported, grounded: Boolean(rag.grounded), model: rag.model };
+      setRagModel(rag.model || null);
+      setUsedRemoteRag(true);
+    } catch (error) {
+      // 2. Fall back to the offline keyword engine when the service is unavailable.
+      console.error('ragQuery failed:', error);
+      remote = undefined;
+      setUsedRemoteRag(false);
+      setRagModel(null);
+    }
 
-      // Auto-open RAG radar if results found
-      if (matchedDocsCount > 0 || unsupportedWarning.length > 0) {
-        setRagRadarOpen(true);
-      }
-    }, 600);
+    const output = generateContentFromBrief(brief, brandProfile, documents, activeWorkspace.id, remote);
+    setIsGenerating(false);
+    streamText(output.content);
+
+    // Auto-open RAG radar if results found
+    if (output.citations.length > 0 || output.unsupportedClaims.length > 0 || matchedDocsCount > 0) {
+      setRagRadarOpen(true);
+    }
+
+    // 3. Persist the grounded draft so it lands in the Editor / Library.
+    try {
+      await onGenerateDraft(brief, output);
+    } catch (error) {
+      console.error('Failed to save generated draft', error);
+    }
   };
 
 
@@ -176,14 +238,37 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
           </p>
         </div>
 
-
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {ragService === null ? (
+            <span className="grounding-badge" style={{ opacity: 0.7 }}>
+              <Loader2 size={13} className="brief-spin-icon" /> Checking RAG Service…
+            </span>
+          ) : ragService.configured && ragService.ready ? (
+            <span className="grounding-badge verified" title={ragModel ? `Model: ${ragModel}` : undefined}>
+              <CheckCircle2 size={13} /> RAG Service Online
+            </span>
+          ) : ragService.configured ? (
+            <span className="grounding-badge warning" title={ragService?.error}>
+              <AlertTriangle size={13} /> RAG Service Degraded
+            </span>
+          ) : (
+            <span className="grounding-badge" style={{ opacity: 0.7 }}>
+              <AlertCircle size={13} /> RAG Offline · Local Engine
+            </span>
+          )}
+          {usedRemoteRag && (
+            <span className="grounding-badge verified" style={{ fontSize: '0.68rem' }}>
+              <Zap size={11} /> Grounded live
+            </span>
+          )}
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.5fr) minmax(400px, 1fr)', gap: '24px', alignItems: 'start' }}>
         {/* ─── Left: Brief Form (preserved) ─── */}
         <form onSubmit={handleSubmit} className="card-panel" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '14px' }}>
-
+            <Sparkles size={20} color="var(--primary)" />
             <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>BUMD Content Brief Parameters</h3>
           </div>
 
@@ -468,6 +553,17 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
                     <CheckCircle2 size={12} />
                     <span>Generation complete</span>
                   </span>
+                )}
+                {streamingDone && onNavigate && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ padding: '4px 10px', fontSize: '0.72rem', marginLeft: '6px' }}
+                    onClick={() => onNavigate('editor')}
+                  >
+                    <ExternalLink size={12} />
+                    <span>Open in Editor</span>
+                  </button>
                 )}
                 {editorContent && (
                   <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginLeft: '8px' }}>

@@ -171,11 +171,17 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Signed-in user + Logout */}
         <div className="role-badge-selector" style={{ cursor: 'default' }}>
-          <img 
-            src={activeUser.avatar} 
-            alt={activeUser.name} 
-            className="role-avatar" 
-          />
+          {activeUser.avatar ? (
+            <img 
+              src={activeUser.avatar} 
+              alt={activeUser.name} 
+              className="role-avatar" 
+            />
+          ) : (
+            <div className="role-avatar" style={{ display: 'grid', placeItems: 'center', fontWeight: 700, background: 'var(--primary)', color: '#fff' }}>
+              {activeUser.name.slice(0, 1).toUpperCase()}
+            </div>
+          )}
           <div className="user-meta-text">
             <span className="user-name-label">{activeUser.name}</span>
             <span className="user-role-tag">

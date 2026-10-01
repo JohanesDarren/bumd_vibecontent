@@ -25,6 +25,7 @@ export const apiService={
   ragSearch:(workspaceId:string,query:string,topK?:number)=>request<{results:RagHit[]}>(`/api/rag/search`,{method:'POST',body:JSON.stringify({workspaceId,query,topK})}),
   ragQuery:(workspaceId:string,query:string,topK?:number)=>request<RagAnswer>(`/api/rag/query`,{method:'POST',body:JSON.stringify({workspaceId,query,topK})}),
   ragSync:(workspaceId:string)=>request<{knowledgeBaseId:string;indexed:number;failed:number;total:number}>(`/api/rag/sync`,{method:'POST',body:JSON.stringify({workspaceId})}),
+  ragPrune:(workspaceId:string)=>request<{knowledgeBaseId:string;removed:number;failed:number;total:number}>(`/api/rag/prune`,{method:'POST',body:JSON.stringify({workspaceId})}),
   saveDraft:(draft:ContentDraft)=>request<ContentDraft>(`/api/drafts/${draft.id}`,{method:'PUT',body:JSON.stringify(draft)}),
   saveBrand:(profile:BrandProfile)=>request<BrandProfile>('/api/brand-profile',{method:'PUT',body:JSON.stringify(profile)}),
   deleteBrand:(workspaceId:string)=>request<{ok:boolean}>(`/api/organizations/${workspaceId}/brand-profile`,{method:'DELETE'}),

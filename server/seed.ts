@@ -1,6 +1,6 @@
 import { ragConfigured } from './env.ts';
 import { clearAllData, hashPassword, pool } from './database.ts';
-import { knowledgeBaseIdFor, ragIndexDocument } from './rag.ts';
+import { knowledgeBaseIdFor, ragDeleteDocument, ragIndexDocument, ragListDocuments } from './rag.ts';
 
 // Shared demo password for every seeded account.
 const DEMO_PASSWORD = 'DemoPass123';
@@ -189,6 +189,19 @@ for (const user of users.filter(u => u.role === 'admin')) {
 
 if (ragConfigured()) {
   try {
+    // The demo reset wipes the local DB but the remote KB persists; prune stale
+    // entries first so old test documents cannot ground future answers.
+    const kbId = knowledgeBaseIdFor(workspaceId);
+    const listed = await ragListDocuments(workspaceId);
+    const remoteIds: string[] = ((listed as any)?.documents || [])
+      .map((e: any) => e?.document_id || e?.id)
+      .filter(Boolean);
+    let pruned = 0;
+    for (const id of remoteIds) {
+      try { await ragDeleteDocument(workspaceId, id); pruned++; } catch { /* already gone */ }
+    }
+    if (pruned > 0) console.log(`RAG: pruned ${pruned} stale document(s) from ${kbId}`);
+
     await ragIndexDocument({
       workspaceId,
       documentId: document.id,
@@ -197,7 +210,7 @@ if (ragConfigured()) {
       language: 'id',
       metadata: { category: document.category, owner: document.owner, version: document.version, effectiveDate: document.effectiveDate }
     });
-    console.log(`\nRAG: indexed "${document.title}" -> ${knowledgeBaseIdFor(workspaceId)}`);
+    console.log(`RAG: indexed "${document.title}" -> ${kbId}`);
   } catch (error) {
     console.warn('RAG: indexing skipped —', error instanceof Error ? error.message : error);
   }

@@ -15,7 +15,7 @@ import {
   DocumentStatus 
 } from './types';
 import { apiService } from './services/apiService';
-import { generateContentFromBrief } from './services/ragEngine';
+import { generateContentFromBrief, GeneratedOutput } from './services/ragEngine';
 
 // Components
 import { Header } from './components/Header';
@@ -93,15 +93,16 @@ export function App() {
   }, [theme]);
 
   // After email login: activate workspace by id and set the authenticated user as active
-  const setActiveWorkspaceById = async (wsId: string) => {
+  // `user` is passed explicitly because React state (authUser) is not yet updated in the same tick.
+  const setActiveWorkspaceById = async (wsId: string, user?: { id: string }) => {
     const data = await apiService.bootstrap(wsId);
     const ws = data.workspaces.find(item => item.id === wsId);
     if (!ws) return;
     setWorkspaces(data.workspaces);
     setActiveWorkspace(ws);
     setUsers(data.users);
-    const me = data.users.find(u => u.id === authUser?.id);
-    setActiveUser(me || data.users[0] || null);
+    const me = data.users.find(u => u.id === (user?.id ?? authUser?.id));
+    setActiveUser(me ?? null);
     setBrandProfile(data.brandProfile);
     setDocuments(data.documents);
     setDrafts(data.drafts);
@@ -149,19 +150,20 @@ export function App() {
   };
 
   // Content Generation from Brief
-  const handleGenerateDraft = async (brief: ContentBrief) => {
+  // `output` is supplied by the Brief Studio (grounded live against the RAG service);
+  // otherwise we fall back to the local engine for callers that only pass a brief.
+  const handleGenerateDraft = async (brief: ContentBrief, output?: GeneratedOutput) => {
     if (!brandProfile || !activeWorkspace || !activeUser) return;
 
-    // Call RAG engine
-    const output = generateContentFromBrief(brief, brandProfile, documents, activeWorkspace.id);
+    const generated = output ?? generateContentFromBrief(brief, brandProfile, documents, activeWorkspace.id);
 
     const initialVersionon: DraftVersionon = {
       versionNumber: 1,
-      content: output.content,
-      scenes: output.scenes,
-      citations: output.citations,
-      unsupportedClaims: output.unsupportedClaims,
-      qualityCheck: output.qualityCheck,
+      content: generated.content,
+      scenes: generated.scenes,
+      citations: generated.citations,
+      unsupportedClaims: generated.unsupportedClaims,
+      qualityCheck: generated.qualityCheck,
       createdAt: new Date().toISOString(),
       createdBy: activeUser.name,
       changeSummary: 'Initial RAG-grounded draft generated from official documents.'
@@ -177,7 +179,7 @@ export function App() {
       currentVersionon: 1,
       versions: [initialVersionon],
       comments: [],
-      visualAsset: output.visualAsset,
+      visualAsset: generated.visualAsset,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       createdBy: activeUser.id,
@@ -189,10 +191,7 @@ export function App() {
     setDrafts(refreshed.drafts);
     setAuditLogs(refreshed.auditLogs);
     setSelectedDraftId(newDraft.id);
-
-    // Transition directly to editor
-    setCurrentTab('editor');
-    showToast(`Draft "${newDraft.title}" created with ${output.citations.length} RAG citations!`);
+    showToast(`Draft "${newDraft.title}" created with ${generated.citations.length} RAG citations!`);
   };
 
   // Save new draft version
@@ -308,12 +307,12 @@ export function App() {
       return <AuthView
         hasWorkspaces={workspaces.length > 0}
         onFirstRun={() => setShowFirstRun(true)}
-        onAuthed={(user) => {
+        onAuthed={async (user) => {
           setAuthUser(user);
           const memberships = user.workspaces || [];
           if (memberships.length === 1) {
             const ws = memberships[0];
-            setActiveWorkspaceById(ws.id);
+            await setActiveWorkspaceById(ws.id, user);
           }
           setAuthenticated(true);
         }}
@@ -400,6 +399,7 @@ export function App() {
               activeWorkspace={activeWorkspace}
               activeUser={activeUser}
               onGenerateDraft={handleGenerateDraft}
+              onNavigate={setCurrentTab}
             />
           )}
 
