@@ -46,9 +46,25 @@ interface BriefStudioViewProps {
   onNavigate?: (tab: ActiveTab) => void;
 }
 
+/** Strip analyst-style artifacts from a raw RAG answer before it becomes copy. */
+function sanitizeRagAnswer(raw: string): string {
+  return raw
+    .replace(/\[\d+\]/g, '') // citation markers like [1], [2]
+    .split('\n')
+    .filter(line => {
+      const t = line.trim();
+      if (!t) return true;
+      // Drop meta commentary lines about the retrieval context itself.
+      return !/^(tidak ditemukan dalam konteks|catatan:|disclaimer|perhitungan, bukan)/i.test(t);
+    })
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 /** Map a live RAG search hit to the citation shape the workspace expects. */
 function toCitation(hit: RagHit, index: number): GroundedCitation {
-  const content = typeof hit.content === 'string' ? hit.content : '';
+  const content = typeof hit.content === 'string' ? hit.content.trim() : '';
   const rawScore = typeof hit.score === 'number' ? hit.score : 0;
   const relevanceScore = rawScore <= 1 ? Math.round(rawScore * 100) : Math.round(rawScore);
   return {
@@ -175,13 +191,15 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
     let remote: RemoteGrounding;
     try {
       const rag = await apiService.ragQuery(activeWorkspace.id, `${title} ${keyMessage}`, 5);
-      const citations = (rag.sources || []).map(toCitation);
+      const citations = (rag.sources || [])
+        .filter(hit => typeof hit.content === 'string' && hit.content.trim()) // skip empty chunks
+        .map(toCitation);
       const unsupported = rag.grounded
         ? []
         : [rag.no_answer_reason
-            ? `The knowledge base could not ground this claim (${rag.no_answer_reason}).`
-            : 'Specific factual claims in the brief were not found in the active documents.'];
-      remote = { answer: rag.answer || '', citations, unsupportedClaims: unsupported, grounded: Boolean(rag.grounded), model: rag.model };
+            ? `Knowledge base belum dapat mem-grounding klaim ini (${rag.no_answer_reason}).`
+            : 'Klaim faktual dalam brief belum ditemukan pada dokumen aktif.'];
+      remote = { answer: sanitizeRagAnswer(rag.answer || ''), citations, unsupportedClaims: unsupported, grounded: Boolean(rag.grounded), model: rag.model };
       setRagModel(rag.model || null);
       setUsedRemoteRag(true);
     } catch (error) {

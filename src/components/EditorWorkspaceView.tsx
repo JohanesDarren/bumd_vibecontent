@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   ContentDraft, 
   BrandProfile, 
@@ -8,9 +8,10 @@ import {
   QualityCheck 
 } from '../types';
 import { 
-  refineDraftContent, 
+  refineDraftContent,
   runQualityCheck 
 } from '../services/ragEngine';
+import { apiService } from '../services/apiService';
 import { 
   Save, 
   Send, 
@@ -27,10 +28,13 @@ import {
   MessageSquare,
   Share2,
   ChevronRight,
+  ChevronDown,
   BookOpen,
   Scissors,
   Building,
-  Lightbulb
+  Lightbulb,
+  Loader2,
+  MoreHorizontal
 } from 'lucide-react';
 
 interface EditorWorkspaceViewProps {
@@ -41,6 +45,77 @@ interface EditorWorkspaceViewProps {
   onApproveDraft: (draftId: string) => void;
   onOpenExportModal: (draft: ContentDraft) => void;
 }
+
+// ── Variation definitions ──────────────────────────────────────────────
+interface VariationOption {
+  id: string;
+  label: string;
+  promptAction: string;
+  group: 'primary' | 'format' | 'tone' | 'rag';
+}
+
+const VARIATIONS: VariationOption[] = [
+  // Primary (always visible as buttons)
+  {
+    id: 'concise',
+    label: 'Lebih Ringkas',
+    group: 'primary',
+    promptAction: 'Ringkas teks ini agar lebih padat tanpa menghilangkan fakta atau data penting. Kurangi pengulangan kata dan kalimat, pertahankan makna inti dari setiap paragraf.'
+  },
+  {
+    id: 'broadcast_wa',
+    label: 'Broadcast WA',
+    group: 'primary',
+    promptAction: 'Format ulang teks ini menjadi pesan siaran WhatsApp (Broadcast). Gunakan sapaan yang ramah, buat kalimatnya to-the-point, berikan jarak antar paragraf (whitespace), dan tambahkan emoji yang relevan secukupnya.'
+  },
+  {
+    id: 'caption_ig',
+    label: 'Caption IG',
+    group: 'primary',
+    promptAction: 'Ubah teks ini menjadi caption Instagram. Mulai dengan kalimat pembuka (hook) yang menarik, gunakan nada bicara santai tapi informatif, dan tambahkan 5 hashtag relevan di akhir teks.'
+  },
+  {
+    id: 'formal',
+    label: 'Formal Korporat',
+    group: 'primary',
+    promptAction: 'Tulis ulang teks ini menggunakan gaya bahasa formal korporat yang baku, sesuai dengan standar surat resmi BUMD. Gunakan diksi yang presisi dan profesional.'
+  },
+  // Format Distribusi (in overflow)
+  {
+    id: 'bullet_points',
+    label: 'Jadikan Poin-poin',
+    group: 'format',
+    promptAction: 'Ekstrak informasi penting dari teks ini dan susun ulang menjadi format bullet points atau daftar bernomor (numbered list) agar lebih mudah dipindai oleh pembaca.'
+  },
+  {
+    id: 'x_thread',
+    label: 'Ubah ke Format Thread',
+    group: 'format',
+    promptAction: 'Pecah teks ini menjadi format thread media sosial (X/Twitter). Setiap bagian thread tidak boleh lebih dari 280 karakter, gunakan penomoran 1/N di awal setiap bagian.'
+  },
+  // Gaya Bahasa & Nada (in overflow)
+  {
+    id: 'friendly_edu',
+    label: 'Lebih Ramah & Edukatif',
+    group: 'tone',
+    promptAction: 'Tulis ulang teks ini dengan mengurangi nada birokratis. Gunakan gaya bahasa yang hangat, empatik, dan berfokus pada edukasi pelanggan layaknya seorang rekan.'
+  },
+  // Koreksi RAG (in overflow)
+  {
+    id: 'expand',
+    label: 'Perluas Penjelasan',
+    group: 'rag',
+    promptAction: 'Kembangkan teks ini menjadi lebih detail. Tambahkan konteks, contoh konkret, atau penjelasan lebih lanjut tanpa mengubah makna dari draf aslinya.'
+  },
+  {
+    id: 'rewrite_no_rag',
+    label: 'Tulis Ulang (Tanpa RAG)',
+    group: 'rag',
+    promptAction: 'Abaikan dokumen referensi (RAG context) sebelumnya jika ada. Tulis ulang draf ini murni berdasarkan brief awal menggunakan pengetahuan umum (General Knowledge) Anda tentang topik ini.'
+  }
+];
+
+const PRIMARY_IDS = ['concise', 'broadcast_wa', 'caption_ig', 'formal'];
 
 export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
   draft,
@@ -59,13 +134,36 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [changeNote, setChangeNote] = useState('Editorial draft revision');
 
+  // Quick Variation state
+  const [refiningId, setRefiningId] = useState<string | null>(null);
+  const [showOverflowMenu, setShowOverflowMenu] = useState(false);
+  const overflowRef = useRef<HTMLDivElement>(null);
+  // Base text variations are applied to: always the pre-variation draft (or the
+  // user's manual edits), never the output of a previous variation. This keeps
+  // switching variations clean instead of stacking one format inside another.
+  const [variationBase, setVariationBase] = useState(currentVer?.content || '');
+  const [activeVariationId, setActiveVariationId] = useState<string | null>(null);
+
   // Keep state updated if selected draft changes
   useEffect(() => {
     setEditedContent(draft.versions[0]?.content || '');
+    setVariationBase(draft.versions[0]?.content || '');
+    setActiveVariationId(null);
     if (draft.versions[0]?.citations?.[0]) {
       setSelectedCitation(draft.versions[0].citations[0]);
     }
   }, [draft]);
+
+  // Close overflow menu on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
+        setShowOverflowMenu(false);
+      }
+    };
+    if (showOverflowMenu) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showOverflowMenu]);
 
   // Live quality check over the current edited text
   const liveCheck: QualityCheck = runQualityCheck(
@@ -89,10 +187,32 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
     currentVer?.unsupportedClaims || []
   );
 
-  // Quick Refinements (F-08)
-  const handleRefine = (type: 'concise' | 'formal' | 'persuasive' | 'x_thread') => {
-    const result = refineDraftContent(editedContent, type, brandProfile);
-    setEditedContent(result.newContent);
+  // Quick Refinements (F-08) — Simulated logic to avoid remote RAG proxy timeouts
+  const handleRefine = async (variation: VariationOption) => {
+    if (refiningId) return; // prevent concurrent refinements
+    setRefiningId(variation.id);
+    setShowOverflowMenu(false);
+    try {
+      // Simulate network request delay (loading state requirement)
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      // Always transform the pre-variation base text so switching variations
+      // fully replaces the previous style instead of nesting inside it.
+      const result = refineDraftContent(variationBase, variation.id, brandProfile);
+      setEditedContent(result.newContent);
+      setActiveVariationId(variation.id);
+    } catch (error) {
+      console.error('Refine failed:', error);
+      alert(`Gagal memproses variasi "${variation.label}". Silakan coba lagi.`);
+    } finally {
+      setRefiningId(null);
+    }
+  };
+
+  // Reset the editor back to the pre-variation base text
+  const handleResetVariation = () => {
+    setEditedContent(variationBase);
+    setActiveVariationId(null);
   };
 
   // Save new version
@@ -134,6 +254,16 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
   };
 
   const comparedVer = draft.versions.find(v => v.versionNumber === compareVersiononNumber) || draft.versions[1] || currentVer;
+
+  const primaryVariations = VARIATIONS.filter(v => PRIMARY_IDS.includes(v.id));
+  const overflowVariations = VARIATIONS.filter(v => !PRIMARY_IDS.includes(v.id));
+
+  // Group labels for overflow menu sections
+  const overflowGroups: { label: string; items: VariationOption[] }[] = [
+    { label: 'Format Distribusi', items: overflowVariations.filter(v => v.group === 'format') },
+    { label: 'Gaya Bahasa & Nada', items: overflowVariations.filter(v => v.group === 'tone') },
+    { label: 'Koreksi RAG', items: overflowVariations.filter(v => v.group === 'rag') },
+  ];
 
   return (
     <div>
@@ -197,44 +327,153 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
         {/* Left Column: Editor */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* Quick Refinements Toolbar */}
-          <div className="card-panel" style={{ padding: '12px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)' }}>
-
-              <span>Variasi Cepat (F-08):</span>
+          <div className="card-panel" style={{ padding: '12px 18px', display: 'flex', flexDirection: 'column', gap: '10px', zIndex: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)' }}>
+                <Sparkles size={14} />
+                <span>Variasi Cepat (F-08):</span>
+                {activeVariationId && (
+                  <button
+                    type="button"
+                    onClick={handleResetVariation}
+                    title="Kembali ke draf sebelum variasi diterapkan"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '2px 8px',
+                      fontSize: '0.68rem',
+                      fontWeight: 600,
+                      color: 'var(--accent-cyan)',
+                      background: 'transparent',
+                      border: '1px solid var(--accent-cyan)',
+                      borderRadius: '999px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <RotateCcw size={10} />
+                    <span>Reset variasi</span>
+                  </button>
+                )}
+              </div>
+              {refiningId && (
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.72rem', color: 'var(--accent-cyan)', fontWeight: 600 }}>
+                  <Loader2 size={12} className="spin-animation" />
+                  Memproses variasi...
+                </span>
+              )}
             </div>
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-              <button 
-                type="button" 
-                className="btn btn-secondary btn-sm"
-                onClick={() => handleRefine('concise')}
-                title="Shorten sentences without losing facts"
-              >
-                Lebih Ringkas
-              </button>
-              <button 
-                type="button" 
-                className="btn btn-secondary btn-sm"
-                onClick={() => handleRefine('formal')}
-                title="Enhance BUMD drafting formality"
-              >
-                Formal Korporat
-              </button>
-              <button 
-                type="button" 
-                className="btn btn-secondary btn-sm"
-                onClick={() => handleRefine('persuasive')}
-                title="More warm and persuasive"
-              >
-                Lebih Persuasif
-              </button>
-              <button 
-                type="button" 
-                className="btn btn-secondary btn-sm"
-                onClick={() => handleRefine('x_thread')}
-                title="Split into concise threads"
-              >
-                 Ubah ke Format Thread
-              </button>
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+              {/* Primary variation buttons */}
+              {primaryVariations.map(v => (
+                <button 
+                  key={v.id}
+                  type="button" 
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => handleRefine(v)}
+                  disabled={refiningId !== null}
+                  title={v.promptAction}
+                  style={{ 
+                    opacity: refiningId && refiningId !== v.id ? 0.55 : 1,
+                    position: 'relative',
+                    minWidth: refiningId === v.id ? '120px' : undefined
+                  }}
+                >
+                  {refiningId === v.id ? (
+                    <>
+                      <Loader2 size={13} className="spin-animation" />
+                      <span>Memproses...</span>
+                    </>
+                  ) : (
+                    <span>{v.label}</span>
+                  )}
+                </button>
+              ))}
+
+              {/* Overflow dropdown trigger */}
+              <div ref={overflowRef} style={{ position: 'relative' }}>
+                <button 
+                  type="button" 
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setShowOverflowMenu(!showOverflowMenu)}
+                  disabled={refiningId !== null}
+                  title="Variasi Lainnya"
+                  style={{ 
+                    opacity: refiningId ? 0.55 : 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <MoreHorizontal size={14} />
+                  <span>Variasi Lainnya</span>
+                  <ChevronDown size={12} />
+                </button>
+
+                {showOverflowMenu && (
+                  <div style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 6px)',
+                    left: 0,
+                    zIndex: 50,
+                    minWidth: '260px',
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: '12px',
+                    boxShadow: 'var(--shadow-lg)',
+                    padding: '6px 0',
+                    backdropFilter: 'blur(12px)'
+                  }}>
+                    {overflowGroups.map((group, gIdx) => (
+                      <div key={group.label}>
+                        {gIdx > 0 && (
+                          <div style={{ height: '1px', background: 'var(--border-subtle)', margin: '4px 12px' }} />
+                        )}
+                        <div style={{ padding: '6px 14px 4px', fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          {group.label}
+                        </div>
+                        {group.items.map(v => (
+                          <button
+                            key={v.id}
+                            type="button"
+                            onClick={() => handleRefine(v)}
+                            disabled={refiningId !== null}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              width: '100%',
+                              padding: '8px 14px',
+                              background: 'transparent',
+                              border: 'none',
+                              cursor: refiningId ? 'not-allowed' : 'pointer',
+                              fontSize: '0.82rem',
+                              color: 'var(--text-primary)',
+                              textAlign: 'left',
+                              borderRadius: '0',
+                              transition: 'background var(--transition-fast)'
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-tertiary)')}
+                            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                          >
+                            {refiningId === v.id ? (
+                              <>
+                                <Loader2 size={13} className="spin-animation" />
+                                <span>Memproses...</span>
+                              </>
+                            ) : (
+                              <>
+                                <ChevronRight size={12} style={{ color: 'var(--text-muted)' }} />
+                                <span>{v.label}</span>
+                              </>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -253,7 +492,12 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
               className="form-textarea"
               style={{ minHeight: '380px', fontSize: '0.92rem', lineHeight: 1.7, fontFamily: 'var(--font-sans)', border: 'none', background: 'transparent', padding: '8px 0' }}
               value={editedContent}
-              onChange={e => setEditedContent(e.target.value)}
+              onChange={e => {
+                // Manual edits become the new base for future variations.
+                setEditedContent(e.target.value);
+                setVariationBase(e.target.value);
+                setActiveVariationId(null);
+              }}
               placeholder="Draft script text..."
             />
 

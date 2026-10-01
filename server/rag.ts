@@ -78,10 +78,27 @@ export type RagQueryResult = {
 };
 
 export function ragQuery(workspaceId: string, query: string, topK = 5) {
+  // The answer of this endpoint is used directly as copywriting material, so
+  // the query must steer the model away from analyst-style replies (citation
+  // markers like [1], meta commentary about the knowledge base, internal
+  // disclaimers) — those used to leak verbatim into the generated draft.
+  const copywritingQuery = [
+    'PERAN: kamu adalah penulis copywriting korporat BUMD.',
+    'TUGAS: berdasarkan HANYA dokumen resmi pada knowledge base, tulis naskah copywriting siap pakai (prosa mengalir, bukan poin analisis) yang menyampaikan pesan berikut.',
+    'ATURAN WAJIB:',
+    '1. Hanya gunakan fakta yang ada di dokumen; jangan mengarang angka atau tanggal.',
+    '2. Keluarkan HANYA teks copywriting-nya dalam Bahasa Indonesia, dengan kalimat utuh yang mengalir.',
+    '3. DILARANG menyertakan: penanda sitasi seperti [1] atau [2], komentar meta tentang konteks/knowledge base/dokumen (misalnya "tidak ditemukan dalam konteks", "perhitungan, bukan isi dekret"), atau disclaimer internal.',
+    '4. Jika sebagian data tidak ditemukan di dokumen, jangan disebut sama sekali; cukup tulis bagian yang didukung dokumen.',
+    '5. Akhiri dengan ajakan bertindak (call to action) yang natural.',
+    '',
+    'PESAN YANG HARUS DISAMPAIKAN:',
+    query
+  ].join('\n');
   return call<RagQueryResult>('/query', {
     method: 'POST',
     body: JSON.stringify({
-      query,
+      query: copywritingQuery,
       knowledge_base_id: knowledgeBaseIdFor(workspaceId),
       options: { top_k: topK, strict_grounding: true, include_sources: true }
     })
@@ -106,6 +123,40 @@ export function ragIndexDocument(input: {
       language: input.language || 'id',
       metadata: { workspaceId: input.workspaceId, ...(input.metadata || {}) },
       replace: true
+    })
+  });
+}
+
+export type RagRefineResult = {
+  answer: string;
+  model?: string;
+};
+
+export function ragRefine(workspaceId: string, draftContent: string, promptAction: string) {
+  // Guard rails so the model restyles the draft instead of amputating it
+  // (regression: quick variations used to return only header + closing line).
+  const combinedQuery = [
+    'PERAN: kamu adalah asisten editor copywriting BUMD.',
+    'TUGAS: tulis ulang/format ulang DRAF ASLI di bawah sesuai instruksi.',
+    'ATURAN WAJIB:',
+    '1. Pertahankan SELURUH isi utama draf asli: semua paragraf, fakta, angka, nama, dan CTA (boleh diringkas kalimat, jangan dibuang).',
+    '2. DILARANG menjawab hanya dengan header/judul plus penutup; keluaran harus memuat isi utama.',
+    '3. Panjang keluaran minimal 70% dari teks asli (kecuali instruksi memang minta lebih pendek, tetap jaga semua fakta).',
+    '4. Keluarkan HANYA draf hasil, tanpa penjelasan, tanpa preface, tanpa awalan seperti "Berikut draf...".',
+    '5. Jawab dalam Bahasa Indonesia, gaya sesuai instruksi.',
+    '',
+    `INSTRUKSI: ${promptAction}`,
+    '',
+    '---',
+    'DRAF ASLI:',
+    draftContent
+  ].join('\n');
+  return call<RagRefineResult>('/query', {
+    method: 'POST',
+    body: JSON.stringify({
+      query: combinedQuery,
+      knowledge_base_id: knowledgeBaseIdFor(workspaceId),
+      options: { top_k: 3, strict_grounding: false, include_sources: false }
     })
   });
 }
