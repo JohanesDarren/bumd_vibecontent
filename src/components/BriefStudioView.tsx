@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   BrandProfile, 
-  KnowledgeDocument, 
+
   ContentFormat, 
   ContentBrief, 
   Workspace,
@@ -10,7 +10,6 @@ import {
   ActiveTab
 } from '../types';
 import { 
-  retrieveKnowledge, 
   generateContentFromBrief, 
   RemoteGrounding, 
   GeneratedOutput 
@@ -18,12 +17,11 @@ import {
 import { apiService, RagHit, RagStatus } from '../services/apiService';
 import { 
   Sparkles, 
-  BookOpen, 
+
   AlertCircle, 
   CheckCircle2, 
   Send,
-  ChevronDown,
-  ChevronUp,
+
   Type,
   Minus,
   Plus,
@@ -38,7 +36,7 @@ import {
 
 interface BriefStudioViewProps {
   brandProfile: BrandProfile;
-  documents: KnowledgeDocument[];
+
   activeWorkspace: Workspace;
   activeUser: User;
   onGenerateDraft: (brief: ContentBrief, output: GeneratedOutput) => Promise<void> | void;
@@ -65,7 +63,7 @@ function toCitation(hit: RagHit, index: number): GroundedCitation {
 
 export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
   brandProfile,
-  documents,
+
   activeWorkspace,
   activeUser,
   onGenerateDraft,
@@ -82,10 +80,6 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
   const [limitations, setLimitations] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
 
-  // Live Grounding Preview
-  const [matchedDocsCount, setMatchedDocsCount] = useState<number>(0);
-  const [matchedDocTitles, setMatchedDocTitles] = useState<string[]>([]);
-  const [unsupportedWarning, setUnsupportedWarning] = useState<string[]>([]);
 
   // Editor & Streaming state
   const [editorContent, setEditorContent] = useState('');
@@ -94,8 +88,6 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
   const editorRef = useRef<HTMLDivElement>(null);
   const streamTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // RAG Radar collapsible state
-  const [ragRadarOpen, setRagRadarOpen] = useState(false);
 
   // Live remote RAG service + latest grounding metadata
   const [ragService, setRagService] = useState<RagStatus | null>(null);
@@ -111,20 +103,6 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
   }, []);
 
 
-  useEffect(() => {
-    if (keyMessage.trim().length > 3 || title.trim().length > 3) {
-      const query = `${title} ${keyMessage}`;
-      const rag = retrieveKnowledge(query, documents, activeWorkspace.id);
-      setMatchedDocsCount(rag.matchedChunks.length);
-      const uniqueDocs = Array.from(new Set(rag.matchedChunks.map(c => c.document.title)));
-      setMatchedDocTitles(uniqueDocs);
-      setUnsupportedWarning(rag.unsupportedClaims);
-    } else {
-      setMatchedDocsCount(0);
-      setMatchedDocTitles([]);
-      setUnsupportedWarning([]);
-    }
-  }, [title, keyMessage, documents, activeWorkspace.id]);
 
 
   // Streaming text simulation
@@ -188,8 +166,8 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
       createdBy: activeUser.id
     };
 
-    // 1. Try the live Multi-Tenant RAG service (grounded answer + real sources).
-    let remote: RemoteGrounding | undefined;
+    // The remote RAG API is the only knowledge source.
+    let remote: RemoteGrounding;
     try {
       const rag = await apiService.ragQuery(activeWorkspace.id, `${title} ${keyMessage}`, 5);
       const citations = (rag.sources || []).map(toCitation);
@@ -202,23 +180,19 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
       setRagModel(rag.model || null);
       setUsedRemoteRag(true);
     } catch (error) {
-      // 2. Fall back to the offline keyword engine when the service is unavailable.
       console.error('ragQuery failed:', error);
-      remote = undefined;
       setUsedRemoteRag(false);
       setRagModel(null);
+      setIsGenerating(false);
+      alert('Content generation is unavailable because the RAG service could not be reached. Please try again later.');
+      return;
     }
 
-    const output = generateContentFromBrief(brief, brandProfile, documents, activeWorkspace.id, remote);
+    const output = generateContentFromBrief(brief, brandProfile, [], activeWorkspace.id, remote);
     setIsGenerating(false);
     streamText(output.content);
 
-    // Auto-open RAG radar if results found
-    if (output.citations.length > 0 || output.unsupportedClaims.length > 0 || matchedDocsCount > 0) {
-      setRagRadarOpen(true);
-    }
-
-    // 3. Persist the grounded draft so it lands in the Editor / Library.
+    // Persist the grounded draft so it lands in the Editor / Library.
     try {
       await onGenerateDraft(brief, output);
     } catch (error) {
@@ -450,89 +424,8 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
           </div>
         </form>
 
-        {/* ─── Right: Editor Canvas + Collapsible RAG Radar ─── */}
+        {/* ─── Right: Editor Canvas ─── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0', position: 'sticky', top: '92px' }}>
-
-          {/* RAG Radar Toggle Button / Collapsible */}
-          <div className="rag-radar-toggle-bar">
-            <button
-              className="rag-radar-toggle-btn"
-              onClick={() => setRagRadarOpen(!ragRadarOpen)}
-              type="button"
-            >
-              <BookOpen size={14} />
-              <span>RAG Knowledge Base Radar</span>
-              {matchedDocsCount > 0 && (
-                <span className="grounding-badge verified" style={{ fontSize: '0.68rem', padding: '2px 6px' }}>
-                  <CheckCircle2 size={10} /> {matchedDocsCount} Match
-                </span>
-              )}
-              {unsupportedWarning.length > 0 && (
-                <span className="grounding-badge warning" style={{ fontSize: '0.68rem', padding: '2px 6px' }}>
-                  <AlertCircle size={10} /> {unsupportedWarning.length} Warnings
-                </span>
-              )}
-              <span style={{ marginLeft: 'auto', color: 'var(--text-muted)' }}>
-                {ragRadarOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-              </span>
-            </button>
-
-            {ragRadarOpen && (
-              <div className="rag-radar-content">
-                {matchedDocsCount > 0 ? (
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-                      <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
-                        {matchedDocsCount} sections matched from {matchedDocTitles.length} active documents
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                      {matchedDocTitles.map((t, idx) => (
-                        <div 
-                          key={idx} 
-                          style={{ 
-                            padding: '6px 10px', 
-                            borderRadius: '6px', 
-                            background: 'var(--bg-primary)', 
-                            fontSize: '0.72rem', 
-                            borderLeft: '3px solid var(--accent-emerald)',
-                            color: 'var(--text-secondary)'
-                          }}
-                        >
-                          {t}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ padding: '10px', background: 'var(--bg-primary)', borderRadius: '8px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.76rem' }}>
-                    Type key message on the left to see relevant official documents in real-time.
-                  </div>
-                )}
-
-                {/* Unsupported Claims Detection Warning (PRD F-04) */}
-                {unsupportedWarning.length > 0 && (
-                  <div style={{ marginTop: '10px', padding: '10px', borderRadius: '8px', background: 'rgba(244, 63, 94, 0.12)', border: '1px solid rgba(244, 63, 94, 0.35)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#fb7185', fontSize: '0.75rem', fontWeight: 700, marginBottom: '4px' }}>
-                      <AlertCircle size={13} />
-                      <span>Grounding Warnings: Insufficient Sources</span>
-                    </div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-primary)', lineHeight: 1.4 }}>
-                      <ul style={{ paddingLeft: '16px', margin: 0 }}>
-                        {unsupportedWarning.map((w, idx) => (
-                          <li key={idx} style={{ color: '#fb7185', fontWeight: 600 }}>{w}</li>
-                        ))}
-                      </ul>
-                      <span style={{ color: 'var(--text-muted)', fontSize: '0.68rem', display: 'block', marginTop: '4px' }}>
-                        * The system will mark the draft as <code>[Needs Verification]</code> and reject false claims.
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
           {/* ─── Rich Text Editor Canvas ─── */}
           <div className="brief-editor-canvas-wrapper">
             {/* Editor Toolbar */}

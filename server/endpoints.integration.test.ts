@@ -32,7 +32,7 @@ test('health check reports database connectivity', async () => {
   const { status, json } = await api('GET', '/api/health');
   assert.equal(status, 200);
   assert.equal(json.ok, true);
-  assert.equal(json.database, 'vibecontent');
+  assert.equal(json.database, 'vibecontent_test');
 });
 
 test('clear-all endpoint returns ok', async () => {

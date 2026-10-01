@@ -23,7 +23,7 @@ export interface Workspace {
   description: string;
 }
 
-export type DocumentStatus = 'aktif' | 'menunggu_persetujuan' | 'usang';
+export type DocumentStatus = 'aktif' | 'menunggu_persetujuan' | 'usang' | 'gagal_diproses';
 
 export type DocumentCategory = 
   | 'sk_direksi' 
@@ -242,7 +242,6 @@ export type ActiveTab =
   | 'content_scheduling'
   | 'review_approval'  
   | 'library' 
-  | 'knowledge_base' 
   | 'brand_profile' 
   | 'user_management'
   | 'audit_log'

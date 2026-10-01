@@ -7,7 +7,14 @@ import nodeCrypto from 'node:crypto';
 import pg from 'pg';
 
 const { Pool } = pg;
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL || 'postgresql://vibecontent:vibecontent_dev@127.0.0.1:5435/vibecontent' });
+const defaultDatabaseUrl = process.env.NODE_ENV === 'test'
+  ? 'postgresql://vibecontent:vibecontent_dev@127.0.0.1:5435/vibecontent_test'
+  : 'postgresql://vibecontent:vibecontent_dev@127.0.0.1:5435/vibecontent';
+const connectionString = process.env.DATABASE_URL || defaultDatabaseUrl;
+if (process.env.NODE_ENV === 'test' && !new URL(connectionString).pathname.endsWith('_test')) {
+  throw new Error('Refusing to run tests against a non-test database');
+}
+export const pool = new Pool({ connectionString });
 const here = dirname(fileURLToPath(import.meta.url));
 
 export async function runMigrations() {
@@ -121,7 +128,23 @@ export async function saveKnowledgeSource(source:any){
 
 export async function updateOrganization(id:string,input:any){const result=await pool.query('UPDATE organizations SET name=$2,code=$3,sector=$4,city=$5,tagline=$6,primary_color=$7,accent_color=$8,description=$9 WHERE id=$1 RETURNING id,name,code,sector,city,tagline,primary_color AS "primaryColor",accent_color AS "accentColor",description',[id,input.name,input.code.toUpperCase(),input.sector,input.city,input.tagline||'',input.primaryColor||'#0284c7',input.accentColor||'#0ea5e9',input.description||'']);if(!result.rowCount)throw new Error('Organization not found');return result.rows[0];}
 
-export async function createUserMembership(workspaceId:string,input:any){const client=await pool.connect();try{await client.query('BEGIN');const id=`usr-${nodeCrypto.randomUUID()}`;await client.query('INSERT INTO users(id,name,email,avatar,title,department) VALUES($1,$2,$3,$4,$5,$6)',[id,input.name,input.email,input.avatar||'',input.title||'',input.department||'']);await client.query('INSERT INTO memberships(organization_id,user_id,role) VALUES($1,$2,$3)',[workspaceId,id,input.role]);await client.query('COMMIT');return{id,workspaceId,...input,avatar:input.avatar||''};}catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}}
+export async function createUserMembership(workspaceId:string,input:any){const client=await pool.connect();try{await client.query('BEGIN');
+  // Re-use an existing account (e.g. registered via /api/auth/register but not yet a member) or create a fresh one.
+  const existing=await client.query('SELECT id FROM users WHERE email=$1',[String(input.email||'').toLowerCase().trim()]);
+  let userId:string; let tempPassword:string|undefined;
+  if(existing.rowCount){ userId=existing.rows[0].id; }
+  else {
+    // password_hash is NOT NULL (migration 002): use the admin-supplied password or generate a temporary one.
+    tempPassword=input.password||nodeCrypto.randomBytes(4).toString('hex');
+    const passwordHash=await hashPassword(tempPassword);
+    const id=`usr-${nodeCrypto.randomUUID()}`;
+    await client.query('INSERT INTO users(id,name,email,avatar,title,department,password_hash) VALUES($1,$2,$3,$4,$5,$6,$7)',[id,input.name,String(input.email||'').toLowerCase().trim(),input.avatar||'',input.title||'',input.department||'',passwordHash]);
+    userId=id;
+  }
+  await client.query('INSERT INTO memberships(organization_id,user_id,role) VALUES($1,$2,$3) ON CONFLICT (organization_id,user_id) DO UPDATE SET role=EXCLUDED.role, active=true',[workspaceId,userId,input.role]);
+  await client.query('COMMIT');
+  return{id:userId,workspaceId,...input,avatar:input.avatar||'',tempPassword};
+}catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}}
 
 export async function deleteUserMembership(workspaceId:string,userId:string){const client=await pool.connect();try{await client.query('BEGIN');await client.query('DELETE FROM memberships WHERE organization_id=$1 AND user_id=$2',[workspaceId,userId]);await client.query('DELETE FROM users u WHERE u.id=$1 AND NOT EXISTS(SELECT 1 FROM memberships m WHERE m.user_id=u.id)',[userId]);await client.query('COMMIT');}catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}}
 export async function deleteKnowledgeSource(workspaceId:string,id:string){await pool.query('DELETE FROM knowledge_sources WHERE organization_id=$1 AND id=$2',[workspaceId,id]);}

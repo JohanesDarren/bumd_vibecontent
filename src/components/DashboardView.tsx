@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   ContentDraft, 
-  KnowledgeDocument, 
+
   BrandProfile, 
   User, 
   Workspace,
@@ -11,7 +11,7 @@ import {
   FileText, 
   Clock, 
   CheckCircle2, 
-  BookOpen, 
+
   ArrowRight, 
   Sparkles, 
   AlertTriangle, 
@@ -22,7 +22,7 @@ import {
 
 interface DashboardViewProps {
   drafts: ContentDraft[];
-  documents: KnowledgeDocument[];
+
   brandProfile: BrandProfile;
   activeUser: User;
   activeWorkspace: Workspace;
@@ -32,7 +32,7 @@ interface DashboardViewProps {
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
   drafts,
-  documents,
+
   brandProfile,
   activeUser,
   activeWorkspace,
@@ -41,7 +41,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 }) => {
   const pendingReviewDrafts = drafts.filter(d => d.status === 'menunggu_review');
   const approvedDrafts = drafts.filter(d => d.status === 'disetujui');
-  const activeDocs = documents.filter(d => d.status === 'aktif');
+
 
   return (
     <div>
@@ -82,13 +82,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <PlusCircle size={16} />
               <span>Create New Content</span>
             </button>
-            <button 
-              className="btn btn-secondary"
-              onClick={() => onNavigate('knowledge_base')}
-            >
-              <BookOpen size={16} />
-              <span>Check RAG Knowledge</span>
-            </button>
+
           </div>
         </div>
       </div>
@@ -128,16 +122,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        <div className="card-panel" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(99, 102, 241, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-indigo)' }}>
-            <BookOpen size={24} />
-          </div>
-          <div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>RAG Active Documents</div>
-            <div style={{ fontSize: '1.65rem', fontWeight: 800 }}>{activeDocs.length}</div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--accent-emerald)' }}>100% Officially grounded</div>
-          </div>
-        </div>
+
       </div>
 
       {/* Main Grid: Pending Approvals & Recent Drafts */}

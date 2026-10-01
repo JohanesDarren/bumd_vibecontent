@@ -1,9 +1,106 @@
 import React, { useState } from 'react';
-import type { User, UserRole, Workspace } from '../types';
-import { ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react';
+import { User, UserRole, Workspace } from '../types';
+import { UserPlus, ShieldCheck, Trash2, Users } from 'lucide-react';
 
-interface Props { users:User[]; activeWorkspace:Workspace; onCreate:(input:{name:string;email:string;role:UserRole;title:string;department:string})=>Promise<void>; onDelete:(id:string)=>Promise<void>; }
-export const UserManagementView:React.FC<Props>=({users,activeWorkspace,onCreate,onDelete})=>{
- const [form,setForm]=useState({name:'',email:'',role:'creator' as UserRole,title:'',department:''});
- return <div><div className="page-header-row"><div><h2 className="page-title">Users & Roles</h2><p className="page-subtitle">PostgreSQL memberships for <strong>{activeWorkspace.name}</strong>.</p></div></div><form className="card-panel" style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,marginBottom:18}} onSubmit={async e=>{e.preventDefault();await onCreate(form);setForm({...form,name:'',email:'',title:'',department:''});}}>{(['name','email','title','department'] as const).map(key=><input key={key} className="form-input" type={key==='email'?'email':'text'} placeholder={key} value={form[key]} onChange={e=>setForm({...form,[key]:e.target.value})} required={key==='name'||key==='email'}/>)}<select className="form-select" value={form.role} onChange={e=>setForm({...form,role:e.target.value as UserRole})}><option value="creator">Creator</option><option value="reviewer">Reviewer</option><option value="admin">Admin</option></select><button className="btn btn-primary"><UserPlus size={16}/>Add user</button></form><div className="card-panel"><div className="table-scroll"><table className="data-table"><thead><tr><th>User</th><th>Email</th><th>Title</th><th>Role</th><th>Access</th><th></th></tr></thead><tbody>{users.map(user=><tr key={user.id}><td><strong>{user.name}</strong></td><td>{user.email}</td><td>{user.title}</td><td>{user.role}</td><td><span className="member-active"><ShieldCheck size={13}/>Active</span></td><td><button className="btn btn-danger btn-sm" onClick={()=>onDelete(user.id)} disabled={users.length===1}><Trash2 size={14}/></button></td></tr>)}</tbody></table></div>{users.length===0&&<div className="empty-state"><Users size={36}/><p>No workspace members.</p></div>}</div></div>;
+interface Props {
+  users: User[];
+  activeWorkspace: Workspace;
+  onCreate: (input: { name: string; email: string; role: UserRole; title: string; department: string; password?: string }) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+}
+
+export const UserManagementView: React.FC<Props> = ({ users, activeWorkspace, onCreate, onDelete }) => {
+  const [form, setForm] = useState({ name: '', email: '', role: 'creator' as UserRole, title: '', department: '', password: '' });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setBusy(true);
+    try {
+      await onCreate({ ...form, password: form.password.trim() || undefined });
+      setForm({ name: '', email: '', role: 'creator', title: '', department: '', password: '' });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add user');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div>
+      <div className="page-header-row">
+        <div>
+          <h2 className="page-title">Users & Roles</h2>
+          <p className="page-subtitle">
+            Workspace memberships for <strong>{activeWorkspace.name}</strong>. New accounts can sign in immediately{form.password ? '' : ' with a temporary password (shown after creation)'}.
+          </p>
+        </div>
+      </div>
+
+      <form className="card-panel" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 18 }} onSubmit={submit}>
+        <input className="form-input" placeholder="Full name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required />
+        <input className="form-input" type="email" placeholder="Email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required />
+        <input className="form-input" placeholder="Title (optional)" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
+        <input className="form-input" placeholder="Department (optional)" value={form.department} onChange={e => setForm({ ...form, department: e.target.value })} />
+        <input
+          className="form-input"
+          type="text"
+          placeholder="Password (optional — auto-generated if empty)"
+          value={form.password}
+          onChange={e => setForm({ ...form, password: e.target.value })}
+          minLength={form.password ? 8 : undefined}
+        />
+        <select className="form-select" value={form.role} onChange={e => setForm({ ...form, role: e.target.value as UserRole })}>
+          <option value="creator">Creator</option>
+          <option value="reviewer">Reviewer</option>
+          <option value="admin">Admin</option>
+        </select>
+        {error && (
+          <div style={{ gridColumn: '1 / -1', padding: '10px 12px', borderRadius: 8, background: 'rgba(244,63,94,0.12)', border: '1px solid rgba(244,63,94,0.35)', color: '#fb7185', fontSize: '0.82rem' }}>
+            {error}
+          </div>
+        )}
+        <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end' }}>
+          <button className="btn btn-primary" disabled={busy}>
+            <UserPlus size={16} />
+            {busy ? 'Adding…' : 'Add user'}
+          </button>
+        </div>
+      </form>
+
+      <div className="card-panel">
+        <div className="table-scroll">
+          <table className="data-table">
+            <thead>
+              <tr><th>User</th><th>Email</th><th>Title</th><th>Role</th><th>Access</th><th></th></tr>
+            </thead>
+            <tbody>
+              {users.map(user => (
+                <tr key={user.id}>
+                  <td><strong>{user.name}</strong></td>
+                  <td>{user.email}</td>
+                  <td>{user.title}</td>
+                  <td>{user.role}</td>
+                  <td><span className="member-active"><ShieldCheck size={13} />Active</span></td>
+                  <td>
+                    <button className="btn btn-danger btn-sm" onClick={() => onDelete(user.id)} disabled={users.length === 1} title="Remove from workspace">
+                      <Trash2 size={14} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {users.length === 0 && (
+          <div className="empty-state">
+            <Users size={36} />
+            <p>No workspace members.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 };

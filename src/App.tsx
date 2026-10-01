@@ -11,8 +11,7 @@ import {
   ContentBrief, 
   DraftVersionon, 
   ApprovalInfo, 
-  ReviewComment, 
-  DocumentStatus 
+  ReviewComment
 } from './types';
 import { apiService } from './services/apiService';
 import { generateContentFromBrief, GeneratedOutput } from './services/ragEngine';
@@ -27,7 +26,7 @@ import { AuthView } from './components/AuthView';
 import { VisualStudioView } from './components/VisualStudioView';
 import { ReviewApprovalView } from './components/ReviewApprovalView';
 import { LibraryView } from './components/LibraryView';
-import { KnowledgeBaseView } from './components/KnowledgeBaseView';
+
 import { BrandProfileView } from './components/BrandProfileView';
 import { AuditLogView } from './components/AuditLogView';
 import { ExportModal } from './components/ExportModal';
@@ -47,6 +46,15 @@ export function App() {
   const [loading, setLoading] = useState(true);
   // Theme state
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  // Icon-only sidebar rail; persisted so it survives reloads.
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    try { return localStorage.getItem('vc-sidebar-collapsed') === '1'; } catch { return false; }
+  });
+  const toggleSidebar = () => setSidebarCollapsed(prev => {
+    const next = !prev;
+    try { localStorage.setItem('vc-sidebar-collapsed', next ? '1' : '0'); } catch { /* ignore */ }
+    return next;
+  });
 
   // Core App State
   const [currentTab, setCurrentTab] = useState<ActiveTab>('dashboard');
@@ -67,13 +75,13 @@ export function App() {
   // Initialize and load data from PostgreSQL API
   const loadData = async (workspaceId = activeWorkspace?.id) => {
     const data = await apiService.bootstrap(workspaceId);
-    const activeWs = data.workspaces.find(workspace => workspace.id === workspaceId) || data.workspaces[0];
-    const curUser = data.users.find(user => user.id === activeUser?.id) || data.users[0];
+    const activeWs = workspaceId ? data.workspaces.find(workspace => workspace.id === workspaceId) : undefined;
+    const curUser = activeUser ? data.users.find(user => user.id === activeUser.id) : undefined;
 
     setWorkspaces(data.workspaces);
     setActiveWorkspace(activeWs || null);
     setUsers(data.users);
-    setActiveUser(curUser);
+    setActiveUser(curUser || null);
     setBrandProfile(data.brandProfile);
     setDocuments(data.documents);
     setDrafts(data.drafts);
@@ -256,21 +264,6 @@ export function App() {
     showToast('Review note successfully added.');
   };
 
-  // Knowledge base document status toggle
-  const handleUpdateDocStatus = async (docId: string, status: DocumentStatus) => {
-    const document = documents.find(item => item.id === docId);
-    if (!document || !activeWorkspace) return;
-    await apiService.saveKnowledge({ ...document, status });
-    await loadData(activeWorkspace.id);
-    showToast(`Document status changed to: ${status.toUpperCase()}`);
-  };
-
-  // Upload new knowledge doc
-  const handleUploadDocument = async (newDoc: KnowledgeDocument) => {
-    await apiService.saveKnowledge(newDoc);
-    if (activeWorkspace) await loadData(activeWorkspace.id);
-    showToast(`Document "${newDoc.title}" successfully indexed to the Knowledge Base.`);
-  };
 
   // Save brand profile
   const handleSaveBrandProfile = async (newProfile: BrandProfile) => {
@@ -282,11 +275,13 @@ export function App() {
   const handleOpenExport = (draft: ContentDraft) => setExportModalDraft(draft);
 
   // Create user membership
-  const handleCreateUser = async (input: { name: string; email: string; role: UserRole; title: string; department: string }) => {
+  const handleCreateUser = async (input: { name: string; email: string; role: UserRole; title: string; department: string; password?: string }) => {
     if (!activeWorkspace) return;
-    await apiService.createUser(activeWorkspace.id, input);
+    const created = await apiService.createUser(activeWorkspace.id, input);
     await loadData(activeWorkspace.id);
-    showToast(`User "${input.name}" successfully added to the workspace.`);
+    showToast(created?.tempPassword
+      ? `User "${input.name}" added. Temporary password: ${created.tempPassword}`
+      : `User "${input.name}" successfully added to the workspace.`);
   };
 
   // Delete user membership
@@ -330,7 +325,7 @@ export function App() {
           {memberships.length === 0 ? (
             <div>
               <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)' }}>You are not a member of any workspace yet.</p>
-              <button className="btn btn-primary" onClick={() => setShowFirstRun(true)}>Provision a new workspace</button>
+              <button className="btn btn-secondary" onClick={handleLogout}>Back to sign in</button>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -350,7 +345,7 @@ export function App() {
 
   const selectedDraft = drafts.find(d => d.id === selectedDraftId) || drafts[0];
   const pendingReviewCount = drafts.filter(d => d.status === 'menunggu_review').length;
-  const activeDocCount = documents.filter(d => d.status === 'aktif').length;
+
 
   return (
     <div className="app-container">
@@ -365,6 +360,8 @@ export function App() {
         theme={theme}
         onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
         onResetData={handleResetData}
+        sidebarCollapsed={sidebarCollapsed}
+        onToggleSidebar={toggleSidebar}
       />
 
       <div className="main-layout">
@@ -373,29 +370,28 @@ export function App() {
           currentTab={currentTab}
           onSelectTab={setCurrentTab}
           pendingReviewCount={pendingReviewCount}
-          activeDocCount={activeDocCount}
+
           userRole={activeUser.role}
           activeWorkspace={activeWorkspace}
+          collapsed={sidebarCollapsed}
         />
 
         {/* Dynamic Viewport */}
         <main className="content-viewport">
           {currentTab === 'dashboard' && (
-            <DashboardView 
+            <DashboardView
               drafts={drafts}
-              documents={documents}
               brandProfile={effectiveBrandProfile}
               activeUser={activeUser}
               activeWorkspace={activeWorkspace}
               onNavigate={setCurrentTab}
-              onSelectDraft={(id) => setSelectedDraftId(id)}
+              onSelectDraft={(id) => { setSelectedDraftId(id); setCurrentTab('editor'); }}
             />
           )}
 
           {currentTab === 'brief_studio' && (
             <BriefStudioView 
               brandProfile={effectiveBrandProfile}
-              documents={documents}
               activeWorkspace={activeWorkspace}
               activeUser={activeUser}
               onGenerateDraft={handleGenerateDraft}
@@ -440,6 +436,7 @@ export function App() {
             <ContentSchedulingView 
               drafts={drafts}
               activeWorkspace={activeWorkspace}
+              onOpenEditorDraft={(id) => { setSelectedDraftId(id); setCurrentTab('editor'); }}
             />
           )}
 
@@ -476,15 +473,6 @@ export function App() {
             />
           )}
 
-          {currentTab === 'knowledge_base' && (
-            <KnowledgeBaseView 
-              documents={documents}
-              activeWorkspace={activeWorkspace}
-              activeUser={activeUser}
-              onUpdateStatus={handleUpdateDocStatus}
-              onUploadDocument={handleUploadDocument}
-            />
-          )}
 
           {currentTab === 'brand_profile' && (
             <BrandProfileView 

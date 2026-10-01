@@ -267,6 +267,88 @@ body {
   flex-direction: column;
   justify-content: space-between;
   padding: 20px 14px;
+  /* Stick under the sticky top header while content scrolls */
+  position: sticky;
+  top: 72px;
+  align-self: flex-start;
+  height: calc(100vh - 72px);
+  overflow-y: auto;
+  z-index: 40;
+  transition: width 0.2s ease;
+}
+
+/* Icon-only rail (hamburger-collapsed) */
+.app-sidebar.collapsed {
+  width: 68px;
+  padding: 20px 10px;
+  align-items: center;
+}
+
+.app-sidebar.collapsed .nav-group {
+  width: 100%;
+  align-items: center;
+}
+
+.app-sidebar.collapsed .nav-item-btn {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  justify-content: center;
+  gap: 0;
+}
+
+.app-sidebar.collapsed .nav-item-label,
+.app-sidebar.collapsed .nav-badge {
+  display: none;
+}
+
+/* Unread-style dot replaces text badges in icon-only mode */
+.app-sidebar.collapsed .nav-item-btn .nav-dot {
+  display: block;
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: var(--accent-rose);
+  box-shadow: 0 0 6px var(--accent-rose);
+}
+
+.app-sidebar.collapsed .nav-divider {
+  width: 32px;
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 4px 0 12px;
+  flex-shrink: 0;
+}
+
+.nav-item-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: all var(--transition-fast);
+  position: relative;
+}
+
+.nav-item-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.nav-divider {
+  display: none;
 }
 
 .nav-section-title {
@@ -767,6 +849,9 @@ body {
   .app-sidebar {
     width: 220px;
   }
+  .app-sidebar.collapsed {
+    width: 64px;
+  }
   .content-viewport {
     padding: 20px;
   }
@@ -777,10 +862,58 @@ body {
     flex-direction: column;
   }
   .app-sidebar {
+    position: static;
     width: 100%;
+    height: auto;
     border-right: none;
     border-bottom: 1px solid var(--border-subtle);
   }
+  /* Collapse toggle only applies to the desktop rail */
+  .sidebar-toggle-btn {
+    display: none;
+  }
+}
+
+/* "+" quick-add hint on today's empty calendar cell */
+.cal-cell-add-hint {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px dashed var(--border-subtle);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.cal-cell-add-hint:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+  background: rgba(2, 132, 199, 0.08);
+}
+
+/* Header collapse toggle button */
+.sidebar-toggle-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.sidebar-toggle-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border-color: var(--primary);
 }
 
 /* PRD surfaces: access, users, settings */

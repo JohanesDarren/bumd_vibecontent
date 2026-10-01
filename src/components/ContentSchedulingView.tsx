@@ -25,16 +25,19 @@ type Platform = 'instagram' | 'facebook' | 'twitter' | 'linkedin' | 'youtube';
 interface ScheduledContent {
   id: string;
   title: string;
-  thumbnail: string;
+  thumbnail?: string;
   platform: Platform;
   status: ScheduleStatus;
   date: string; // ISO date string YYYY-MM-DD
   time: string; // HH:mm
+  notes?: string;
+  draftId?: string;
 }
 
 interface ContentSchedulingViewProps {
   drafts: ContentDraft[];
   activeWorkspace: Workspace;
+  onOpenEditorDraft?: (draftId: string) => void;
 }
 
 /* ─── Mini SVG Social Icons ─── */
@@ -97,51 +100,6 @@ const STATUS_COLORS: Record<ScheduleStatus, { bg: string; border: string; text: 
   published: { bg: 'rgba(16, 185, 129, 0.15)', border: 'rgba(16, 185, 129, 0.4)', text: '#34d399', label: 'Published' },
 };
 
-const SAMPLE_THUMBNAILS = [
-  'https://images.unsplash.com/photo-1548839140-29a749e1cf4d?auto=format&fit=crop&w=200&q=80',
-  'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=200&q=80',
-  'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=200&q=80',
-  'https://images.unsplash.com/photo-1560264280-88b68371db39?auto=format&fit=crop&w=200&q=80',
-  'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=200&q=80',
-  'https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=200&q=80',
-  'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&w=200&q=80',
-  'https://images.unsplash.com/photo-1551434678-e076c223a692?auto=format&fit=crop&w=200&q=80',
-  'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=200&q=80',
-  'https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=200&q=80',
-  'https://images.unsplash.com/photo-1573164713988-8665fc963095?auto=format&fit=crop&w=200&q=80',
-  'https://images.unsplash.com/photo-1553484771-047a44eee27b?auto=format&fit=crop&w=200&q=80',
-];
-
-function generateMockSchedule(year: number, month: number): ScheduledContent[] {
-  const titles = [
-    'Promo Layanan Air Bersih', 'Info Tarif Baru Q4', 'Tips Hemat Air Harian',
-    'Event Peduli Lingkungan', 'Kampanye Sambungan Baru', 'Laporan Kualitas Air',
-    'CSR Tandon Air Gratis', 'Edukasi Sanitasi Sehat', 'Behind the Scenes WTP',
-    'Testimoni Pelanggan', 'Infografis Distribusi', 'Reels: Proses Filtrasi',
-    'Story: Hari Air Sedunia', 'Poster Digital Inovasi', 'FAQ Layanan Pelanggan',
-    'Reminder Bayar Tagihan', 'Workshop Sanitasi Warga', 'Partnership Highlight',
-  ];
-  const platforms: Platform[] = ['instagram', 'facebook', 'twitter', 'linkedin', 'youtube'];
-  const statuses: ScheduleStatus[] = ['draft', 'scheduled', 'published'];
-  const items: ScheduledContent[] = [];
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-  for (let i = 0; i < 18; i++) {
-    const day = Math.floor(Math.random() * daysInMonth) + 1;
-    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    items.push({
-      id: `sc-${i}-${Date.now()}`,
-      title: titles[i % titles.length],
-      thumbnail: SAMPLE_THUMBNAILS[i % SAMPLE_THUMBNAILS.length],
-      platform: platforms[i % platforms.length],
-      status: day < 15 ? statuses[2] : (day < 22 ? statuses[1] : statuses[0]),
-      date: dateStr,
-      time: `${String(8 + Math.floor(Math.random() * 12)).padStart(2, '0')}:${Math.random() > 0.5 ? '00' : '30'}`,
-    });
-  }
-  return items;
-}
-
 /* ─── Calendar Helpers ─── */
 function getCalendarDays(year: number, month: number) {
   const firstDay = new Date(year, month, 1).getDay();
@@ -178,6 +136,8 @@ function getCalendarDays(year: number, month: number) {
 /* ─── Component ─── */
 export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
   activeWorkspace,
+  drafts,
+  onOpenEditorDraft
 }) => {
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
@@ -189,10 +149,49 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedCard, setSelectedCard] = useState<ScheduledContent | null>(null);
 
-  // Generate schedule data
-  const [schedule, setSchedule] = useState<ScheduledContent[]>(() => generateMockSchedule(viewYear, viewMonth));
+  // Add-form state (the modal was previously non-functional)
+  const [formTitle, setFormTitle] = useState('');
+  const [formPlatform, setFormPlatform] = useState<Platform>('instagram');
+  const [formStatus, setFormStatus] = useState<ScheduleStatus>('draft');
+  const [formDate, setFormDate] = useState('');
+  const [formTime, setFormTime] = useState('09:00');
+  const [formNotes, setFormNotes] = useState('');
+  const [formDraftId, setFormDraftId] = useState('');
 
-  // Regenerate schedule when month changes
+  // Schedule entries start empty — the user creates them via "Add New Schedule".
+  const [schedule, setSchedule] = useState<ScheduledContent[]>([]);
+
+  const openAddModal = (dateStr?: string) => {
+    setFormTitle('');
+    setFormPlatform('instagram');
+    setFormStatus('draft');
+    setFormDate(dateStr || `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`);
+    setFormTime('09:00');
+    setFormNotes('');
+    setFormDraftId('');
+    setShowAddModal(true);
+  };
+
+  const handleSaveSchedule = () => {
+    if (!formTitle.trim() || !formDate) {
+      alert('Content title and publication date are required.');
+      return;
+    }
+    const entry: ScheduledContent = {
+      id: `sc-${Date.now()}`,
+      title: formTitle.trim(),
+      platform: formPlatform,
+      status: formStatus,
+      date: formDate,
+      time: formTime || '09:00',
+      notes: formNotes.trim() || undefined,
+      draftId: formDraftId || undefined
+    };
+    setSchedule(prev => [...prev, entry]);
+    setShowAddModal(false);
+  };
+
+  // Month navigation (data-independent)
   const handleMonthChange = useCallback((delta: number) => {
     let newMonth = viewMonth + delta;
     let newYear = viewYear;
@@ -200,7 +199,6 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
     if (newMonth > 11) { newMonth = 0; newYear++; }
     setViewMonth(newMonth);
     setViewYear(newYear);
-    setSchedule(generateMockSchedule(newYear, newMonth));
   }, [viewMonth, viewYear]);
 
   // Calendar grid
@@ -288,7 +286,7 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
 
       {/* ── Action Bar ── */}
       <div className="scheduling-action-bar">
-        <button className="btn btn-primary scheduling-add-btn" onClick={() => setShowAddModal(true)}>
+        <button className="btn btn-primary scheduling-add-btn" onClick={() => openAddModal()}>
           <Plus size={18} />
           <span>Add New Schedule</span>
 
@@ -364,7 +362,6 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
               onClick={() => {
                 setViewMonth(today.getMonth());
                 setViewYear(today.getFullYear());
-                setSchedule(generateMockSchedule(today.getFullYear(), today.getMonth()));
               }}
             >
               Today
@@ -374,7 +371,9 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
           {/* Drag hint */}
           <div className="drag-hint-bar">
             <Move size={14} />
-            <span>Drag content cards to another date to reschedule — changes automatically update the Visual Grid Preview</span>
+            <span>{schedule.length === 0
+              ? 'No schedules yet — click “Add New Schedule” (or drag-off hint below) to plan your first post'
+              : 'Drag content cards to another date to reschedule — changes automatically update the Visual Grid Preview'}</span>
           </div>
 
           {/* Day headers */}
@@ -406,6 +405,9 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
                     )}
                   </div>
                   <div className="cal-cell-content">
+                    {items.length === 0 && cell.isCurrentMonth && cell.dateStr === todayStr && schedule.length === 0 && (
+                      <button className="cal-cell-add-hint" onClick={() => openAddModal(cell.dateStr)} title="Add schedule on this date">+</button>
+                    )}
                     {items.slice(0, 3).map(item => (
                       <div
                         key={item.id}
@@ -420,8 +422,16 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
                         </div>
                         <div
                           className="content-card-thumb"
-                          style={{ backgroundImage: `url(${item.thumbnail})` }}
-                        />
+                          style={item.thumbnail
+                            ? { backgroundImage: `url(${item.thumbnail})` }
+                            : { background: `linear-gradient(135deg, ${activeWorkspace.primaryColor}, ${activeWorkspace.accentColor})`, display: 'grid', placeItems: 'center' }}
+                        >
+                          {!item.thumbnail && (
+                            <span style={{ fontSize: '0.55rem', fontWeight: 800, color: '#fff' }}>
+                              {item.title.slice(0, 2).toUpperCase()}
+                            </span>
+                          )}
+                        </div>
                         <div className="content-card-info">
                           <span className="content-card-title">{item.title}</span>
                           <div className="content-card-meta">
@@ -492,7 +502,13 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
                   style={{ animationDelay: `${i * 60}ms` }}
                   onClick={() => setSelectedCard(item)}
                 >
-                  <img src={item.thumbnail} alt={item.title} className="ig-grid-img" />
+                  {item.thumbnail ? (
+                    <img src={item.thumbnail} alt={item.title} className="ig-grid-img" />
+                  ) : (
+                    <div className="ig-grid-img" style={{ background: `linear-gradient(135deg, ${activeWorkspace.primaryColor}, ${activeWorkspace.accentColor})`, display: 'grid', placeItems: 'center', color: '#fff', fontWeight: 800 }}>
+                      {item.title.slice(0, 2).toUpperCase()}
+                    </div>
+                  )}
                   <div className="ig-grid-overlay">
                     <span className="ig-grid-title">{item.title}</span>
                     <span
@@ -554,13 +570,20 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
             </div>
             <div className="modal-body">
               <div className="form-group">
-                <label className="form-label">Content Title</label>
-                <input className="form-input" placeholder="e.g.: New Connection Discount Promotion" />
+                <label className="form-label">Content Title *</label>
+                <input className="form-input" placeholder="e.g.: New Connection Discount Promotion" value={formTitle} onChange={e => setFormTitle(e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Link to Library Draft (Optional)</label>
+                <select className="form-select" value={formDraftId} onChange={e => setFormDraftId(e.target.value)}>
+                  <option value="">— None —</option>
+                  {drafts.map(d => <option key={d.id} value={d.id}>{d.title}</option>)}
+                </select>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                 <div className="form-group">
                   <label className="form-label">Platform</label>
-                  <select className="form-select">
+                  <select className="form-select" value={formPlatform} onChange={e => setFormPlatform(e.target.value as Platform)}>
                     <option value="instagram">Instagram</option>
                     <option value="facebook">Facebook</option>
                     <option value="twitter">Twitter / X</option>
@@ -570,7 +593,7 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
                 </div>
                 <div className="form-group">
                   <label className="form-label">Initial Status</label>
-                  <select className="form-select">
+                  <select className="form-select" value={formStatus} onChange={e => setFormStatus(e.target.value as ScheduleStatus)}>
                     <option value="draft">Draft</option>
                     <option value="scheduled">Scheduled</option>
                   </select>
@@ -578,22 +601,22 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                 <div className="form-group">
-                  <label className="form-label">Publication Date</label>
-                  <input className="form-input" type="date" />
+                  <label className="form-label">Publication Date *</label>
+                  <input className="form-input" type="date" value={formDate} onChange={e => setFormDate(e.target.value)} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Time</label>
-                  <input className="form-input" type="time" />
+                  <input className="form-input" type="time" value={formTime} onChange={e => setFormTime(e.target.value)} />
                 </div>
               </div>
               <div className="form-group">
                 <label className="form-label">Notes (Optional)</label>
-                <textarea className="form-textarea" placeholder="Add a note or short brief for this content..." rows={3} />
+                <textarea className="form-textarea" placeholder="Add a note or short brief for this content..." rows={3} value={formNotes} onChange={e => setFormNotes(e.target.value)} />
               </div>
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowAddModal(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={() => setShowAddModal(false)}>
+              <button className="btn btn-primary" onClick={handleSaveSchedule}>
                 <Check size={16} />
                 Save Schedule
               </button>
@@ -607,11 +630,23 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
         <div className="modal-overlay" onClick={() => setSelectedCard(null)}>
           <div className="modal-card" style={{ maxWidth: '440px' }} onClick={e => e.stopPropagation()}>
             <div className="modal-header" style={{ padding: '0', overflow: 'hidden', borderBottom: 'none' }}>
-              <img
-                src={selectedCard.thumbnail}
-                alt={selectedCard.title}
-                style={{ width: '100%', height: '200px', objectFit: 'cover', borderRadius: '20px 20px 0 0' }}
-              />
+              {selectedCard.thumbnail ? (
+                <img
+                  src={selectedCard.thumbnail}
+                  alt={selectedCard.title}
+                  style={{ width: '100%', height: '200px', objectFit: 'cover', borderRadius: '20px 20px 0 0' }}
+                />
+              ) : (
+                <div
+                  style={{
+                    width: '100%', height: '200px', borderRadius: '20px 20px 0 0',
+                    background: `linear-gradient(135deg, ${activeWorkspace.primaryColor}, ${activeWorkspace.accentColor})`,
+                    display: 'grid', placeItems: 'center', color: '#fff', fontWeight: 800, fontSize: '2rem'
+                  }}
+                >
+                  {selectedCard.title.slice(0, 2).toUpperCase()}
+                </div>
+              )}
             </div>
             <div className="modal-body">
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -655,10 +690,12 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setSelectedCard(null)}>Close</button>
-              <button className="btn btn-primary">
-                <ArrowUpRight size={16} />
-                Open in Editor
-              </button>
+              {selectedCard.draftId && onOpenEditorDraft && (
+                <button className="btn btn-primary" onClick={() => { onOpenEditorDraft(selectedCard.draftId!); setSelectedCard(null); }}>
+                  <ArrowUpRight size={16} />
+                  Open in Editor
+                </button>
+              )}
             </div>
           </div>
         </div>

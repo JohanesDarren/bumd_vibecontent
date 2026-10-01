@@ -28,12 +28,7 @@ export const AuthView: React.FC<Props> = ({ onAuthed, onFirstRun, hasWorkspaces 
         const user = await apiService.login(email.trim(), password);
         onAuthed(user);
       } else {
-        const result = await apiService.register({ name: name.trim(), email: email.trim(), password, workspaceCode: workspaceCode.trim() || undefined });
-        if (!result.hasWorkspace) {
-          // registered without workspace — go to onboarding to create one
-          onFirstRun();
-          return;
-        }
+        await apiService.register({ name: name.trim(), email: email.trim(), password, workspaceCode: workspaceCode.trim() });
         const user = await apiService.login(email.trim(), password);
         onAuthed(user);
       }
@@ -69,8 +64,8 @@ export const AuthView: React.FC<Props> = ({ onAuthed, onFirstRun, hasWorkspaces 
         <label className="form-group"><span className="form-label">Password{mode === 'register' ? ' (min 8 characters)' : ''}</span>
           <input className="form-input" type="password" value={password} onChange={e => setPassword(e.target.value)} minLength={mode === 'register' ? 8 : undefined} required /></label>
         {mode === 'register' && (
-          <label className="form-group"><span className="form-label">Workspace code <small style={{ color: 'var(--text-muted)' }}>(optional — join an existing workspace)</small></span>
-            <input className="form-input" value={workspaceCode} onChange={e => setWorkspaceCode(e.target.value)} placeholder="e.g. TIRTA" /></label>
+          <label className="form-group"><span className="form-label">Workspace code</span>
+            <input className="form-input" value={workspaceCode} onChange={e => setWorkspaceCode(e.target.value)} placeholder="e.g. TIRTA" required /></label>
         )}
         {error && <div style={{ padding: '10px 12px', borderRadius: '8px', background: 'rgba(244,63,94,0.12)', border: '1px solid rgba(244,63,94,0.35)', color: '#fb7185', fontSize: '0.82rem', marginBottom: '12px' }}>{error}</div>}
         <button className="btn btn-primary" disabled={busy} style={{ width: '100%' }}>
