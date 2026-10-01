@@ -135,15 +135,17 @@ export async function createUserMembership(workspaceId:string,input:any){const c
   if(existing.rowCount){ userId=existing.rows[0].id; }
   else {
     // password_hash is NOT NULL (migration 002): use the admin-supplied password or generate a temporary one.
-    tempPassword=input.password||nodeCrypto.randomBytes(4).toString('hex');
-    const passwordHash=await hashPassword(tempPassword);
+    const adminPassword = typeof input.password === 'string' && input.password.length >= 8 ? input.password : undefined;
+    tempPassword = adminPassword ?? nodeCrypto.randomBytes(4).toString('hex');
+    const passwordHash = await hashPassword(tempPassword);
     const id=`usr-${nodeCrypto.randomUUID()}`;
     await client.query('INSERT INTO users(id,name,email,avatar,title,department,password_hash) VALUES($1,$2,$3,$4,$5,$6,$7)',[id,input.name,String(input.email||'').toLowerCase().trim(),input.avatar||'',input.title||'',input.department||'',passwordHash]);
     userId=id;
   }
   await client.query('INSERT INTO memberships(organization_id,user_id,role) VALUES($1,$2,$3) ON CONFLICT (organization_id,user_id) DO UPDATE SET role=EXCLUDED.role, active=true',[workspaceId,userId,input.role]);
   await client.query('COMMIT');
-  return{id:userId,workspaceId,...input,avatar:input.avatar||'',tempPassword};
+  // Only surface auto-generated passwords; never echo one the admin chose.
+  return{id:userId,workspaceId,...input,avatar:input.avatar||'',tempPassword: adminPassword ? undefined : tempPassword};
 }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}}
 
 export async function deleteUserMembership(workspaceId:string,userId:string){const client=await pool.connect();try{await client.query('BEGIN');await client.query('DELETE FROM memberships WHERE organization_id=$1 AND user_id=$2',[workspaceId,userId]);await client.query('DELETE FROM users u WHERE u.id=$1 AND NOT EXISTS(SELECT 1 FROM memberships m WHERE m.user_id=u.id)',[userId]);await client.query('COMMIT');}catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}}

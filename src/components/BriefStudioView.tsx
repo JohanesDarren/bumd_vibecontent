@@ -206,35 +206,10 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
     <div>
       <div className="page-header-row">
         <div>
-          <h2 className="page-title">Content Brief & RAG Generation</h2>
+          <h2 className="page-title">Content Brief Generation</h2>
           <p className="page-subtitle">
-            Draft structured content guides. AI only uses facts from the official knowledge base of <strong>{activeWorkspace.name}</strong> without unrestricted web search.
+            Susun panduan konten yang terstruktur. Sistem hanya menggunakan fakta dari knowledge base resmi <strong>{activeWorkspace.name}</strong>.
           </p>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {ragService === null ? (
-            <span className="grounding-badge" style={{ opacity: 0.7 }}>
-              <Loader2 size={13} className="brief-spin-icon" /> Checking RAG Service…
-            </span>
-          ) : ragService.configured && ragService.ready ? (
-            <span className="grounding-badge verified" title={ragModel ? `Model: ${ragModel}` : undefined}>
-              <CheckCircle2 size={13} /> RAG Service Online
-            </span>
-          ) : ragService.configured ? (
-            <span className="grounding-badge warning" title={ragService?.error}>
-              <AlertTriangle size={13} /> RAG Service Degraded
-            </span>
-          ) : (
-            <span className="grounding-badge" style={{ opacity: 0.7 }}>
-              <AlertCircle size={13} /> RAG Offline · Local Engine
-            </span>
-          )}
-          {usedRemoteRag && (
-            <span className="grounding-badge verified" style={{ fontSize: '0.68rem' }}>
-              <Zap size={11} /> Grounded live
-            </span>
-          )}
         </div>
       </div>
 
@@ -242,20 +217,19 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
         {/* ─── Left: Brief Form (preserved) ─── */}
         <form onSubmit={handleSubmit} className="card-panel" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '14px' }}>
-            <Sparkles size={20} color="var(--primary)" />
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>BUMD Content Brief Parameters</h3>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Parameter Brief Konten BUMD</h3>
           </div>
 
           {/* Title & Campaign */}
           <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '16px' }}>
             <div className="form-group" style={{ minWidth: 0 }}>
               <label className="form-label">
-                <span>Initiative / Content Title *</span>
+                <span>Judul Inisiatif / Konten *</span>
               </label>
               <input 
                 type="text" 
                 className="form-input" 
-                placeholder="e.g.: New Water Connection Education Campaign 2026"
+                placeholder="cth.: Kampanye Edukasi Sambungan Air Baru 2026"
                 value={title}
                 onChange={e => setTitle(e.target.value)}
                 required
@@ -264,12 +238,12 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
 
             <div className="form-group" style={{ minWidth: 0 }}>
               <label className="form-label">
-                <span>Campaign / Program Name</span>
+                <span>Nama Kampanye / Program</span>
               </label>
               <input 
                 type="text" 
                 className="form-input" 
-                placeholder="e.g.: Clean Water Prosperity Program"
+                placeholder="cth.: Program Kesejahteraan Air Bersih"
                 value={campaign}
                 onChange={e => setCampaign(e.target.value)}
               />
@@ -280,23 +254,23 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             <div className="form-group" style={{ minWidth: 0 }}>
               <label className="form-label">
-                <span>Draft Output Format *</span>
+                <span>Format Output Draf *</span>
               </label>
               <select 
                 className="form-select"
                 value={format}
                 onChange={e => setFormat(e.target.value as ContentFormat)}
               >
-                <option value="copy_caption">Copy & Social Media Caption (Feed / Carousel)</option>
-                <option value="teks_promosi">Official Promotional & Press Release Text</option>
-                <option value="naskah_singkat">Short Video Script 9:16 (Reels/TikTok/Shorts)</option>
-                <option value="brief_visual">Visual Brief & Infographic Guide</option>
+                <option value="copy_caption">Copy & Caption Media Sosial (Feed / Carousel)</option>
+                <option value="teks_promosi">Teks Promosi Resmi & Siaran Pers</option>
+                <option value="naskah_singkat">Naskah Video Pendek 9:16 (Reels/TikTok/Shorts)</option>
+                <option value="brief_visual">Brief Visual & Panduan Infografis</option>
               </select>
             </div>
 
             <div className="form-group" style={{ minWidth: 0 }}>
               <label className="form-label">
-                <span>Official Distribution Channel</span>
+                <span>Kanal Distribusi Resmi</span>
               </label>
               <select 
                 className="form-select"
@@ -314,14 +288,14 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             <div className="form-group" style={{ minWidth: 0 }}>
               <label className="form-label">
-                <span>Target Audience</span>
+                <span>Target Audiens</span>
               </label>
               <select
                 className="form-select"
                 value={targetAudience}
                 onChange={e => setTargetAudience(e.target.value)}
               >
-                <option value="">Select target audience…</option>
+                <option value="">Pilih target audiens…</option>
                 {(brandProfile.targetAudiences ?? []).map((aud, idx) => (
                   <option key={idx} value={aud}>{aud}</option>
                 ))}
@@ -330,7 +304,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
 
             <div className="form-group" style={{ minWidth: 0 }}>
               <label className="form-label">
-                <span>Tone of Voice (Brand Guidelines)</span>
+                <span>Nada Suara (Panduan Merek)</span>
               </label>
               <select 
                 className="form-select"

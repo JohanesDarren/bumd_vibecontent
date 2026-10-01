@@ -145,6 +145,7 @@ export function App() {
   };
 
 
+
   // Reset Demo Data
   const handleResetData = async () => {
     await apiService.clearAll();
@@ -356,10 +357,6 @@ export function App() {
         onSelectWorkspace={handleSelectWorkspace}
         users={filterUsersForWorkspace(users, activeWorkspace.id)}
         activeUser={activeUser}
-        onLogout={handleLogout}
-        theme={theme}
-        onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-        onResetData={handleResetData}
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={toggleSidebar}
       />
@@ -370,10 +367,10 @@ export function App() {
           currentTab={currentTab}
           onSelectTab={setCurrentTab}
           pendingReviewCount={pendingReviewCount}
-
           userRole={activeUser.role}
           activeWorkspace={activeWorkspace}
           collapsed={sidebarCollapsed}
+          onLogout={handleLogout}
         />
 
         {/* Dynamic Viewport */}

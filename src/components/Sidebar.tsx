@@ -8,11 +8,11 @@ import {
   CalendarDays,
   CheckSquare, 
   FolderArchive, 
-
-  Sparkles, 
+  Building2, 
   ShieldAlert, 
   Users,
-  CircleHelp
+  CircleHelp,
+  LogOut
 } from 'lucide-react';
 import { canAccessTab } from '../services/policies';
 
@@ -20,20 +20,20 @@ interface SidebarProps {
   currentTab: ActiveTab;
   onSelectTab: (tab: ActiveTab) => void;
   pendingReviewCount: number;
-
   userRole: UserRole;
   activeWorkspace: Workspace;
   collapsed?: boolean;
+  onLogout?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
   currentTab,
   onSelectTab,
   pendingReviewCount,
-
   userRole,
   activeWorkspace,
-  collapsed = false
+  collapsed = false,
+  onLogout
 }) => {
   const navButton = (tab: ActiveTab, label: string, Icon: React.ComponentType<{ size?: number }>, badge?: React.ReactNode) => {
     if (!canAccessTab(userRole, tab)) return null;
@@ -72,7 +72,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {collapsed ? <div className="nav-divider" aria-hidden /> : <div className="nav-section-title">Knowledge & Settings</div>}
         <div className="nav-group">
 
-          {navButton('brand_profile', 'Profile & Brand', Sparkles)}
+          {navButton('brand_profile', 'Profile & Brand', Building2)}
           {navButton('user_management', 'Users & Roles', Users)}
           {navButton('audit_log', 'Audit Trail', ShieldAlert)}
           {navButton('settings_help', 'Settings & Help', CircleHelp)}
@@ -86,8 +86,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span>Active Tenant Isolation</span>
           </div>
           <div className="tenant-status-body">
-            Data bound to <strong>{activeWorkspace.code}</strong>. Documents and drafts are securely isolated.
+            Data terikat pada <strong>{activeWorkspace.code}</strong>. Dokumen dan draf terisolasi dengan aman.
           </div>
+        </div>
+      )}
+
+      {onLogout && (
+        <div style={{ marginTop: 'auto', padding: '16px' }}>
+          <button 
+            className="btn btn-secondary" 
+            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'flex-start', gap: '8px', padding: '10px' }}
+            onClick={onLogout}
+            title="Log Out"
+          >
+            <LogOut size={18} />
+            {!collapsed && <span>Log Out</span>}
+          </button>
         </div>
       )}
     </aside>

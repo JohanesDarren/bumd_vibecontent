@@ -26,10 +26,6 @@ interface HeaderProps {
   onSelectWorkspace: (wsId: string) => void;
   users: User[];
   activeUser: User;
-  onLogout: () => void;
-  theme: 'dark' | 'light';
-  onToggleTheme: () => void;
-  onResetData: () => void;
   sidebarCollapsed: boolean;
   onToggleSidebar: () => void;
 }
@@ -40,10 +36,6 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectWorkspace,
   users,
   activeUser,
-  onLogout,
-  theme,
-  onToggleTheme,
-  onResetData,
   sidebarCollapsed,
   onToggleSidebar
 }) => {
@@ -140,51 +132,7 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       <div className="header-right">
-        {/* Grounding Safety Status */}
-        <div 
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            fontSize: '0.78rem',
-            fontWeight: 600,
-            padding: '5px 10px',
-            borderRadius: '9999px',
-            background: 'rgba(16, 185, 129, 0.1)',
-            color: '#10b981',
-            border: '1px solid rgba(16, 185, 129, 0.25)'
-          }}
-          title="BUMD facts are only pulled from active official documents (RAG-Only Grounding)"
-        >
-          <ShieldCheck size={14} />
-          <span>RAG-Grounded Only</span>
-        </div>
-
-        {/* Theme Toggle */}
-        <button 
-          onClick={onToggleTheme}
-          className="btn btn-secondary btn-sm"
-          style={{ padding: '8px' }}
-          title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-        >
-          {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-        </button>
-
-        {/* Destructive data clear */}
-        <button 
-          onClick={() => {
-            if (window.confirm('Delete all application data? This action cannot be undone.')) {
-              onResetData();
-            }
-          }}
-          className="btn btn-secondary btn-sm"
-          style={{ padding: '8px' }}
-          title="Delete all data"
-        >
-          <RotateCcw size={16} />
-        </button>
-
-        {/* Signed-in user + Logout */}
+        {/* Signed-in user */}
         <div className="role-badge-selector" style={{ cursor: 'default' }}>
           {activeUser.avatar ? (
             <img 
@@ -206,15 +154,6 @@ export const Header: React.FC<HeaderProps> = ({
             </span>
           </div>
         </div>
-        <button 
-          onClick={onLogout}
-          className="btn btn-secondary btn-sm"
-          style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: '6px' }}
-          title="Sign out"
-        >
-          <LogOut size={15} />
-          <span>Logout</span>
-        </button>
       </div>
     </header>
   );
