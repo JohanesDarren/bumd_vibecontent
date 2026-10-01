@@ -10,7 +10,6 @@ import {
   AuditLog, 
   ContentBrief, 
   DraftVersionon, 
-  ApprovalInfo, 
   ReviewComment
 } from './types';
 import { apiService } from './services/apiService';
@@ -24,7 +23,7 @@ import { BriefStudioView } from './components/BriefStudioView';
 import { EditorWorkspaceView } from './components/EditorWorkspaceView';
 import { AuthView } from './components/AuthView';
 import { VisualStudioView } from './components/VisualStudioView';
-import { ReviewApprovalView } from './components/ReviewApprovalView';
+
 import { LibraryView } from './components/LibraryView';
 
 import { BrandProfileView } from './components/BrandProfileView';
@@ -125,7 +124,7 @@ export function App() {
     setAuthUser(null);
     setActiveUser(null);
     setCurrentTab('dashboard');
-    showToast('Signed out.');
+    showToast('Anda telah keluar.');
   };
 
   // Toast helper
@@ -137,11 +136,11 @@ export function App() {
   // Workspace Switcher
   const handleSelectWorkspace = async (wsId: string) => {
     if (!activeUser || activeUser.workspaceId !== wsId) {
-      showToast('Workspace access denied. This account is not a member of that tenant.');
+      showToast('Akses workspace ditolak. Akun ini bukan anggota tenant tersebut.');
       return;
     }
     await loadData(wsId);
-    showToast(`Switched to workspace ${workspaces.find(w => w.id === wsId)?.name}`);
+    showToast(`Beralih ke workspace ${workspaces.find(w => w.id === wsId)?.name}`);
   };
 
 
@@ -155,7 +154,7 @@ export function App() {
     setActiveUser(null);
     setActiveWorkspace(null);
     await loadData();
-    showToast('All application data has been deleted.');
+    showToast('Semua data aplikasi telah dihapus.');
   };
 
   // Content Generation from Brief
@@ -200,7 +199,7 @@ export function App() {
     setDrafts(refreshed.drafts);
     setAuditLogs(refreshed.auditLogs);
     setSelectedDraftId(newDraft.id);
-    showToast(`Draft "${newDraft.title}" created with ${generated.citations.length} RAG citations!`);
+    showToast(`Draf "${newDraft.title}" dibuat dengan ${generated.citations.length} sitasi RAG!`);
   };
 
   // Save new draft version
@@ -209,51 +208,20 @@ export function App() {
     if (!draft || !activeWorkspace) return;
     await apiService.saveDraft({ ...draft, versions: [version, ...draft.versions], currentVersionon: version.versionNumber, updatedAt: new Date().toISOString() });
     await loadData(activeWorkspace.id);
-    showToast(`Version ${version.versionNumber} saved to the audit history.`);
+    showToast(`Versi ${version.versionNumber} disimpan ke riwayat audit.`);
   };
 
-  // Submit draft for review
-  const handleSubmitForReview = async (draftId: string) => {
-    const draft = drafts.find(item => item.id === draftId);
-    if (!activeUser || !draft || !canTransitionDraft(activeUser.role, draft.status, 'menunggu_review')) {
-      showToast('Status transition not allowed for this role.');
-      return;
-    }
-    await apiService.saveDraft({ ...draft, status: 'menunggu_review', updatedAt: new Date().toISOString() });
-    if (activeWorkspace) await loadData(activeWorkspace.id);
-    showToast('Draft successfully submitted to the PR/Approver review queue.');
-  };
-
-  // Approve draft
-  const handleApproveDraft = async (draftId: string, approvalInfo: ApprovalInfo) => {
+  // User confirms the brief is final; Visual Studio unlocks immediately.
+  const handleSelfApprove = async (draftId: string) => {
     const draft = drafts.find(item => item.id === draftId);
     if (!activeUser || !draft || !canTransitionDraft(activeUser.role, draft.status, 'disetujui')) {
-      showToast('Only Reviewer/Admin can approve drafts Pending Review.');
+      showToast('Transisi status tidak diizinkan untuk peran ini.');
       return;
     }
-    await apiService.saveDraft({ ...draft, status: 'disetujui', approvalInfo, updatedAt: new Date().toISOString() });
+    await apiService.saveDraft({ ...draft, status: 'disetujui', approvalInfo: undefined, updatedAt: new Date().toISOString() });
     if (activeWorkspace) await loadData(activeWorkspace.id);
-    showToast(`Draft officially Approved! Disposition No.: ${approvalInfo.dispositionNumber}`);
-  };
-
-  // Request revision
-  const handleRequestRevision = async (draftId: string, commentText: string) => {
-    const draft = drafts.find(item => item.id === draftId);
-    if (!activeUser || !draft || !canTransitionDraft(activeUser.role, draft.status, 'revisi_diminta')) {
-      showToast('Revision request not allowed for this status/role.');
-      return;
-    }
-    const comment: ReviewComment = {
-      id: `cmt-${Date.now()}`,
-      authorName: activeUser!.name,
-      authorRole: activeUser!.role,
-      text: commentText,
-      createdAt: new Date().toISOString(),
-      resolved: false
-    };
-    await apiService.saveDraft({ ...draft, comments: [...draft.comments, comment], status: 'revisi_diminta', updatedAt: new Date().toISOString() });
-    if (activeWorkspace) await loadData(activeWorkspace.id);
-    showToast('Revision request successfully sent to the content creator.');
+    setCurrentTab('visual_studio');
+    showToast('Brief disetujui. Studio Visual kini tersedia.');
   };
 
   // Add review comment
@@ -262,7 +230,7 @@ export function App() {
     if (!draft || !activeWorkspace) return;
     await apiService.saveDraft({ ...draft, comments: [...draft.comments, comment], updatedAt: new Date().toISOString() });
     await loadData(activeWorkspace.id);
-    showToast('Review note successfully added.');
+    showToast('Catatan review berhasil ditambahkan.');
   };
 
 
@@ -270,7 +238,7 @@ export function App() {
   const handleSaveBrandProfile = async (newProfile: BrandProfile) => {
     await apiService.saveBrand(newProfile);
     setBrandProfile(newProfile);
-    showToast('Brand guidelines and BUMD profile successfully updated.');
+    showToast('Panduan merek dan profil BUMD berhasil diperbarui.');
   };
 
   const handleOpenExport = (draft: ContentDraft) => setExportModalDraft(draft);
@@ -281,8 +249,8 @@ export function App() {
     const created = await apiService.createUser(activeWorkspace.id, input);
     await loadData(activeWorkspace.id);
     showToast(created?.tempPassword
-      ? `User "${input.name}" added. Temporary password: ${created.tempPassword}`
-      : `User "${input.name}" successfully added to the workspace.`);
+      ? `Pengguna "${input.name}" ditambahkan. Kata sandi sementara: ${created.tempPassword}`
+      : `Pengguna "${input.name}" berhasil ditambahkan ke workspace.`);
   };
 
   // Delete user membership
@@ -290,10 +258,10 @@ export function App() {
     if (!activeWorkspace) return;
     await apiService.deleteUser(activeWorkspace.id, userId);
     await loadData(activeWorkspace.id);
-    showToast('User membership successfully removed.');
+    showToast('Keanggotaan pengguna berhasil dihapus.');
   };
 
-  if (loading) return <div style={{display:'grid',placeItems:'center',height:'100vh'}}>Loading PostgreSQL…</div>;
+  if (loading) return <div style={{display:'grid',placeItems:'center',height:'100vh'}}>Memuat PostgreSQL…</div>;
 
     // 1. Auth gate — must come before workspace picker
     if (!authenticated || !authUser) {
@@ -320,13 +288,13 @@ export function App() {
       const memberships = authUser?.workspaces || [];
       return <main className="login-shell">
         <section className="login-card card-panel" style={{ maxWidth: '480px', margin: '0 auto' }}>
-          <span className="login-kicker">Choose Workspace</span>
-          <h2>Welcome, {authUser?.name}</h2>
-          <p>Select which workspace to open.</p>
+          <span className="login-kicker">Pilih Workspace</span>
+          <h2>Selamat datang, {authUser?.name}</h2>
+          <p>Pilih workspace yang akan dibuka.</p>
           {memberships.length === 0 ? (
             <div>
-              <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)' }}>You are not a member of any workspace yet.</p>
-              <button className="btn btn-secondary" onClick={handleLogout}>Back to sign in</button>
+              <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)' }}>Anda belum menjadi anggota workspace mana pun.</p>
+              <button className="btn btn-secondary" onClick={handleLogout}>Kembali ke halaman masuk</button>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -345,7 +313,7 @@ export function App() {
   const effectiveBrandProfile: BrandProfile = brandProfile || {workspaceId:activeWorkspace.id,organizationName:activeWorkspace.name,unitDepartment:'',defaultLanguage:'English',targetAudiences:[],toneOfVoice:[],terminology:[],bannedWords:[],officialCTAs:[],approvedChannels:[],brandGuidelinesSummary:'',officialDisclaimer:''};
 
   const selectedDraft = drafts.find(d => d.id === selectedDraftId) || drafts[0];
-  const pendingReviewCount = drafts.filter(d => d.status === 'menunggu_review').length;
+
 
 
   return (
@@ -366,7 +334,7 @@ export function App() {
         <Sidebar 
           currentTab={currentTab}
           onSelectTab={setCurrentTab}
-          pendingReviewCount={pendingReviewCount}
+
           userRole={activeUser.role}
           activeWorkspace={activeWorkspace}
           collapsed={sidebarCollapsed}
@@ -391,6 +359,8 @@ export function App() {
               brandProfile={effectiveBrandProfile}
               activeWorkspace={activeWorkspace}
               activeUser={activeUser}
+              drafts={drafts}
+              onOpenEditor={(id) => { setSelectedDraftId(id); setCurrentTab('editor'); }}
               onGenerateDraft={handleGenerateDraft}
               onNavigate={setCurrentTab}
             />
@@ -398,23 +368,31 @@ export function App() {
 
           {currentTab === 'editor' && (
             selectedDraft ? (
-              <EditorWorkspaceView 
-                draft={selectedDraft}
-                brandProfile={effectiveBrandProfile}
-                activeUser={activeUser}
-                onSaveNewVersionon={handleSaveNewVersionon}
-                onSubmitForReview={handleSubmitForReview}
-                onOpenExportModal={handleOpenExport}
-              />
+              <div>
+                <div className="card-panel" style={{ marginBottom: '18px', padding: '14px' }}>
+                  <label className="form-label">Brief Hasil Generasi</label>
+                  <select className="form-select" value={selectedDraft.id} onChange={event => setSelectedDraftId(event.target.value)}>
+                    {drafts.map(draft => <option key={draft.id} value={draft.id}>{draft.title} — {draft.status.replace('_', ' ')}</option>)}
+                  </select>
+                </div>
+                <EditorWorkspaceView 
+                  draft={selectedDraft}
+                  brandProfile={effectiveBrandProfile}
+                  activeUser={activeUser}
+                  onSaveNewVersionon={handleSaveNewVersionon}
+                  onApproveDraft={handleSelfApprove}
+                  onOpenExportModal={handleOpenExport}
+                />
+              </div>
             ) : (
               <div className="card-panel" style={{ textAlign: 'center', padding: '56px 24px' }}>
-                <h3 style={{ fontSize: '1.15rem', fontWeight: 700 }}>No Draft Selected</h3>
+                <h3 style={{ fontSize: '1.15rem', fontWeight: 700 }}>Belum Ada Draf Dipilih</h3>
                 <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginTop: '6px', marginBottom: '18px' }}>
-                  There are no drafts in this workspace yet, or none is selected. Create a new draft in Brief &amp; Generation, or open one from the Library.
+                  Belum ada draf di workspace ini, atau belum ada yang dipilih. Buat draf baru di Brief &amp; Generasi, atau buka dari Pustaka.
                 </p>
                 <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
-                  <button className="btn btn-primary" onClick={() => setCurrentTab('brief_studio')}>Create New Content</button>
-                  <button className="btn btn-secondary" onClick={() => setCurrentTab('library')}>Open Library</button>
+                  <button className="btn btn-primary" onClick={() => setCurrentTab('brief_studio')}>Buat Konten Baru</button>
+                  <button className="btn btn-secondary" onClick={() => setCurrentTab('library')}>Buka Pustaka</button>
                 </div>
               </div>
             )
@@ -422,7 +400,9 @@ export function App() {
 
           {currentTab === 'visual_studio' && (
             <VisualStudioView 
-              draft={selectedDraft}
+              draft={selectedDraft?.status === 'disetujui' ? selectedDraft : undefined}
+              drafts={drafts}
+              onSelectDraft={setSelectedDraftId}
               brandProfile={effectiveBrandProfile}
               activeWorkspace={activeWorkspace}
             />
@@ -437,18 +417,6 @@ export function App() {
             />
           )}
 
-          {currentTab === 'review_approval' && (
-            <ReviewApprovalView 
-              drafts={drafts}
-              selectedDraftId={selectedDraftId}
-              onSelectDraft={(id) => setSelectedDraftId(id)}
-              activeUser={activeUser}
-              activeWorkspace={activeWorkspace}
-              onApprove={handleApproveDraft}
-              onRequestRevision={handleRequestRevision}
-              onAddComment={handleAddComment}
-            />
-          )}
 
           {currentTab === 'library' && (
             <LibraryView 
@@ -465,7 +433,7 @@ export function App() {
                 if (!draft) return;
                 await apiService.saveDraft({ ...draft, status: 'diarsipkan', updatedAt: new Date().toISOString() });
                 await loadData(activeWorkspace.id);
-                showToast('Draft successfully moved to the archive.');
+                showToast('Draf berhasil dipindahkan ke arsip.');
               }}
             />
           )}

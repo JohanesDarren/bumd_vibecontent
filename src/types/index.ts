@@ -1,4 +1,4 @@
-export type UserRole = 'creator' | 'reviewer' | 'admin';
+export type UserRole = 'creator' | 'admin';
 
 export interface User {
   id: string;
@@ -240,7 +240,7 @@ export type ActiveTab =
   | 'brief_studio' 
   | 'editor'  | 'visual_studio' 
   | 'content_scheduling'
-  | 'review_approval'  
+
   | 'library' 
   | 'brand_profile' 
   | 'user_management'

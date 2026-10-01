@@ -55,9 +55,9 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     <div>
       <div className="page-header-row">
         <div>
-          <h2 className="page-title">Content Library</h2>
+          <h2 className="page-title">Pustaka Konten</h2>
           <p className="page-subtitle">
-            Collection of all official drafts, press releases, and video scripts belonging to <strong>{activeWorkspace.name}</strong>.
+            Kumpulan semua draf resmi, siaran pers, dan naskah video milik <strong>{activeWorkspace.name}</strong>.
           </p>
         </div>
       </div>
@@ -72,7 +72,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               type="text" 
               className="form-input" 
               style={{ paddingLeft: '36px' }}
-              placeholder="Search by title, keywords, or topic..."
+              placeholder="Cari berdasarkan judul, kata kunci, atau topik..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
             />
@@ -85,12 +85,12 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value as any)}
             >
-              <option value="all">All Approval Statuses</option>
-              <option value="draft">Draft</option>
-              <option value="menunggu_review">Pending Review</option>
-              <option value="revisi_diminta">Revision Requested</option>
-              <option value="disetujui">Approved</option>
-              <option value="diarsipkan">Archived</option>
+              <option value="all">Semua Status Persetujuan</option>
+              <option value="draft">Draf</option>
+              <option value="menunggu_review">Menunggu Review</option>
+              <option value="revisi_diminta">Revisi Diminta</option>
+              <option value="disetujui">Disetujui</option>
+              <option value="diarsipkan">Diarsipkan</option>
             </select>
           </div>
 
@@ -101,11 +101,11 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               value={formatFilter}
               onChange={e => setFormatFilter(e.target.value as any)}
             >
-              <option value="all">All Content Formats</option>
-              <option value="copy_caption">Social Media Caption</option>
-              <option value="teks_promosi">Press Release Text</option>
-              <option value="naskah_singkat">9:16 Video Script</option>
-              <option value="brief_visual">Visual Graphics Guide</option>
+              <option value="all">Semua Format Konten</option>
+              <option value="copy_caption">Caption Media Sosial</option>
+              <option value="teks_promosi">Teks Siaran Pers</option>
+              <option value="naskah_singkat">Naskah Video 9:16</option>
+              <option value="brief_visual">Panduan Grafis Visual</option>
             </select>
           </div>
         </div>
@@ -115,9 +115,9 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       {filteredDrafts.length === 0 ? (
         <div className="card-panel" style={{ textAlign: 'center', padding: '48px 24px' }}>
           <FileText size={40} color="var(--text-muted)" style={{ margin: '0 auto 12px' }} />
-          <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>No Drafts Found</h3>
+          <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Tidak Ada Draf</h3>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-            Adjust your search keywords or change the status filter above.
+            Sesuaikan kata kunci pencarian atau ubah filter status di atas.
           </p>
         </div>
       ) : (
@@ -139,11 +139,11 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                     <span className={`status-pill ${draft.status}`}>
-                      {draft.status === 'draft' && 'Draft'}
-                      {draft.status === 'menunggu_review' && 'Pending Review'}
-                      {draft.status === 'revisi_diminta' && 'Revision Requested'}
-                      {draft.status === 'disetujui' && 'Approved'}
-                      {draft.status === 'diarsipkan' && 'Archived'}
+                      {draft.status === 'draft' && 'Draf'}
+                      {draft.status === 'menunggu_review' && 'Menunggu Review'}
+                      {draft.status === 'revisi_diminta' && 'Revisi Diminta'}
+                      {draft.status === 'disetujui' && 'Disetujui'}
+                      {draft.status === 'diarsipkan' && 'Diarsipkan'}
                     </span>
                     <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
                       v{draft.currentVersionon}
@@ -161,18 +161,18 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
                 <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                    <span>By: <strong>{draft.creatorName}</strong></span>
+                    <span>Oleh: <strong>{draft.creatorName}</strong></span>
                     <span>{new Date(draft.updatedAt).toLocaleDateString('en-US')}</span>
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
                     {latestVer?.citations?.length > 0 ? (
                       <span className="grounding-badge verified">
-                        <CheckCircle2 size={12} /> {latestVer.citations.length} References
+                        <CheckCircle2 size={12} /> {latestVer.citations.length} Referensi
                       </span>
                     ) : (
                       <span className="grounding-badge warning">
-                        <AlertTriangle size={12} /> Needs Verification
+                        <AlertTriangle size={12} /> Perlu Verifikasi
                       </span>
                     )}
 
@@ -180,22 +180,22 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                       <button 
                         className="btn btn-secondary btn-sm"
                         onClick={() => onOpenEditor(draft.id)}
-                        title="Open in Editor"
+                        title="Buka di Editor"
                       >
                         <Eye size={14} />
-                        <span>Open</span>
+                        <span>Buka</span>
                       </button>
                       <button 
                         className="btn btn-primary btn-sm"
                         onClick={() => onOpenExportModal(draft)}
-                        title="Export Draft"
+                        title="Ekspor Draf"
                       >
                         <Share2 size={14} />
-                        <span>Export</span>
+                        <span>Ekspor</span>
                       </button>
                       {draft.status !== 'diarsipkan' && (
-                        <button className="btn btn-secondary btn-sm" onClick={() => onArchiveDraft(draft.id)} title="Archive draft">
-                          <Archive size={14}/><span>Archive</span>
+                        <button className="btn btn-secondary btn-sm" onClick={() => onArchiveDraft(draft.id)} title="Arsipkan draf">
+                          <Archive size={14}/><span>Arsipkan</span>
                         </button>
                       )}
                     </div>

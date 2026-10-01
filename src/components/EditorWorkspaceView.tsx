@@ -38,7 +38,7 @@ interface EditorWorkspaceViewProps {
   brandProfile: BrandProfile;
   activeUser: User;
   onSaveNewVersionon: (draftId: string, version: DraftVersionon, changeSummary: string) => void;
-  onSubmitForReview: (draftId: string) => void;
+  onApproveDraft: (draftId: string) => void;
   onOpenExportModal: (draft: ContentDraft) => void;
 }
 
@@ -47,7 +47,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
   brandProfile,
   activeUser,
   onSaveNewVersionon,
-  onSubmitForReview,
+  onApproveDraft,
   onOpenExportModal
 }) => {
   const currentVer = draft.versions[0];
@@ -116,7 +116,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
 
   // Rollback to previous version
   const handleRollback = (ver: DraftVersionon) => {
-    if (window.confirm(`Restore draft content to Version ${ver.versionNumber}?`)) {
+    if (window.confirm(`Pulihkan konten draf ke Versi ${ver.versionNumber}?`)) {
       setEditedContent(ver.content);
       const rollbackVer: DraftVersionon = {
         versionNumber: draft.versions.length + 1,
@@ -142,14 +142,14 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
             <span className={`status-pill ${draft.status}`}>
-              {draft.status === 'draft' && 'Draft'}
-              {draft.status === 'menunggu_review' && 'Pending Review'}
-              {draft.status === 'revisi_diminta' && 'Revision Requested'}
-              {draft.status === 'disetujui' && 'Approved'}
-              {draft.status === 'diarsipkan' && 'Archived'}
+              {draft.status === 'draft' && 'Draf'}
+              {draft.status === 'menunggu_review' && 'Menunggu Review'}
+              {draft.status === 'revisi_diminta' && 'Revisi Diminta'}
+              {draft.status === 'disetujui' && 'Disetujui'}
+              {draft.status === 'diarsipkan' && 'Diarsipkan'}
             </span>
             <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-              Version: <strong>v{draft.currentVersionon}</strong> ({draft.versions.length} saved versions)
+              Versi: <strong>v{draft.currentVersionon}</strong> ({draft.versions.length} versi tersimpan)
             </span>
           </div>
           <h2 className="page-title">{draft.title}</h2>
@@ -161,7 +161,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
             onClick={() => onOpenExportModal(draft)}
           >
             <Share2 size={16} />
-            <span>Export & Copy</span>
+            <span>Ekspor & Salin</span>
           </button>
 
           <button 
@@ -169,16 +169,16 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
             onClick={() => setShowSaveModal(true)}
           >
             <Save size={16} />
-            <span>Save New Version</span>
+            <span>Simpan Versi Baru</span>
           </button>
 
-          {draft.status !== 'menunggu_review' && draft.status !== 'disetujui' && (
+          {draft.status !== 'disetujui' && (
             <button 
               className="btn btn-primary"
-              onClick={() => onSubmitForReview(draft.id)}
+              onClick={() => onApproveDraft(draft.id)}
             >
-              <Send size={16} />
-              <span>Submit for Review</span>
+              <CheckCircle2 size={16} />
+              <span>Setujui Brief & Lanjutkan</span>
             </button>
           )}
         </div>
@@ -188,7 +188,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
       <div className="draft-watermark" style={{ marginBottom: '20px' }}>
         <AlertTriangle size={16} />
         <span>
-          STATUS: <strong>CORPORATE DRAFT</strong> — This draft has not passed final approval by the Head of PR / Approver. Distribution to external channels is prohibited until it is Approved.
+          STATUS: <strong>DRAF</strong> — Sempurnakan brief ini, lalu setujui untuk membuka Studio Visual.
         </span>
       </div>
 
@@ -200,7 +200,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
           <div className="card-panel" style={{ padding: '12px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)' }}>
 
-              <span>Quick Variations (F-08):</span>
+              <span>Variasi Cepat (F-08):</span>
             </div>
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
               <button 
@@ -209,7 +209,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
                 onClick={() => handleRefine('concise')}
                 title="Shorten sentences without losing facts"
               >
-                More Concise
+                Lebih Ringkas
               </button>
               <button 
                 type="button" 
@@ -217,7 +217,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
                 onClick={() => handleRefine('formal')}
                 title="Enhance BUMD drafting formality"
               >
-                Corporate Formality
+                Formal Korporat
               </button>
               <button 
                 type="button" 
@@ -225,7 +225,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
                 onClick={() => handleRefine('persuasive')}
                 title="More warm and persuasive"
               >
-                More Persuasive
+                Lebih Persuasif
               </button>
               <button 
                 type="button" 
@@ -233,7 +233,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
                 onClick={() => handleRefine('x_thread')}
                 title="Split into concise threads"
               >
-                 Change to Thread Format
+                 Ubah ke Format Thread
               </button>
             </div>
           </div>
@@ -242,10 +242,10 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
           <div className="card-panel" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '10px' }}>
               <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                Draft Editor ({editedContent.length} characters)
+                Editor Draf ({editedContent.length} karakter)
               </span>
               <span style={{ fontSize: '0.74rem', color: 'var(--accent-emerald)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <CheckCircle2 size={12} /> Auto-checked live
+                <CheckCircle2 size={12} /> Diperiksa otomatis
               </span>
             </div>
 
@@ -309,7 +309,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
               onClick={() => setActiveTabSide('grounding')}
             >
               <BookOpen size={14} />
-              <span>RAG References</span>
+              <span>Referensi RAG</span>
             </button>
             <button 
               className={`btn btn-sm ${activeTabSide === 'scorecard' ? 'btn-primary' : 'btn-secondary'}`}
@@ -317,7 +317,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
               onClick={() => setActiveTabSide('scorecard')}
             >
               <FileCheck size={14} />
-              <span>Quality Score</span>
+              <span>Skor Kualitas</span>
             </button>
             <button 
               className={`btn btn-sm ${activeTabSide === 'history' ? 'btn-primary' : 'btn-secondary'}`}
@@ -325,7 +325,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
               onClick={() => setActiveTabSide('history')}
             >
               <History size={14} />
-              <span>History</span>
+              <span>Riwayat</span>
             </button>
             <button 
               className={`btn btn-sm ${activeTabSide === 'diff' ? 'btn-primary' : 'btn-secondary'}`}
@@ -333,7 +333,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
               onClick={() => setActiveTabSide('diff')}
             >
               <Columns size={14} />
-              <span>Diff</span>
+              <span>Bandingkan</span>
             </button>
           </div>
 
@@ -341,7 +341,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
           {activeTabSide === 'grounding' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <h4 style={{ fontSize: '0.92rem', fontWeight: 700 }}>Verified Source References</h4>
+                <h4 style={{ fontSize: '0.92rem', fontWeight: 700 }}>Referensi Sumber Terverifikasi</h4>
                 <span className="grounding-badge verified">
                   <ShieldCheck size={12} /> RAG Only
                 </span>
@@ -369,7 +369,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
                            {c.documentTitle}
                         </span>
                         <span style={{ fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', background: 'rgba(2, 132, 199, 0.2)', color: 'var(--accent-cyan)', fontWeight: 700 }}>
-                          {c.relevanceScore}% Relevant
+                          {c.relevanceScore}% Relevan
                         </span>
                       </div>
                       <div style={{ fontSize: '0.74rem', color: 'var(--accent-cyan)' }}>
@@ -418,7 +418,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
 
               <div className="scorecard-item">
                 <div>
-                  <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>Brief & Message Compliance</div>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>Kepatuhan Brief & Pesan</div>
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{liveCheck.briefCompliance.details}</div>
                 </div>
                 <span className={`score-badge ${liveCheck.briefCompliance.score >= 80 ? 'score-high' : 'score-med'}`}>
@@ -428,7 +428,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
 
               <div className="scorecard-item">
                 <div>
-                  <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>BUMD Tone & Style Compliance</div>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>Kepatuhan Tone & Gaya BUMD</div>
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{liveCheck.toneCompliance.details}</div>
                 </div>
                 <span className={`score-badge ${liveCheck.toneCompliance.score >= 80 ? 'score-high' : 'score-low'}`}>
@@ -438,9 +438,9 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
 
               <div className="scorecard-item">
                 <div>
-                  <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>Factual Grounding Support</div>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>Dukungan Fakta (Grounding)</div>
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                    {liveCheck.factualGrounding.groundedClaims} claims grounded in sources out of {liveCheck.factualGrounding.totalClaims} total.
+                    {liveCheck.factualGrounding.groundedClaims} dari {liveCheck.factualGrounding.totalClaims} klaim didukung sumber.
                   </div>
                 </div>
                 <span className={`score-badge ${liveCheck.factualGrounding.passed ? 'score-high' : 'score-low'}`}>
@@ -461,7 +461,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
               {liveCheck.bannedWordsFound.length > 0 && (
                 <div style={{ padding: '12px', borderRadius: '10px', background: 'rgba(244, 63, 94, 0.1)', border: '1px solid rgba(244, 63, 94, 0.3)' }}>
                   <div style={{ fontSize: '0.78rem', color: '#fb7185', fontWeight: 700, marginBottom: '4px' }}>
-                    🚨 Banned Terms Detected:
+                    🚨 Kata Terlarang Terdeteksi:
                   </div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-primary)' }}>
                     The terms "{liveCheck.bannedWordsFound.join(', ')}" violate BUMD brand guidelines. Please replace them with measured, formal language.
@@ -475,7 +475,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
           {activeTabSide === 'history' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <h4 style={{ fontSize: '0.92rem', fontWeight: 700 }}>Version History (F-08)</h4>
+                <h4 style={{ fontSize: '0.92rem', fontWeight: 700 }}>Riwayat Versi (F-08)</h4>
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{draft.versions.length} Versions Saved</span>
               </div>
 
@@ -524,7 +524,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
           {activeTabSide === 'diff' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <h4 style={{ fontSize: '0.92rem', fontWeight: 700 }}>Version Comparison (Diff)</h4>
+                <h4 style={{ fontSize: '0.92rem', fontWeight: 700 }}>Perbandingan Versi (Diff)</h4>
                 <select 
                   className="form-select"
                   style={{ padding: '4px 8px', fontSize: '0.75rem', width: 'auto' }}
@@ -568,20 +568,20 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
         <div className="modal-overlay">
           <div className="modal-card">
             <div className="modal-header">
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Save New Version (v{draft.versions.length + 1})</h3>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Simpan Versi Baru (v{draft.versions.length + 1})</h3>
             </div>
             <div className="modal-body">
               <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)' }}>
-                The new version will be stored in the BUMD draft audit history. Please provide a summary of your changes.
+                Versi baru akan disimpan dalam riwayat audit draf BUMD. Mohon sertakan ringkasan perubahan Anda.
               </p>
               <div className="form-group">
-                <label className="form-label">Change Summary *</label>
+                <label className="form-label">Ringkasan Perubahan *</label>
                 <input 
                   type="text" 
                   className="form-input"
                   value={changeNote}
                   onChange={e => setChangeNote(e.target.value)}
-                  placeholder="e.g.: Condensed the requirement items to be more concise"
+                  placeholder="cth.: Meringkas poin persyaratan agar lebih padat"
                   required
                 />
               </div>
@@ -592,14 +592,14 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
                 className="btn btn-secondary"
                 onClick={() => setShowSaveModal(false)}
               >
-                Cancel
+                Batal
               </button>
               <button 
                 type="button" 
                 className="btn btn-primary"
                 onClick={handleConfirmSave}
               >
-                Save Version
+                Simpan Versi
               </button>
             </div>
           </div>

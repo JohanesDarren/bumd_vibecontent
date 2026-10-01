@@ -48,8 +48,8 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           className="icon-btn sidebar-toggle-btn"
           onClick={onToggleSidebar}
-          title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={sidebarCollapsed ? 'Perluas sidebar' : 'Ciutkan sidebar'}
+          aria-label={sidebarCollapsed ? 'Perluas sidebar' : 'Ciutkan sidebar'}
           aria-expanded={!sidebarCollapsed}
         >
           <Menu size={18} />
@@ -57,8 +57,8 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="brand-logo-wrap" onClick={() => window.location.reload()}>
           <div className="brand-title-group">
             <h1>VibeContent <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--accent-cyan)', background: 'rgba(6, 182, 212, 0.15)', padding: '2px 6px', borderRadius: '4px', marginLeft: '6px' }}>BUMD</span></h1>
-            <div className="brand-tagline">AI Workspace • Enterprise Knowledge Base</div>
-            <div className="brand-tagline" style={{ marginTop: '2px', opacity: 0.8, fontSize: '0.7rem' }}>Enterprise Content Engine</div>
+            <div className="brand-tagline">AI Workspace • Knowledge Base Resmi</div>
+            <div className="brand-tagline" style={{ marginTop: '2px', opacity: 0.8, fontSize: '0.7rem' }}>Mesin Konten Korporat</div>
           </div>
         </div>
 
@@ -67,7 +67,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button 
             className="org-switcher-pill"
             onClick={() => setShowWsMenu(!showWsMenu)}
-            title="Switch Organization / BUMD"
+            title="Ganti Organisasi / BUMD"
           >
             <Building2 size={16} color="var(--primary)" />
             <span className="org-name-text">{activeWorkspace.name}</span>
@@ -91,7 +91,7 @@ export const Header: React.FC<HeaderProps> = ({
               }}
             >
               <div style={{ padding: '8px 12px', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                Select BUMD Workspace (Isolated Tenant)
+                Pilih Workspace BUMD (Tenant Terisolasi)
               </div>
               {workspaces.map(ws => (
                 <div
@@ -148,9 +148,9 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="user-meta-text">
             <span className="user-name-label">{activeUser.name}</span>
             <span className="user-role-tag">
-              {activeUser.role === 'creator' && <span style={{display: 'flex', alignItems: 'center'}}><PenTool size={12} style={{ marginRight: '4px' }} /> Creator</span>}
-              {activeUser.role === 'reviewer' && <span style={{display: 'flex', alignItems: 'center'}}><ShieldAlert size={12} style={{ marginRight: '4px' }} /> Reviewer / Approver</span>}
-              {activeUser.role === 'admin' && <span style={{display: 'flex', alignItems: 'center'}}><Crown size={12} style={{ marginRight: '4px' }} /> Knowledge Admin</span>}
+              {activeUser.role === 'creator' && <span style={{display: 'flex', alignItems: 'center'}}><PenTool size={12} style={{ marginRight: '4px' }} /> Kreator</span>}
+  
+              {activeUser.role === 'admin' && <span style={{display: 'flex', alignItems: 'center'}}><Crown size={12} style={{ marginRight: '4px' }} /> Admin Pengetahuan</span>}
             </span>
           </div>
         </div>

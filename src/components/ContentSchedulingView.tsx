@@ -95,9 +95,9 @@ const PLATFORM_COLORS: Record<Platform, string> = {
 };
 
 const STATUS_COLORS: Record<ScheduleStatus, { bg: string; border: string; text: string; label: string }> = {
-  draft: { bg: 'rgba(245, 158, 11, 0.15)', border: 'rgba(245, 158, 11, 0.4)', text: '#fbbf24', label: 'Draft' },
-  scheduled: { bg: 'rgba(56, 189, 248, 0.15)', border: 'rgba(56, 189, 248, 0.4)', text: '#38bdf8', label: 'Scheduled' },
-  published: { bg: 'rgba(16, 185, 129, 0.15)', border: 'rgba(16, 185, 129, 0.4)', text: '#34d399', label: 'Published' },
+  draft: { bg: 'rgba(245, 158, 11, 0.15)', border: 'rgba(245, 158, 11, 0.4)', text: '#fbbf24', label: 'Draf' },
+  scheduled: { bg: 'rgba(56, 189, 248, 0.15)', border: 'rgba(56, 189, 248, 0.4)', text: '#38bdf8', label: 'Terjadwal' },
+  published: { bg: 'rgba(16, 185, 129, 0.15)', border: 'rgba(16, 185, 129, 0.4)', text: '#34d399', label: 'Terbit' },
 };
 
 /* ─── Calendar Helpers ─── */
@@ -174,7 +174,7 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
 
   const handleSaveSchedule = () => {
     if (!formTitle.trim() || !formDate) {
-      alert('Content title and publication date are required.');
+      alert('Judul konten dan tanggal publikasi wajib diisi.');
       return;
     }
     const entry: ScheduledContent = {
@@ -276,10 +276,10 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
           </div>
           <h2 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <CalendarDays size={28} style={{ color: 'var(--primary)' }} />
-            Content Scheduling
+            Penjadwalan Konten
           </h2>
           <p className="page-subtitle">
-            Plan content publication visually. Drag content cards between dates to reschedule, and monitor your Instagram feed aesthetics in real time.
+            Rencanakan publikasi konten secara visual. Geser kartu konten antar tanggal untuk menjadwalkan ulang, dan pantau estetika feed Instagram Anda secara real-time.
           </p>
         </div>
       </div>
@@ -288,7 +288,7 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
       <div className="scheduling-action-bar">
         <button className="btn btn-primary scheduling-add-btn" onClick={() => openAddModal()}>
           <Plus size={18} />
-          <span>Add New Schedule</span>
+          <span>Tambah Jadwal Baru</span>
 
         </button>
 
@@ -300,7 +300,7 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
               value={filterPlatform}
               onChange={(e) => setFilterPlatform(e.target.value as Platform | 'all')}
             >
-              <option value="all">All Platforms</option>
+              <option value="all">Semua Platform</option>
               <option value="instagram">Instagram</option>
               <option value="facebook">Facebook</option>
               <option value="twitter">Twitter / X</option>
@@ -314,10 +314,10 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value as ScheduleStatus | 'all')}
             >
-              <option value="all">All Statuses</option>
-              <option value="draft">Draft</option>
-              <option value="scheduled">Scheduled</option>
-              <option value="published">Published</option>
+              <option value="all">Semua Status</option>
+              <option value="draft">Draf</option>
+              <option value="scheduled">Terjadwal</option>
+              <option value="published">Terbit</option>
             </select>
           </div>
         </div>
@@ -326,15 +326,15 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
         <div className="scheduling-stats">
           <div className="stat-pill" style={{ background: STATUS_COLORS.draft.bg, borderColor: STATUS_COLORS.draft.border }}>
             <span className="stat-dot" style={{ background: STATUS_COLORS.draft.text }} />
-            <span style={{ color: STATUS_COLORS.draft.text }}>{draftCount} Draft</span>
+            <span style={{ color: STATUS_COLORS.draft.text }}>{draftCount} Draf</span>
           </div>
           <div className="stat-pill" style={{ background: STATUS_COLORS.scheduled.bg, borderColor: STATUS_COLORS.scheduled.border }}>
             <span className="stat-dot" style={{ background: STATUS_COLORS.scheduled.text }} />
-            <span style={{ color: STATUS_COLORS.scheduled.text }}>{scheduledCount} Scheduled</span>
+            <span style={{ color: STATUS_COLORS.scheduled.text }}>{scheduledCount} Terjadwal</span>
           </div>
           <div className="stat-pill" style={{ background: STATUS_COLORS.published.bg, borderColor: STATUS_COLORS.published.border }}>
             <span className="stat-dot" style={{ background: STATUS_COLORS.published.text }} />
-            <span style={{ color: STATUS_COLORS.published.text }}>{publishedCount} Published</span>
+            <span style={{ color: STATUS_COLORS.published.text }}>{publishedCount} Terbit</span>
           </div>
         </div>
       </div>
@@ -364,7 +364,7 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
                 setViewYear(today.getFullYear());
               }}
             >
-              Today
+              Hari Ini
             </button>
           </div>
 
@@ -372,8 +372,8 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
           <div className="drag-hint-bar">
             <Move size={14} />
             <span>{schedule.length === 0
-              ? 'No schedules yet — click “Add New Schedule” (or drag-off hint below) to plan your first post'
-              : 'Drag content cards to another date to reschedule — changes automatically update the Visual Grid Preview'}</span>
+              ? 'Belum ada jadwal — klik “Tambah Jadwal Baru” untuk merencanakan unggahan pertama Anda'
+              : 'Geser kartu konten ke tanggal lain untuk menjadwalkan ulang — perubahan otomatis memperbarui Pratinjau Grid Visual'}</span>
           </div>
 
           {/* Day headers */}
@@ -473,7 +473,7 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
             </div>
 
             <p className="sidebar-preview-desc">
-              Preview of your Instagram feed grid layout. Scheduled and published content appears here.
+              Pratinjau tata letak grid feed Instagram Anda. Konten terjadwal dan terbit muncul di sini.
             </p>
 
             {/* Instagram-style profile header */}
@@ -492,7 +492,7 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
               {instagramGrid.length === 0 && (
                 <div className="ig-grid-empty">
                   <Eye size={24} style={{ color: 'var(--text-muted)', marginBottom: '8px' }} />
-                  <span>No Instagram content scheduled for this month yet</span>
+                  <span>Belum ada konten Instagram terjadwal untuk bulan ini</span>
                 </div>
               )}
               {instagramGrid.map((item, i) => (
@@ -531,7 +531,7 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
 
           {/* Legend */}
           <div className="sidebar-legend-panel">
-            <span className="sidebar-legend-title">Status Legend</span>
+            <span className="sidebar-legend-title">Legenda Status</span>
             <div className="legend-items">
               {Object.entries(STATUS_COLORS).map(([key, val]) => (
                 <div key={key} className="legend-item">
@@ -562,7 +562,7 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
             <div className="modal-header">
               <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>
                 <CalendarDays size={20} style={{ marginRight: '8px', color: 'var(--primary)', verticalAlign: 'middle' }} />
-                Add New Schedule
+                Tambah Jadwal Baru
               </h3>
               <button className="btn btn-sm btn-secondary" onClick={() => setShowAddModal(false)} style={{ padding: '6px' }}>
                 <X size={16} />
@@ -570,11 +570,11 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
             </div>
             <div className="modal-body">
               <div className="form-group">
-                <label className="form-label">Content Title *</label>
-                <input className="form-input" placeholder="e.g.: New Connection Discount Promotion" value={formTitle} onChange={e => setFormTitle(e.target.value)} />
+                <label className="form-label">Judul Konten *</label>
+                <input className="form-input" placeholder="cth.: Promosi Diskon Sambungan Baru" value={formTitle} onChange={e => setFormTitle(e.target.value)} />
               </div>
               <div className="form-group">
-                <label className="form-label">Link to Library Draft (Optional)</label>
+                <label className="form-label">Tautkan ke Draf Pustaka (Opsional)</label>
                 <select className="form-select" value={formDraftId} onChange={e => setFormDraftId(e.target.value)}>
                   <option value="">— None —</option>
                   {drafts.map(d => <option key={d.id} value={d.id}>{d.title}</option>)}
@@ -592,33 +592,33 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
                   </select>
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Initial Status</label>
+                  <label className="form-label">Status Awal</label>
                   <select className="form-select" value={formStatus} onChange={e => setFormStatus(e.target.value as ScheduleStatus)}>
-                    <option value="draft">Draft</option>
-                    <option value="scheduled">Scheduled</option>
+                    <option value="draft">Draf</option>
+                    <option value="scheduled">Terjadwal</option>
                   </select>
                 </div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                 <div className="form-group">
-                  <label className="form-label">Publication Date *</label>
+                  <label className="form-label">Tanggal Publikasi *</label>
                   <input className="form-input" type="date" value={formDate} onChange={e => setFormDate(e.target.value)} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Time</label>
+                  <label className="form-label">Waktu</label>
                   <input className="form-input" type="time" value={formTime} onChange={e => setFormTime(e.target.value)} />
                 </div>
               </div>
               <div className="form-group">
-                <label className="form-label">Notes (Optional)</label>
-                <textarea className="form-textarea" placeholder="Add a note or short brief for this content..." rows={3} value={formNotes} onChange={e => setFormNotes(e.target.value)} />
+                <label className="form-label">Catatan (Opsional)</label>
+                <textarea className="form-textarea" placeholder="Tambahkan catatan atau brief singkat untuk konten ini..." rows={3} value={formNotes} onChange={e => setFormNotes(e.target.value)} />
               </div>
             </div>
             <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowAddModal(false)}>Cancel</button>
+              <button className="btn btn-secondary" onClick={() => setShowAddModal(false)}>Batal</button>
               <button className="btn btn-primary" onClick={handleSaveSchedule}>
                 <Check size={16} />
-                Save Schedule
+                Simpan Jadwal
               </button>
             </div>
           </div>
@@ -689,11 +689,11 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
               </div>
             </div>
             <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setSelectedCard(null)}>Close</button>
+              <button className="btn btn-secondary" onClick={() => setSelectedCard(null)}>Tutup</button>
               {selectedCard.draftId && onOpenEditorDraft && (
                 <button className="btn btn-primary" onClick={() => { onOpenEditorDraft(selectedCard.draftId!); setSelectedCard(null); }}>
                   <ArrowUpRight size={16} />
-                  Open in Editor
+                  Buka di Editor
                 </button>
               )}
             </div>

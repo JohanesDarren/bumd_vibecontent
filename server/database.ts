@@ -132,10 +132,10 @@ export async function createUserMembership(workspaceId:string,input:any){const c
   // Re-use an existing account (e.g. registered via /api/auth/register but not yet a member) or create a fresh one.
   const existing=await client.query('SELECT id FROM users WHERE email=$1',[String(input.email||'').toLowerCase().trim()]);
   let userId:string; let tempPassword:string|undefined;
+  const adminPassword = typeof input.password === 'string' && input.password.length >= 8 ? input.password : undefined;
   if(existing.rowCount){ userId=existing.rows[0].id; }
   else {
     // password_hash is NOT NULL (migration 002): use the admin-supplied password or generate a temporary one.
-    const adminPassword = typeof input.password === 'string' && input.password.length >= 8 ? input.password : undefined;
     tempPassword = adminPassword ?? nodeCrypto.randomBytes(4).toString('hex');
     const passwordHash = await hashPassword(tempPassword);
     const id=`usr-${nodeCrypto.randomUUID()}`;

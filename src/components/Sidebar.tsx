@@ -6,7 +6,7 @@ import {
   FileEdit, 
   Image as ImageIcon, 
   CalendarDays,
-  CheckSquare, 
+
   FolderArchive, 
   Building2, 
   ShieldAlert, 
@@ -19,7 +19,7 @@ import { canAccessTab } from '../services/policies';
 interface SidebarProps {
   currentTab: ActiveTab;
   onSelectTab: (tab: ActiveTab) => void;
-  pendingReviewCount: number;
+
   userRole: UserRole;
   activeWorkspace: Workspace;
   collapsed?: boolean;
@@ -29,7 +29,7 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({
   currentTab,
   onSelectTab,
-  pendingReviewCount,
+
   userRole,
   activeWorkspace,
   collapsed = false,
@@ -52,30 +52,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <aside className={`app-sidebar ${collapsed ? 'collapsed' : ''}`}>
       <div>
         {/* Creation & Content Section */}
-        {collapsed ? <div className="nav-divider" aria-hidden /> : <div className="nav-section-title">Content Production</div>}
+        {collapsed ? <div className="nav-divider" aria-hidden /> : <div className="nav-section-title">Produksi Konten</div>}
         <div className="nav-group">
-          {navButton('dashboard', 'Dashboard', LayoutDashboard)}
-          {navButton('brief_studio', 'Brief & Generation', PenTool)}
-          {navButton('editor', 'Editor & Versions', FileEdit)}
-          {navButton('visual_studio', 'Visual Studio', ImageIcon)}
-          {navButton('content_scheduling', 'Content Scheduling', CalendarDays)}
+          {navButton('dashboard', 'Dasbor', LayoutDashboard)}
+          {navButton('brief_studio', 'Brief & Generasi', PenTool)}
+          {navButton('editor', 'Editor & Versi', FileEdit)}
+          {navButton('visual_studio', 'Studio Visual', ImageIcon)}
+          {navButton('content_scheduling', 'Penjadwalan Konten', CalendarDays)}
         </div>
 
-        {/* Governance & Review Section */}
-        {collapsed ? <div className="nav-divider" aria-hidden /> : <div className="nav-section-title">Governance & Review</div>}
+        {collapsed ? <div className="nav-divider" aria-hidden /> : <div className="nav-section-title">Tata Kelola & Review</div>}
         <div className="nav-group">
-          {navButton('review_approval', 'Review & Approval', CheckSquare, pendingReviewCount > 0 ? <span className="nav-badge alert">{pendingReviewCount}</span> : null)}
-          {navButton('library', 'Library & Export', FolderArchive)}
+          {navButton('library', 'Pustaka & Ekspor', FolderArchive)}
         </div>
 
         {/* Knowledge & Administration Section */}
-        {collapsed ? <div className="nav-divider" aria-hidden /> : <div className="nav-section-title">Knowledge & Settings</div>}
+        {collapsed ? <div className="nav-divider" aria-hidden /> : <div className="nav-section-title">Pengetahuan & Pengaturan</div>}
         <div className="nav-group">
 
-          {navButton('brand_profile', 'Profile & Brand', Building2)}
-          {navButton('user_management', 'Users & Roles', Users)}
-          {navButton('audit_log', 'Audit Trail', ShieldAlert)}
-          {navButton('settings_help', 'Settings & Help', CircleHelp)}
+          {navButton('brand_profile', 'Profil & Merek', Building2)}
+          {navButton('user_management', 'Pengguna & Peran', Users)}
+          {navButton('audit_log', 'Jejak Audit', ShieldAlert)}
+          {navButton('settings_help', 'Pengaturan & Bantuan', CircleHelp)}
         </div>
       </div>
 
@@ -83,7 +81,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {!collapsed && (
         <div className="tenant-status-box">
           <div className="tenant-status-header">
-            <span>Active Tenant Isolation</span>
+            <span>Isolasi Tenant Aktif</span>
           </div>
           <div className="tenant-status-body">
             Data terikat pada <strong>{activeWorkspace.code}</strong>. Dokumen dan draf terisolasi dengan aman.
@@ -97,10 +95,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             className="btn btn-secondary" 
             style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'flex-start', gap: '8px', padding: '10px' }}
             onClick={onLogout}
-            title="Log Out"
+            title="Keluar"
           >
             <LogOut size={18} />
-            {!collapsed && <span>Log Out</span>}
+            {!collapsed && <span>Keluar</span>}
           </button>
         </div>
       )}

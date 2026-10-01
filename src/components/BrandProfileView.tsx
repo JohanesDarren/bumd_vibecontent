@@ -133,9 +133,9 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
     <div>
       <div className="page-header-row">
         <div>
-          <h2 className="page-title">Organization Profile & Brand Guidelines</h2>
+          <h2 className="page-title">Profil Organisasi & Panduan Merek</h2>
           <p className="page-subtitle">
-            Standardize language, mandatory terminology, and banned terms to keep <strong>{activeWorkspace.name}</strong> communications consistent.
+            Standarkan bahasa, terminologi wajib, dan kata terlarang agar komunikasi <strong>{activeWorkspace.name}</strong> tetap konsisten.
           </p>
         </div>
 
@@ -146,14 +146,14 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
             onClick={handleSave}
           >
             <Save size={16} />
-            <span>{saveSuccess ? 'Saved!' : 'Save Changes'}</span>
+            <span>{saveSuccess ? 'Tersimpan!' : 'Simpan Perubahan'}</span>
           </button>
         )}
       </div>
 
       {!isAdmin && (
         <div style={{ padding: '12px 18px', borderRadius: '10px', background: 'var(--bg-tertiary)', marginBottom: '20px', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-           You are viewing in <strong>{activeUser.role.toUpperCase()}</strong> role mode. Only <strong>Administrators / Knowledge Owners</strong> may update the brand guidelines.
+           Anda melihat dalam mode peran <strong>{activeUser.role.toUpperCase()}</strong>. Hanya <strong>Administrator / Pemilik Pengetahuan</strong> yang dapat memperbarui panduan merek.
         </div>
       )}
 
@@ -163,12 +163,12 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
           <div className="card-panel">
             <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
 
-              <span>Official Organization Identity</span>
+              <span>Identitas Resmi Organisasi</span>
             </h3>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div className="form-group">
-                <label className="form-label">Business Entity / Institution Name</label>
+                <label className="form-label">Nama Badan Usaha / Institusi</label>
                 <input 
                   type="text" 
                   className="form-input" 
@@ -179,7 +179,7 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
               </div>
 
               <div className="form-group">
-                <label className="form-label">Responsible Business Unit</label>
+                <label className="form-label">Unit Usaha Penanggung Jawab</label>
                 <input 
                   type="text" 
                   className="form-input" 
@@ -190,7 +190,7 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
               </div>
 
               <div className="form-group">
-                <label className="form-label">Default Formal Language</label>
+                <label className="form-label">Bahasa Formal Bawaan</label>
                 <input 
                   type="text" 
                   className="form-input" 
@@ -201,7 +201,7 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
               </div>
 
               <div className="form-group">
-                <label className="form-label">Official Disclaimer</label>
+                <label className="form-label">Disclaimer Resmi</label>
                 <textarea 
                   className="form-textarea" 
                   rows={2}
@@ -216,7 +216,7 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
           {/* Target Audiences */}
           <div className="card-panel">
             <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '12px' }}>
-              Target Audiences
+              Target Audiens
             </h3>
             <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '12px' }}>
               Shown as selectable options in Brief Studio.
@@ -244,7 +244,7 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
                       type="button"
                       onClick={() => handleDeleteAudience(idx)}
                       style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#f43f5e', display: 'flex' }}
-                      title="Remove audience"
+                      title="Hapus audiens"
                     >
                       <Trash2 size={12} />
                     </button>
@@ -257,14 +257,14 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
                 <input
                   type="text"
                   className="form-input"
-                  placeholder="E.g.: City residents"
+                  placeholder="Cth.: Warga kota"
                   value={newAudience}
                   onChange={e => setNewAudience(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddAudience(); } }}
                 />
                 <button type="button" className="btn btn-secondary btn-sm" onClick={handleAddAudience}>
                   <Plus size={14} />
-                  <span>Add</span>
+                  <span>Tambah</span>
                 </button>
               </div>
             )}
@@ -273,7 +273,7 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
           {/* Tone of Voice */}
           <div className="card-panel">
             <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '12px' }}>
-              Tone of Voice Pillars
+              Pilar Tone of Voice
             </h3>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
               {profile.toneOfVoice.map((tone, idx) => (
@@ -302,7 +302,7 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
           <div className="card-panel">
             <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <BookOpen size={18} color="var(--accent-cyan)" />
-              <span>Official Terminology Glossary</span>
+              <span>Glosarium Terminologi Resmi</span>
             </h3>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
@@ -368,7 +368,7 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
           <div className="card-panel">
             <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px', color: '#fb7185' }}>
               <AlertTriangle size={18} />
-              <span>Public Terms Ban (Banned Words)</span>
+              <span>Larangan Istilah Publik (Kata Terlarang)</span>
             </h3>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
@@ -415,21 +415,21 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
                 <input 
                   type="text" 
                   className="form-input" 
-                  placeholder="Banned word..."
+                  placeholder="Kata terlarang..."
                   value={newBanned}
                   onChange={e => setNewBanned(e.target.value)}
                 />
                 <input 
                   type="text" 
                   className="form-input" 
-                  placeholder="Reason for ban..."
+                  placeholder="Alasan larangan..."
                   value={newReason}
                   onChange={e => setNewReason(e.target.value)}
                 />
                 <input 
                   type="text" 
                   className="form-input" 
-                  placeholder="Replacement word..."
+                  placeholder="Kata pengganti..."
                   value={newReplacement}
                   onChange={e => setNewReplacement(e.target.value)}
                 />
@@ -444,7 +444,7 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
           <div className="card-panel">
             <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <MessageSquare size={18} color="var(--primary)" />
-              <span>Registered Official Call to Action (CTA)</span>
+              <span>Call to Action (CTA) Resmi Terdaftar</span>
             </h3>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
@@ -488,14 +488,14 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
                 <input 
                   type="text" 
                   className="form-input" 
-                  placeholder="CTA label name..."
+                  placeholder="Nama label CTA..."
                   value={newCtaLabel}
                   onChange={e => setNewCtaLabel(e.target.value)}
                 />
                 <input 
                   type="text" 
                   className="form-input" 
-                  placeholder="Full call-to-action sentence..."
+                  placeholder="Kalimat call-to-action lengkap..."
                   value={newCtaText}
                   onChange={e => setNewCtaText(e.target.value)}
                 />

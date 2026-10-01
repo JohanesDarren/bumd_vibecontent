@@ -43,9 +43,9 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({
     <div>
       <div className="page-header-row">
         <div>
-          <h2 className="page-title">Activity Audit Trail</h2>
+          <h2 className="page-title">Jejak Audit Aktivitas</h2>
           <p className="page-subtitle">
-            Transparent recording of all draft changes, approval decisions, and document uploads for BUMD governance accountability of <strong>{activeWorkspace.name}</strong>.
+            Pencatatan transparan atas semua perubahan draf, keputusan persetujuan, dan unggahan dokumen untuk akuntabilitas tata kelola BUMD <strong>{activeWorkspace.name}</strong>.
           </p>
         </div>
       </div>
@@ -68,11 +68,11 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <Lock size={20} color="#10b981" />
           <span style={{ fontSize: '0.85rem' }}>
-            <strong>Tenant Isolation Compliance (PRD F-01 & F-12):</strong> All audit events are encrypted and strictly bound to the workspace ID <code>{activeWorkspace.id}</code>. No metadata leakage across BUMD entities.
+            <strong>Kepatuhan Isolasi Tenant (PRD F-01 & F-12):</strong> Semua event audit terenkripsi dan terikat ketat pada ID workspace <code>{activeWorkspace.id}</code>. Tidak ada kebocoran metadata antar entitas BUMD.
           </span>
         </div>
         <span style={{ fontSize: '0.78rem', color: '#34d399', fontWeight: 700, display: 'flex', alignItems: 'center' }}>
-          <CheckCircle2 size={14} style={{ marginRight: '6px' }} /> Status: Perfectly Isolated
+          <CheckCircle2 size={14} style={{ marginRight: '6px' }} /> Status: Terisolasi Sempurna
         </span>
       </div>
 
@@ -85,7 +85,7 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({
               type="text" 
               className="form-input" 
               style={{ paddingLeft: '36px' }}
-              placeholder="Search activity, staff name, object, or disposition number..."
+              placeholder="Cari aktivitas, nama staf, objek, atau nomor disposisi..."
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
@@ -96,12 +96,12 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({
             value={filterType}
             onChange={e => setFilterType(e.target.value)}
           >
-            <option value="all">All Object Types</option>
-            <option value="draft">Content Drafts</option>
-            <option value="review">Review & Approval</option>
-            <option value="dokumen">Knowledge Base Documents</option>
-            <option value="brand_profile">Brand Guidelines</option>
-            <option value="ekspor">Export</option>
+            <option value="all">Semua Tipe Objek</option>
+            <option value="draft">Draf Konten</option>
+            <option value="review">Review & Persetujuan</option>
+            <option value="dokumen">Dokumen Knowledge Base</option>
+            <option value="brand_profile">Panduan Merek</option>
+            <option value="ekspor">Ekspor</option>
           </select>
         </div>
       </div>
@@ -112,18 +112,18 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
-                <th style={{ padding: '12px 14px' }}>Event Time</th>
-                <th style={{ padding: '12px 14px' }}>Actor & Role</th>
-                <th style={{ padding: '12px 14px' }}>Action</th>
-                <th style={{ padding: '12px 14px' }}>Related Object</th>
-                <th style={{ padding: '12px 14px' }}>Metadata Details</th>
+                <th style={{ padding: '12px 14px' }}>Waktu Event</th>
+                <th style={{ padding: '12px 14px' }}>Aktor & Peran</th>
+                <th style={{ padding: '12px 14px' }}>Aksi</th>
+                <th style={{ padding: '12px 14px' }}>Objek Terkait</th>
+                <th style={{ padding: '12px 14px' }}>Detail Metadata</th>
               </tr>
             </thead>
             <tbody>
               {filteredLogs.map(log => (
                 <tr key={log.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                   <td style={{ padding: '12px 14px', whiteSpace: 'nowrap', color: 'var(--text-muted)', fontSize: '0.78rem', fontFamily: 'var(--font-mono)' }}>
-                    {new Date(log.timestamp).toLocaleDateString('en-US', {
+                    {new Date(log.timestamp).toLocaleDateString('id-ID', {
                       day: 'numeric',
                       month: 'short',
                       year: 'numeric',

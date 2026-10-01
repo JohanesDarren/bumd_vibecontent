@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   ContentDraft, 
   BrandProfile, 
@@ -20,12 +20,16 @@ import {
 
 interface VisualStudioViewProps {
   draft?: ContentDraft;
+  drafts: ContentDraft[];
+  onSelectDraft: (draftId: string) => void;
   brandProfile: BrandProfile;
   activeWorkspace: Workspace;
 }
 
 export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
   draft,
+  drafts,
+  onSelectDraft,
   brandProfile,
   activeWorkspace
 }) => {
@@ -45,6 +49,15 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
 
   const [visual, setVisual] = useState<VisualAsset>(defaultVisual);
   const [copiedPrompt, setCopiedPrompt] = useState(false);
+  const approvedDrafts = drafts.filter(item => item.status === 'disetujui');
+
+  useEffect(() => {
+    setVisual(draft?.visualAsset || {
+      ...defaultVisual,
+      id: `vis-${draft?.id || 'new'}-${Date.now()}`,
+      headline: draft?.title || ''
+    });
+  }, [draft?.id]);
 
   const handleCopyPrompt = () => {
     navigator.clipboard.writeText(visual.visualPrompt);
@@ -63,13 +76,29 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
     }
   };
 
+  if (!draft || draft.status !== 'disetujui') {
+    return <div className="card-panel" style={{ textAlign: 'center', padding: '48px 24px' }}>
+      <FileCheck size={42} color="var(--text-muted)" style={{ margin: '0 auto 12px' }} />
+      <h2 className="page-title">Perlu Konten Disetujui</h2>
+      <p className="page-subtitle">Pilih konten yang telah menyelesaikan review dan persetujuan sebelum membuat aset visual.</p>
+      {approvedDrafts.length > 0 ? (
+        <select className="form-select" style={{ maxWidth: '420px', margin: '18px auto 0' }} defaultValue="" onChange={event => event.target.value && onSelectDraft(event.target.value)}>
+          <option value="" disabled>Pilih konten yang disetujui</option>
+          {approvedDrafts.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
+        </select>
+      ) : (
+        <p style={{ marginTop: '14px', color: 'var(--text-muted)' }}>Belum ada konten yang disetujui. Ajukan draf hasil generasi untuk review terlebih dahulu.</p>
+      )}
+    </div>;
+  }
+
   return (
     <div>
       <div className="page-header-row">
         <div>
-          <h2 className="page-title">Corporate Graphics & Visual Asset Studio</h2>
+          <h2 className="page-title">Studio Grafis & Aset Visual Korporat</h2>
           <p className="page-subtitle">
-            Create infographic materials and promotional banners that comply with the color guidelines, official logo placement, and disclaimer of <strong>{activeWorkspace.name}</strong>.
+            Buat materi infografis dan banner promosi yang sesuai dengan panduan warna, penempatan logo resmi, dan disclaimer <strong>{activeWorkspace.name}</strong>.
           </p>
         </div>
 
@@ -79,9 +108,16 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
             onClick={handleCopyPrompt}
           >
             <Copy size={16} />
-            <span>{copiedPrompt ? 'Prompt Copied!' : 'Copy AI Prompt'}</span>
+            <span>{copiedPrompt ? 'Prompt Tersalin!' : 'Salin Prompt AI'}</span>
           </button>
         </div>
+      </div>
+
+      <div className="card-panel" style={{ marginBottom: '20px', padding: '14px' }}>
+        <label className="form-label">Konten Disetujui</label>
+        <select className="form-select" value={draft.id} onChange={event => onSelectDraft(event.target.value)}>
+          {approvedDrafts.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
+        </select>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.8fr', gap: '32px', alignItems: 'start' }}>
@@ -89,7 +125,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
         <div className="card-panel" style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '12px' }}>
             <Layout size={18} color="var(--primary)" />
-            <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>Layout & Element Settings</h3>
+            <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>Pengaturan Tata Letak & Elemen</h3>
           </div>
 
           {/* Aspect Ratio Switcher */}

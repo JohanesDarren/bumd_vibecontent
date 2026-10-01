@@ -55,25 +55,25 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   };
 
   const markdownContent = `# ${draft.title}
-**Organization:** ${activeWorkspace.name}  
+**Organisasi:** ${activeWorkspace.name}  
 **Format:** ${draft.format}  
 **Status:** ${draft.status.toUpperCase()}  
-**Version:** v${draft.currentVersionon}  
-**Date:** ${new Date(draft.updatedAt).toLocaleDateString('en-US')}  
-**Created by:** ${draft.creatorName}  
-${draft.approvalInfo ? `**Disposition Number:** ${draft.approvalInfo.dispositionNumber}  
-**Approved By:** ${draft.approvalInfo.approvedBy} (${new Date(draft.approvalInfo.approvedAt).toLocaleDateString('en-US')})` : ''}
+**Versi:** v${draft.currentVersionon}  
+**Tanggal:** ${new Date(draft.updatedAt).toLocaleDateString('id-ID')}  
+**Dibuat oleh:** ${draft.creatorName}  
+${draft.approvalInfo ? `**Nomor Disposisi:** ${draft.approvalInfo.dispositionNumber}  
+**Disetujui oleh:** ${draft.approvalInfo.approvedBy} (${new Date(draft.approvalInfo.approvedAt).toLocaleDateString('id-ID')})` : ''}
 
 ---
 
-## Draft Content
+## Konten Draf
 
 ${currentVer?.content}
 
 ---
 
-## Knowledge Base Source References (RAG)
-${currentVer?.citations.map(c => `- **${c.documentTitle}** (${c.section}) - Relevance: ${c.relevanceScore}%`).join('\n') || 'No active references.'}
+## Referensi Sumber Knowledge Base (RAG)
+${currentVer?.citations.map(c => `- **${c.documentTitle}** (${c.section}) - Relevansi: ${c.relevanceScore}%`).join('\n') || 'Tidak ada referensi aktif.'}
 `;
 
   const jsonContent = JSON.stringify(draft, null, 2);
@@ -84,7 +84,7 @@ ${currentVer?.citations.map(c => `- **${c.documentTitle}** (${c.section}) - Rele
         <div className="modal-header">
           <div>
             <span style={{ fontSize: '0.72rem', color: 'var(--accent-cyan)', fontWeight: 700, textTransform: 'uppercase' }}>
-              Export Draft & BUMD Disposition (PRD F-11)
+              Ekspor Draf & Disposisi BUMD (PRD F-11)
             </span>
             <h3 style={{ fontSize: '1.2rem', fontWeight: 800 }}>
               {draft.title}
@@ -99,25 +99,25 @@ ${currentVer?.citations.map(c => `- **${c.documentTitle}** (${c.section}) - Rele
             className={`btn btn-sm ${activeTab === 'disposition' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setActiveTab('disposition')}
           >
-            <Building size={14} style={{ marginRight: '4px' }} /> Official Dispatch Sheet
+            <Building size={14} style={{ marginRight: '4px' }} /> Lembar Pengiriman Resmi
           </button>
           <button 
             className={`btn btn-sm ${activeTab === 'markdown' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setActiveTab('markdown')}
           >
-            <FileText size={14} style={{ marginRight: '4px' }} /> Markdown Format (.md)
+            <FileText size={14} style={{ marginRight: '4px' }} /> Format Markdown (.md)
           </button>
           <button 
             className={`btn btn-sm ${activeTab === 'plaintext' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setActiveTab('plaintext')}
           >
-            <FileDown size={14} style={{ marginRight: '4px' }} /> Plain Text (.txt)
+            <FileDown size={14} style={{ marginRight: '4px' }} /> Teks Biasa (.txt)
           </button>
           <button 
             className={`btn btn-sm ${activeTab === 'json' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setActiveTab('json')}
           >
-            <Code size={14} style={{ marginRight: '4px' }} /> Audit Metadata (JSON)
+            <Code size={14} style={{ marginRight: '4px' }} /> Metadata Audit (JSON)
           </button>
         </div>
 
@@ -152,10 +152,10 @@ ${currentVer?.citations.map(c => `- **${c.documentTitle}** (${c.section}) - Rele
               {/* Title & Metadata */}
               <div style={{ textAlign: 'center', marginBottom: '20px' }}>
                 <h5 style={{ fontSize: '1.05rem', fontWeight: 800, textDecoration: 'underline', margin: '0 0 4px' }}>
-                  CORPORATE PUBLICATION MATERIAL SHEET
+                  LEMBAR PUBLIKASI KORPORAT
                 </h5>
                 <div style={{ fontSize: '0.8rem', color: '#475569' }}>
-                  Format: {draft.format.replace('_', ' ').toUpperCase()} • Version: v{draft.currentVersionon} • Date: {new Date(draft.updatedAt).toLocaleDateString('en-US')}
+                  Format: {draft.format.replace('_', ' ').toUpperCase()} • Versi: v{draft.currentVersionon} • Tanggal: {new Date(draft.updatedAt).toLocaleDateString('id-ID')}
                 </div>
               </div>
 
@@ -166,10 +166,10 @@ ${currentVer?.citations.map(c => `- **${c.documentTitle}** (${c.section}) - Rele
 
               {/* Citations Footer */}
               <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '12px', fontSize: '0.78rem', color: '#64748b', fontFamily: 'sans-serif', marginBottom: '28px' }}>
-                <strong>Knowledge Base Source References (RAG):</strong>
+                <strong>Referensi Sumber Knowledge Base (RAG):</strong>
                 <ul style={{ paddingLeft: '18px', marginTop: '4px' }}>
                   {currentVer?.citations.map((c, i) => (
-                    <li key={i}>{c.documentTitle} ({c.section}) - Verified</li>
+                    <li key={i}>{c.documentTitle} ({c.section}) - Terverifikasi</li>
                   ))}
                 </ul>
               </div>
@@ -177,25 +177,25 @@ ${currentVer?.citations.map(c => `- **${c.documentTitle}** (${c.section}) - Rele
               {/* Approval Disposition Box */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', paddingTop: '14px', borderTop: '2px solid #0f172a' }}>
                 <div style={{ fontSize: '0.78rem', fontFamily: 'sans-serif' }}>
-                  <div>Prepared by: <strong>{draft.creatorName}</strong></div>
-                  <div style={{ color: '#64748b' }}>Communications & Creative Content Staff</div>
+                  <div>Disiapkan oleh: <strong>{draft.creatorName}</strong></div>
+                  <div style={{ color: '#64748b' }}>Staf Komunikasi & Konten Kreatif</div>
                 </div>
 
                 <div style={{ textAlign: 'center', fontSize: '0.78rem', fontFamily: 'sans-serif' }}>
-                  <div>Approved By:</div>
+                  <div>Disetujui oleh:</div>
                   <div style={{ height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {isApproved ? (
                       <span style={{ border: '2px solid #059669', color: '#059669', padding: '3px 8px', borderRadius: '4px', fontWeight: 800, fontSize: '0.7rem', transform: 'rotate(-4deg)' }}>
-                        Status: OFFICIALLY APPROVED<br/>
+                        Status: DISETUJUI RESMI<br/>
                         {draft.approvalInfo?.dispositionNumber}
                       </span>
                     ) : (
                       <span style={{ color: '#d97706', fontWeight: 700, fontStyle: 'italic' }}>
-                        [PENDING APPROVAL]
+                        [MENUNGGU PERSETUJUAN]
                       </span>
                     )}
                   </div>
-                  <div><strong>{draft.approvalInfo?.approvedBy || 'Head of Public Relations'}</strong></div>
+                  <div><strong>{draft.approvalInfo?.approvedBy || 'Kepala Humas'}</strong></div>
                 </div>
               </div>
             </div>
@@ -231,7 +231,7 @@ ${currentVer?.citations.map(c => `- **${c.documentTitle}** (${c.section}) - Rele
               onClick={handlePrint}
             >
               <Printer size={14} />
-              <span>Print Document</span>
+              <span>Cetak Dokumen</span>
             </button>
           </div>
 
@@ -245,7 +245,7 @@ ${currentVer?.citations.map(c => `- **${c.documentTitle}** (${c.section}) - Rele
               )}
             >
               {copiedType === activeTab ? <Check size={14} color="#10b981" /> : <Copy size={14} />}
-              <span>{copiedType === activeTab ? 'Copied!' : 'Copy to Clipboard'}</span>
+              <span>{copiedType === activeTab ? 'Tersalin!' : 'Salin ke Clipboard'}</span>
             </button>
 
             <button 
@@ -258,7 +258,7 @@ ${currentVer?.citations.map(c => `- **${c.documentTitle}** (${c.section}) - Rele
               )}
             >
               <Download size={14} />
-              <span>Download File</span>
+              <span>Unduh File</span>
             </button>
           </div>
         </div>

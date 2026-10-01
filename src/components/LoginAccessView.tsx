@@ -18,7 +18,7 @@ export const LoginAccessView: React.FC<Props> = ({ users, workspaces, onLogin })
 
       <p className="brand-tagline">Enterprise Content Workspace Powered by Verified Sources</p>
       <h1>Professional content.<br/>Facts stay under control.</h1>
-      <p>VibeContent helps Creators, Reviewers, and Knowledge Owners work within a single, fully traceable workflow.</p>
+      <p>VibeContent helps users generate, refine, approve, and produce visual content in one workflow.</p>
       <div className="login-trust"><ShieldCheck size={18}/><span>RAG strictly uses active documents within your workspace.</span></div>
     </section>
     <section className="login-card card-panel">

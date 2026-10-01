@@ -22,7 +22,7 @@ export const UserManagementView: React.FC<Props> = ({ users, activeWorkspace, on
       await onCreate({ ...form, password: form.password.trim() || undefined });
       setForm({ name: '', email: '', role: 'creator', title: '', department: '', password: '' });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add user');
+      setError(err instanceof Error ? err.message : 'Gagal menambahkan pengguna');
     } finally {
       setBusy(false);
     }
@@ -32,29 +32,28 @@ export const UserManagementView: React.FC<Props> = ({ users, activeWorkspace, on
     <div>
       <div className="page-header-row">
         <div>
-          <h2 className="page-title">Users & Roles</h2>
+          <h2 className="page-title">Pengguna & Peran</h2>
           <p className="page-subtitle">
-            Workspace memberships for <strong>{activeWorkspace.name}</strong>. New accounts can sign in immediately{form.password ? '' : ' with a temporary password (shown after creation)'}.
+            Keanggotaan workspace untuk <strong>{activeWorkspace.name}</strong>. Akun baru dapat langsung masuk{form.password ? '' : ' dengan kata sandi sementara (ditampilkan setelah pembuatan)'}.
           </p>
         </div>
       </div>
 
       <form className="card-panel" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 18 }} onSubmit={submit}>
-        <input className="form-input" placeholder="Full name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required />
+        <input className="form-input" placeholder="Nama lengkap" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required />
         <input className="form-input" type="email" placeholder="Email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required />
-        <input className="form-input" placeholder="Title (optional)" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
-        <input className="form-input" placeholder="Department (optional)" value={form.department} onChange={e => setForm({ ...form, department: e.target.value })} />
+        <input className="form-input" placeholder="Jabatan (opsional)" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
+        <input className="form-input" placeholder="Departemen (opsional)" value={form.department} onChange={e => setForm({ ...form, department: e.target.value })} />
         <input
           className="form-input"
           type="text"
-          placeholder="Password (optional — auto-generated if empty)"
+          placeholder="Kata sandi (opsional — dibuat otomatis jika kosong)"
           value={form.password}
           onChange={e => setForm({ ...form, password: e.target.value })}
           minLength={form.password ? 8 : undefined}
         />
         <select className="form-select" value={form.role} onChange={e => setForm({ ...form, role: e.target.value as UserRole })}>
-          <option value="creator">Creator</option>
-          <option value="reviewer">Reviewer</option>
+          <option value="creator">Kreator</option>
           <option value="admin">Admin</option>
         </select>
         {error && (
@@ -65,7 +64,7 @@ export const UserManagementView: React.FC<Props> = ({ users, activeWorkspace, on
         <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end' }}>
           <button className="btn btn-primary" disabled={busy}>
             <UserPlus size={16} />
-            {busy ? 'Adding…' : 'Add user'}
+            {busy ? 'Menambahkan…' : 'Tambah Pengguna'}
           </button>
         </div>
       </form>
@@ -74,7 +73,7 @@ export const UserManagementView: React.FC<Props> = ({ users, activeWorkspace, on
         <div className="table-scroll">
           <table className="data-table">
             <thead>
-              <tr><th>User</th><th>Email</th><th>Title</th><th>Role</th><th>Access</th><th></th></tr>
+              <tr><th>Pengguna</th><th>Email</th><th>Jabatan</th><th>Peran</th><th>Akses</th><th></th></tr>
             </thead>
             <tbody>
               {users.map(user => (
@@ -83,9 +82,9 @@ export const UserManagementView: React.FC<Props> = ({ users, activeWorkspace, on
                   <td>{user.email}</td>
                   <td>{user.title}</td>
                   <td>{user.role}</td>
-                  <td><span className="member-active"><ShieldCheck size={13} />Active</span></td>
+                  <td><span className="member-active"><ShieldCheck size={13} />Aktif</span></td>
                   <td>
-                    <button className="btn btn-danger btn-sm" onClick={() => onDelete(user.id)} disabled={users.length === 1} title="Remove from workspace">
+                    <button className="btn btn-danger btn-sm" onClick={() => onDelete(user.id)} disabled={users.length === 1} title="Keluarkan dari workspace">
                       <Trash2 size={14} />
                     </button>
                   </td>
@@ -97,7 +96,7 @@ export const UserManagementView: React.FC<Props> = ({ users, activeWorkspace, on
         {users.length === 0 && (
           <div className="empty-state">
             <Users size={36} />
-            <p>No workspace members.</p>
+            <p>Belum ada anggota workspace.</p>
           </div>
         )}
       </div>

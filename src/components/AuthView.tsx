@@ -33,7 +33,7 @@ export const AuthView: React.FC<Props> = ({ onAuthed, onFirstRun, hasWorkspaces 
         onAuthed(user);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Authentication failed');
+      setError(err instanceof Error ? err.message : 'Autentikasi gagal');
     } finally {
       setBusy(false);
     }
@@ -42,45 +42,45 @@ export const AuthView: React.FC<Props> = ({ onAuthed, onFirstRun, hasWorkspaces 
   return <main className="login-shell">
     <section className="login-brand-panel">
 
-      <p className="brand-tagline">Enterprise Content Workspace Powered by Verified Sources</p>
-      <h1>Professional content.<br/>Facts stay under control.</h1>
-      <p>VibeContent helps Creators, Reviewers, and Knowledge Owners work within a single, fully traceable workflow.</p>
-      <div className="login-trust"><ShieldCheck size={18}/><span>RAG strictly uses active documents within your workspace.</span></div>
+      <p className="brand-tagline">Workspace Konten Korporat Berbasis Sumber Terverifikasi</p>
+      <h1>Konten profesional.<br/>Fakta tetap terkendali.</h1>
+      <p>VibeContent membantu pengguna membuat, menyempurnakan, menyetujui, dan memproduksi konten visual dalam satu alur kerja.</p>
+      <div className="login-trust"><ShieldCheck size={18}/><span>RAG hanya menggunakan dokumen aktif di workspace Anda.</span></div>
     </section>
     <section className="login-card card-panel">
       <span className="login-kicker">Workspace Access</span>
-      <h2>{mode === 'login' ? 'Sign in to VibeContent' : 'Create your account'}</h2>
+      <h2>{mode === 'login' ? 'Masuk ke VibeContent' : 'Buat akun Anda'}</h2>
       <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-        <button type="button" className={`btn btn-sm ${mode === 'login' ? 'btn-primary' : 'btn-secondary'}`} style={{ flex: 1 }} onClick={() => { setMode('login'); setError(''); }}><LogIn size={14}/><span>Sign In</span></button>
-        <button type="button" className={`btn btn-sm ${mode === 'register' ? 'btn-primary' : 'btn-secondary'}`} style={{ flex: 1 }} onClick={() => { setMode('register'); setError(''); }}><UserPlus size={14}/><span>Register</span></button>
+        <button type="button" className={`btn btn-sm ${mode === 'login' ? 'btn-primary' : 'btn-secondary'}`} style={{ flex: 1 }} onClick={() => { setMode('login'); setError(''); }}><LogIn size={14}/><span>Masuk</span></button>
+        <button type="button" className={`btn btn-sm ${mode === 'register' ? 'btn-primary' : 'btn-secondary'}`} style={{ flex: 1 }} onClick={() => { setMode('register'); setError(''); }}><UserPlus size={14}/><span>Daftar</span></button>
       </div>
       <form onSubmit={submit}>
         {mode === 'register' && (
-          <label className="form-group"><span className="form-label">Full name</span>
+          <label className="form-group"><span className="form-label">Nama lengkap</span>
             <input className="form-input" value={name} onChange={e => setName(e.target.value)} required /></label>
         )}
         <label className="form-group"><span className="form-label">Email</span>
           <input className="form-input" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@company.com" required /></label>
-        <label className="form-group"><span className="form-label">Password{mode === 'register' ? ' (min 8 characters)' : ''}</span>
+        <label className="form-group"><span className="form-label">Kata sandi{mode === 'register' ? ' (min. 8 karakter)' : ''}</span>
           <input className="form-input" type="password" value={password} onChange={e => setPassword(e.target.value)} minLength={mode === 'register' ? 8 : undefined} required /></label>
         {mode === 'register' && (
-          <label className="form-group"><span className="form-label">Workspace code</span>
+          <label className="form-group"><span className="form-label">Kode workspace</span>
             <input className="form-input" value={workspaceCode} onChange={e => setWorkspaceCode(e.target.value)} placeholder="e.g. TIRTA" required /></label>
         )}
         {error && <div style={{ padding: '10px 12px', borderRadius: '8px', background: 'rgba(244,63,94,0.12)', border: '1px solid rgba(244,63,94,0.35)', color: '#fb7185', fontSize: '0.82rem', marginBottom: '12px' }}>{error}</div>}
         <button className="btn btn-primary" disabled={busy} style={{ width: '100%' }}>
-          <LockKeyhole size={17}/>{busy ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'}
+          <LockKeyhole size={17}/>{busy ? 'Mohon tunggu…' : mode === 'login' ? 'Masuk' : 'Buat Akun'}
         </button>
       </form>
       {hasWorkspaces && (
         <div className="login-workspace" style={{ marginTop: '14px' }}>
           <Building2 size={18}/>
           <div><small>New organization?</small>
-            <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: '4px' }} onClick={onFirstRun}>Provision a new workspace</button>
+            <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: '4px' }} onClick={onFirstRun}>Buat workspace baru</button>
           </div>
         </div>
       )}
-      <small className="login-note">Credentials are verified against the secure tenant database. Passwords are stored salted &amp; hashed (scrypt).</small>
+      <small className="login-note">Kredensial diverifikasi terhadap basis data tenant yang aman. Kata sandi disimpan dengan salt &amp; hash (scrypt).</small>
     </section>
   </main>;
 };

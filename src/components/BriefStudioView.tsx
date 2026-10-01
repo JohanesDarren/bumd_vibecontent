@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   BrandProfile, 
+  ContentDraft,
 
   ContentFormat, 
   ContentBrief, 
@@ -39,6 +40,8 @@ interface BriefStudioViewProps {
 
   activeWorkspace: Workspace;
   activeUser: User;
+  drafts: ContentDraft[];
+  onOpenEditor: (draftId: string) => void;
   onGenerateDraft: (brief: ContentBrief, output: GeneratedOutput) => Promise<void> | void;
   onNavigate?: (tab: ActiveTab) => void;
 }
@@ -66,6 +69,8 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
 
   activeWorkspace,
   activeUser,
+  drafts,
+  onOpenEditor,
   onGenerateDraft,
   onNavigate
 }) => {
@@ -143,7 +148,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !keyMessage.trim()) {
-      alert('Content title and key message are required.');
+      alert('Judul konten dan pesan kunci wajib diisi.');
       return;
     }
 
@@ -206,11 +211,33 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
     <div>
       <div className="page-header-row">
         <div>
-          <h2 className="page-title">Content Brief Generation</h2>
+          <h2 className="page-title">Brief & Generasi Konten</h2>
           <p className="page-subtitle">
             Susun panduan konten yang terstruktur. Sistem hanya menggunakan fakta dari knowledge base resmi <strong>{activeWorkspace.name}</strong>.
           </p>
         </div>
+      </div>
+
+      <div className="card-panel" style={{ marginBottom: '20px', padding: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+          <h3 style={{ fontSize: '0.95rem', fontWeight: 700 }}>Konten Hasil Generasi</h3>
+          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{drafts.length} tersimpan</span>
+        </div>
+        {drafts.length === 0 ? (
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Belum ada konten hasil generasi. Lengkapi brief di bawah untuk membuatnya.</p>
+        ) : (
+          <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+            {drafts.map(draft => (
+              <div key={draft.id} style={{ minWidth: '220px', padding: '10px', border: '1px solid var(--border-subtle)', borderRadius: '10px', background: 'var(--bg-tertiary)' }}>
+                <div style={{ fontSize: '0.82rem', fontWeight: 700, marginBottom: '5px' }}>{draft.title}</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                  <span className={`status-pill ${draft.status}`} style={{ fontSize: '0.62rem' }}>{draft.status.replace('_', ' ')}</span>
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => onOpenEditor(draft.id)}>Buka di Editor</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.5fr) minmax(400px, 1fr)', gap: '24px', alignItems: 'start' }}>
@@ -321,13 +348,13 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
           {/* Key Message */}
           <div className="form-group">
             <label className="form-label" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'baseline', gap: '8px' }}>
-              <span>Key Message & Facts to Convey *</span>
-              <span style={{ fontSize: '0.72rem', color: 'var(--accent-cyan)' }}>RAG matches these facts to active documents</span>
+              <span>Pesan Kunci & Fakta yang Disampaikan *</span>
+              <span style={{ fontSize: '0.72rem', color: 'var(--accent-cyan)' }}>RAG mencocokkan fakta ini dengan dokumen aktif</span>
             </label>
             <textarea 
               className="form-textarea" 
               rows={4}
-              placeholder="Write key info. E.g., new connection rate Rp 1,250,000 with 3x installments and ID/Tax requirements..."
+              placeholder="Tulis info kunci. Cth.: tarif sambungan baru Rp 1.250.000 dengan 3x cicilan dan persyaratan KTP/PBB..."
               value={keyMessage}
               onChange={e => setKeyMessage(e.target.value)}
               required
@@ -337,7 +364,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
           {/* Call to Action */}
           <div className="form-group">
             <label className="form-label">
-              <span>Official Call to Action (CTA) Choice</span>
+              <span>Pilihan Call to Action (CTA) Resmi</span>
             </label>
             <select 
               className="form-select"
@@ -350,12 +377,12 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
                   [{c.label}] {c.text}
                 </option>
               ))}
-              <option value="">-- Custom CTA --</option>
+              <option value="">-- CTA Kustom --</option>
             </select>
             <input 
               type="text"
               className="form-input"
-              placeholder="Or type a custom Call to Action..."
+              placeholder="Atau tulis Call to Action kustom..."
               value={selectedCta}
               onChange={e => setSelectedCta(e.target.value)}
             />
@@ -364,12 +391,12 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
           {/* Limitations */}
           <div className="form-group">
             <label className="form-label">
-              <span>Limitations, Conditions & Important Warnings (Optional)</span>
+              <span>Batasan, Syarat & Peringatan Penting (Opsional)</span>
             </label>
             <input 
               type="text" 
               className="form-input"
-              placeholder="E.g., Only valid for customers with up to 900 VA electrical capacity"
+              placeholder="Cth.: Hanya berlaku untuk pelanggan dengan daya listrik maksimal 900 VA"
               value={limitations}
               onChange={e => setLimitations(e.target.value)}
             />
@@ -386,12 +413,12 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
               {isGenerating ? (
                 <>
                   <Loader2 size={18} className="brief-spin-icon" />
-                  <span>Processing RAG & Generating Draft...</span>
+                  <span>Memproses RAG & Membuat Draf...</span>
                 </>
               ) : (
                 <>
                   <Send size={18} />
-                  <span>Run RAG-Based Generation</span>
+                  <span>Jalankan Generasi Berbasis RAG</span>
                 </>
               )}
             </button>
@@ -406,19 +433,19 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
             <div className="brief-editor-toolbar">
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <Type size={14} color="var(--primary)" />
-                <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>AI Draft Editor</span>
+                <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>Editor Draf AI</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                 {isStreaming && (
                   <span className="brief-streaming-indicator">
                     <Loader2 size={12} className="brief-spin-icon" />
-                    <span>AI is writing...</span>
+                    <span>AI sedang menulis...</span>
                   </span>
                 )}
                 {streamingDone && (
                   <span className="brief-done-indicator">
                     <CheckCircle2 size={12} />
-                    <span>Generation complete</span>
+                    <span>Generasi selesai</span>
                   </span>
                 )}
                 {streamingDone && onNavigate && (
@@ -429,12 +456,12 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
                     onClick={() => onNavigate('editor')}
                   >
                     <ExternalLink size={12} />
-                    <span>Open in Editor</span>
+                    <span>Buka di Editor</span>
                   </button>
                 )}
                 {editorContent && (
                   <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginLeft: '8px' }}>
-                    {editorContent.length} characters
+                    {editorContent.length} karakter
                   </span>
                 )}
               </div>
@@ -466,7 +493,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
                       + (isStreaming ? '<span class="brief-cursor-blink">▊</span>' : '')
                   : ''
               }}
-              data-placeholder="AI draft result will appear here. You can edit it directly..."
+              data-placeholder="Hasil draf AI akan muncul di sini. Anda dapat mengeditnya langsung..."
             />
 
 
