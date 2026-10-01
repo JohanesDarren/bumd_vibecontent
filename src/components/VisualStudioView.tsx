@@ -30,16 +30,16 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
   activeWorkspace
 }) => {
   const defaultVisual: VisualAsset = draft?.visualAsset || {
-    id: 'vis-default',
-    headline: draft?.title || 'PELAYANAN PUBLIK BUMD MODERN & TERPERCAYA',
-    subheadline: 'Mengutamakan Kualitas, Kecepatan, dan Transparansi Layanan Daerah',
+    id: `vis-${draft?.id || 'new'}-${Date.now()}`,
+    headline: draft?.title || '',
+    subheadline: '',
     aspectRatio: '1:1',
     primaryColor: activeWorkspace.primaryColor,
     accentColor: activeWorkspace.accentColor,
-    badgeText: 'PUBLIKASI RESMI BUMD',
-    ctaText: brandProfile.officialCTAs[0]?.label || 'Kunjungi Portal Resmi',
-    disclaimer: brandProfile.officialDisclaimer || 'Berdasarkan SK Direksi yang telah disahkan secara hukum.',
-    visualPrompt: `High quality Indonesian corporate graphic design for ${activeWorkspace.name}, modern minimalist aesthetic, verified ISO certification stamp, clean typography, official color accents`,
+    badgeText: '',
+    ctaText: brandProfile.officialCTAs[0]?.label || '',
+    disclaimer: brandProfile.officialDisclaimer || '',
+    visualPrompt: `High quality corporate graphic design for ${activeWorkspace.name}, modern minimalist aesthetic, clean typography, official color accents`,
     templateStyle: 'corporate'
   };
 
@@ -67,9 +67,9 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
     <div>
       <div className="page-header-row">
         <div>
-          <h2 className="page-title">Studio Grafis & Aset Visual Korporat</h2>
+          <h2 className="page-title">Corporate Graphics & Visual Asset Studio</h2>
           <p className="page-subtitle">
-            Buat materi grafis informasi dan banner promosi yang mematuhi panduan warna, penempatan logo resmi, dan penafian (disclaimer) <strong>{activeWorkspace.name}</strong>.
+            Create infographic materials and promotional banners that comply with the color guidelines, official logo placement, and disclaimer of <strong>{activeWorkspace.name}</strong>.
           </p>
         </div>
 
@@ -79,7 +79,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
             onClick={handleCopyPrompt}
           >
             <Copy size={16} />
-            <span>{copiedPrompt ? 'Prompt Disalin!' : 'Salin Prompt AI'}</span>
+            <span>{copiedPrompt ? 'Prompt Copied!' : 'Copy AI Prompt'}</span>
           </button>
         </div>
       </div>
@@ -89,12 +89,12 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
         <div className="card-panel" style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '12px' }}>
             <Layout size={18} color="var(--primary)" />
-            <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>Pengaturan Tata Letak & Elemen</h3>
+            <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>Layout & Element Settings</h3>
           </div>
 
           {/* Aspect Ratio Switcher */}
           <div className="form-group">
-            <label className="form-label">Rasio Format (Aspect Ratio)</label>
+            <label className="form-label">Aspect Ratio</label>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
               <button 
                 type="button"
@@ -125,7 +125,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
 
           {/* Headline & Subheadline */}
           <div className="form-group">
-            <label className="form-label">Teks Judul Utama (Headline)</label>
+            <label className="form-label">Headline Text</label>
             <input 
               type="text" 
               className="form-input" 
@@ -135,7 +135,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
           </div>
 
           <div className="form-group">
-            <label className="form-label">Teks Penjelas (Sub-headline)</label>
+            <label className="form-label">Sub-headline Text</label>
             <textarea 
               className="form-textarea" 
               rows={2}
@@ -147,7 +147,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
           {/* Badge & CTA */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
             <div className="form-group">
-              <label className="form-label">Teks Pita Label (Badge)</label>
+              <label className="form-label">Badge Text</label>
               <input 
                 type="text" 
                 className="form-input" 
@@ -156,7 +156,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
               />
             </div>
             <div className="form-group">
-              <label className="form-label">Teks Tombol CTA</label>
+              <label className="form-label">CTA Button Text</label>
               <input 
                 type="text" 
                 className="form-input" 
@@ -168,7 +168,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
 
           {/* Style Template */}
           <div className="form-group">
-            <label className="form-label">Tema Gaya Visual</label>
+            <label className="form-label">Visual Style Theme</label>
             <select 
               className="form-select"
               value={visual.templateStyle}
@@ -177,7 +177,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
               <option value="corporate">Corporate BUMD (Navy & Cyan)</option>
               <option value="modern_bold">Modern Bold (Emerald & Lime)</option>
               <option value="clean_service">Clean Public Service (Sky Blue)</option>
-              <option value="infographic">Infografis Data Terverifikasi</option>
+              <option value="infographic">Verified Data Infographic</option>
             </select>
           </div>
 
@@ -185,12 +185,12 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
           <div style={{ padding: '14px', borderRadius: '12px', background: 'var(--bg-tertiary)', border: '1px solid var(--border-subtle)', fontSize: '0.78rem' }}>
             <div style={{ fontWeight: 700, color: 'var(--accent-emerald)', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
               <ShieldCheck size={16} />
-              <span>Kepatuhan Aset Merek (Brand Compliance):</span>
+              <span>Brand Asset Compliance:</span>
             </div>
             <ul style={{ paddingLeft: '18px', display: 'flex', flexDirection: 'column', gap: '4px', color: 'var(--text-secondary)' }}>
-              <li>Logo resmi BUMD diletakkan pada pojok kanan atas dengan proporsi asli.</li>
-              <li>Warna dominan menggunakan palet resmi ({activeWorkspace.primaryColor}).</li>
-              <li>Mencantumkan penafian (disclaimer) legal di bagian bawah grafis.</li>
+              <li>The official BUMD logo is placed in the top-right corner at original proportions.</li>
+              <li>Dominant colors use the official palette ({activeWorkspace.primaryColor}).</li>
+              <li>A legal disclaimer is displayed at the bottom of the graphic.</li>
             </ul>
           </div>
         </div>
@@ -319,7 +319,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
           </div>
 
           <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            Pratinjau grafis otomatis tersinkronisasi dengan palet merek <strong>{activeWorkspace.name}</strong>.
+            The graphic preview auto-syncs with the <strong>{activeWorkspace.name}</strong> brand palette.
           </div>
         </div>
       </div>

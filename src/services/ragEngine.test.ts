@@ -18,14 +18,14 @@ test('retrieval uses active documents from current workspace only', () => {
 test('unsupported query returns explicit inadequate fallback', () => {
   const result = retrieveKnowledge('layanan internasional', documents, 'ws-a');
   assert.equal(result.isAdequate, false);
-  assert.match(result.explanation, /tidak memuat rujukan resmi/i);
+  assert.match(result.explanation, /does not contain adequate official references/i);
   assert.ok(result.unsupportedClaims.length > 0);
 });
 
 test('generation never repeats an unsupported factual claim as fact', () => {
   const brief = { id:'b', workspaceId:'ws-a', title:'Promo', targetAudience:'Publik', format:'copy_caption', channel:'Instagram', tone:'Formal', keyMessage:'Diskon 50% tiket dan hadiah undian mobil', cta:'Review kanal resmi', language:'Bahasa Indonesia', createdAt:'2026', createdBy:'u' } satisfies ContentBrief;
-  const brand = { workspaceId:'ws-a', organizationName:'BUMD Contoh', unitDepartment:'Humas', defaultLanguage:'Bahasa Indonesia', toneOfVoice:['Formal'], terminology:[], bannedWords:[], officialCTAs:[], approvedChannels:['Instagram'], brandGuidelinesSummary:'', officialDisclaimer:'' } satisfies BrandProfile;
+  const brand = { workspaceId:'ws-a', organizationName:'BUMD Contoh', unitDepartment:'Humas', defaultLanguage:'Bahasa Indonesia', targetAudiences:['City residents'], toneOfVoice:['Formal'], terminology:[], bannedWords:[], officialCTAs:[], approvedChannels:['Instagram'], brandGuidelinesSummary:'', officialDisclaimer:'' } satisfies BrandProfile;
   const output = generateContentFromBrief(brief, brand, documents, 'ws-a');
   assert.doesNotMatch(output.content, /Diskon 50% tiket dan hadiah undian mobil/i);
-  assert.match(output.content, /belum tersedia di sumber resmi/i);
+  assert.match(output.content, /not yet available in active official sources/i);
 });

@@ -47,10 +47,10 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
 }) => {
   const [title, setTitle] = useState('');
   const [campaign, setCampaign] = useState('');
-  const [targetAudience, setTargetAudience] = useState('Masyarakat Kota dan Pelanggan BUMD');
+  const [targetAudience, setTargetAudience] = useState('');
   const [format, setFormat] = useState<ContentFormat>('copy_caption');
-  const [channel, setChannel] = useState(brandProfile.approvedChannels[0] || 'Instagram Feed & Reels');
-  const [tone, setTone] = useState(brandProfile.toneOfVoice[0] || 'Formal Korporat Ramah');
+  const [channel, setChannel] = useState(brandProfile.approvedChannels[0] || '');
+  const [tone, setTone] = useState(brandProfile.toneOfVoice[0] || '');
   const [keyMessage, setKeyMessage] = useState('');
   const [selectedCta, setSelectedCta] = useState(brandProfile.officialCTAs[0]?.text || '');
   const [limitations, setLimitations] = useState('');
@@ -128,7 +128,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !keyMessage.trim()) {
-      alert('Judul konten dan pesan utama wajib diisi.');
+      alert('Content title and key message are required.');
       return;
     }
 
@@ -183,7 +183,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
         {/* ─── Left: Brief Form (preserved) ─── */}
         <form onSubmit={handleSubmit} className="card-panel" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '14px' }}>
-            <Sparkles size={20} color="var(--primary)" />
+
             <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>BUMD Content Brief Parameters</h3>
           </div>
 
@@ -196,7 +196,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
               <input 
                 type="text" 
                 className="form-input" 
-                placeholder="Contoh: Edukasi Pasang Baru Sambungan Air 2026"
+                placeholder="e.g.: New Water Connection Education Campaign 2026"
                 value={title}
                 onChange={e => setTitle(e.target.value)}
                 required
@@ -210,7 +210,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
               <input 
                 type="text" 
                 className="form-input" 
-                placeholder="Contoh: Program Air Bersih Sejahtera"
+                placeholder="e.g.: Clean Water Prosperity Program"
                 value={campaign}
                 onChange={e => setCampaign(e.target.value)}
               />
@@ -229,9 +229,9 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
                 onChange={e => setFormat(e.target.value as ContentFormat)}
               >
                 <option value="copy_caption">Copy & Social Media Caption (Feed / Carousel)</option>
-                <option value="teks_promosi">Teks Promosi & Siaran Pers Resmi</option>
-                <option value="naskah_singkat">Naskah Video Singkat 9:16 (Reels/TikTok/Shorts)</option>
-                <option value="brief_visual">Panduan Brief Visual & Grafis Informasi</option>
+                <option value="teks_promosi">Official Promotional & Press Release Text</option>
+                <option value="naskah_singkat">Short Video Script 9:16 (Reels/TikTok/Shorts)</option>
+                <option value="brief_visual">Visual Brief & Infographic Guide</option>
               </select>
             </div>
 
@@ -257,12 +257,16 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
               <label className="form-label">
                 <span>Target Audience</span>
               </label>
-              <input 
-                type="text" 
-                className="form-input"
+              <select
+                className="form-select"
                 value={targetAudience}
                 onChange={e => setTargetAudience(e.target.value)}
-              />
+              >
+                <option value="">Select target audience…</option>
+                {(brandProfile.targetAudiences ?? []).map((aud, idx) => (
+                  <option key={idx} value={aud}>{aud}</option>
+                ))}
+              </select>
             </div>
 
             <div className="form-group" style={{ minWidth: 0 }}>
@@ -426,7 +430,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
                   <div style={{ marginTop: '10px', padding: '10px', borderRadius: '8px', background: 'rgba(244, 63, 94, 0.12)', border: '1px solid rgba(244, 63, 94, 0.35)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#fb7185', fontSize: '0.75rem', fontWeight: 700, marginBottom: '4px' }}>
                       <AlertCircle size={13} />
-                      <span>Warnings Grounding: Sumber Belum Cukup</span>
+                      <span>Grounding Warnings: Insufficient Sources</span>
                     </div>
                     <div style={{ fontSize: '0.72rem', color: 'var(--text-primary)', lineHeight: 1.4 }}>
                       <ul style={{ paddingLeft: '16px', margin: 0 }}>
@@ -435,7 +439,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
                         ))}
                       </ul>
                       <span style={{ color: 'var(--text-muted)', fontSize: '0.68rem', display: 'block', marginTop: '4px' }}>
-                        * System will mark draft as <code>[Perlu Verifikasi]</code> and reject false claims.
+                        * The system will mark the draft as <code>[Needs Verification]</code> and reject false claims.
                       </span>
                     </div>
                   </div>
@@ -494,8 +498,8 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
                       .replace(/\n/g, '<br/>')
                       // Highlight grounding markers
                       .replace(/\[References:([^\]]+)\]/g, '<span class="brief-citation-tag">[References:$1]</span>')
-                      .replace(/\[Perlu Verifikasi([^\]]*)\]/g, '<span class="brief-warning-tag">[Perlu Verifikasi$1]</span>')
-                      .replace(/\[DRAFT[^\]]*\]/g, '<span class="brief-draft-tag">[DRAFT KORPORAT - BELUM DISETUJUI]</span>')
+                      .replace(/\[(?:Perlu Verifikasi|Needs Verification)([^\]]*)\]/g, '<span class="brief-warning-tag">[Needs Verification$1]</span>')
+                      .replace(/\[DRAFT[^\]]*\]/g, '<span class="brief-draft-tag">[CORPORATE DRAFT - NOT YET APPROVED]</span>')
                       + (isStreaming ? '<span class="brief-cursor-blink">▊</span>' : '')
                   : ''
               }}

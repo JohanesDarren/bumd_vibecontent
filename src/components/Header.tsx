@@ -6,14 +6,14 @@ import {
 } from '../types';
 import { 
   Building2, 
-  ChevronDown, 
+  ChevronDown,
+  LogOut,
   ShieldCheck, 
   Sun, 
   Moon, 
   RotateCcw, 
   CheckCircle2,
   Sparkles,
-  UserCheck,
   PenTool,
   ShieldAlert,
   Crown
@@ -25,7 +25,7 @@ interface HeaderProps {
   onSelectWorkspace: (wsId: string) => void;
   users: User[];
   activeUser: User;
-  onSelectUser: (userId: string) => void;
+  onLogout: () => void;
   theme: 'dark' | 'light';
   onToggleTheme: () => void;
   onResetData: () => void;
@@ -37,13 +37,12 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectWorkspace,
   users,
   activeUser,
-  onSelectUser,
+  onLogout,
   theme,
   onToggleTheme,
   onResetData
 }) => {
   const [showWsMenu, setShowWsMenu] = useState(false);
-  const [showUserMenu, setShowUserMenu] = useState(false);
 
   return (
     <header className="top-header">
@@ -159,95 +158,42 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Destructive data clear */}
         <button 
           onClick={() => {
-            if (window.confirm('Hapus seluruh data aplikasi? Tindakan ini tidak dapat dibatalkan.')) {
+            if (window.confirm('Delete all application data? This action cannot be undone.')) {
               onResetData();
             }
           }}
           className="btn btn-secondary btn-sm"
           style={{ padding: '8px' }}
-          title="Hapus seluruh data"
+          title="Delete all data"
         >
           <RotateCcw size={16} />
         </button>
 
-        {/* User Role Switcher Dropdown */}
-        <div style={{ position: 'relative' }}>
-          <button 
-            className="role-badge-selector"
-            onClick={() => setShowUserMenu(!showUserMenu)}
-            title="Switch User Role (Creator, Reviewer, Admin)"
-          >
-            <img 
-              src={activeUser.avatar} 
-              alt={activeUser.name} 
-              className="role-avatar" 
-            />
-            <div className="user-meta-text">
-              <span className="user-name-label">{activeUser.name}</span>
-              <span className="user-role-tag">
-                {activeUser.role === 'creator' && <span style={{display: 'flex', alignItems: 'center'}}><PenTool size={12} style={{ marginRight: '4px' }} /> Creator</span>}
-                {activeUser.role === 'reviewer' && <span style={{display: 'flex', alignItems: 'center'}}><ShieldAlert size={12} style={{ marginRight: '4px' }} /> Reviewer / Approver</span>}
-                {activeUser.role === 'admin' && <span style={{display: 'flex', alignItems: 'center'}}><Crown size={12} style={{ marginRight: '4px' }} /> Knowledge Admin</span>}
-              </span>
-            </div>
-            <ChevronDown size={14} color="var(--text-muted)" />
-          </button>
-
-          {showUserMenu && (
-            <div 
-              style={{
-                position: 'absolute',
-                top: '100%',
-                right: 0,
-                marginTop: '8px',
-                width: '300px',
-                background: 'var(--bg-secondary)',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: '14px',
-                boxShadow: 'var(--shadow-lg)',
-                padding: '8px',
-                zIndex: 100
-              }}
-            >
-              <div style={{ padding: '8px 12px', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                Simulate User Role (PRD F-01)
-              </div>
-              {users.map(u => (
-                <div
-                  key={u.id}
-                  onClick={() => {
-                    onSelectUser(u.id);
-                    setShowUserMenu(false);
-                  }}
-                  style={{
-                    padding: '10px 12px',
-                    borderRadius: '10px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    background: u.id === activeUser.id ? 'var(--bg-tertiary)' : 'transparent',
-                    border: u.id === activeUser.id ? '1px solid var(--primary)' : '1px solid transparent',
-                    marginBottom: '4px'
-                  }}
-                >
-                  <img src={u.avatar} alt={u.name} style={{ width: '36px', height: '36px', borderRadius: '50%' }} />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                      {u.name}
-                    </div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--accent-cyan)', fontWeight: 600 }}>
-                      {u.role.toUpperCase()} • {u.title}
-                    </div>
-                  </div>
-                  {u.id === activeUser.id && (
-                    <UserCheck size={16} color="var(--primary)" />
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+        {/* Signed-in user + Logout */}
+        <div className="role-badge-selector" style={{ cursor: 'default' }}>
+          <img 
+            src={activeUser.avatar} 
+            alt={activeUser.name} 
+            className="role-avatar" 
+          />
+          <div className="user-meta-text">
+            <span className="user-name-label">{activeUser.name}</span>
+            <span className="user-role-tag">
+              {activeUser.role === 'creator' && <span style={{display: 'flex', alignItems: 'center'}}><PenTool size={12} style={{ marginRight: '4px' }} /> Creator</span>}
+              {activeUser.role === 'reviewer' && <span style={{display: 'flex', alignItems: 'center'}}><ShieldAlert size={12} style={{ marginRight: '4px' }} /> Reviewer / Approver</span>}
+              {activeUser.role === 'admin' && <span style={{display: 'flex', alignItems: 'center'}}><Crown size={12} style={{ marginRight: '4px' }} /> Knowledge Admin</span>}
+            </span>
+          </div>
         </div>
+        <button 
+          onClick={onLogout}
+          className="btn btn-secondary btn-sm"
+          style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+          title="Sign out"
+        >
+          <LogOut size={15} />
+          <span>Logout</span>
+        </button>
       </div>
     </header>
   );

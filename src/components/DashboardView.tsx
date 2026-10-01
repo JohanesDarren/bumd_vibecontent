@@ -60,7 +60,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
               <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--accent-cyan)' }}>
-                Portal Kerja BUMD Terpadu
+                Unified BUMD Work Portal
               </span>
               <span className="status-pill disetujui" style={{ fontSize: '0.68rem', padding: '2px 8px' }}>
                 <ShieldCheck size={12} /> Grounding Verified
@@ -133,7 +133,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <BookOpen size={24} />
           </div>
           <div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>Dokumen RAG Active</div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>RAG Active Documents</div>
             <div style={{ fontSize: '1.65rem', fontWeight: 800 }}>{activeDocs.length}</div>
             <div style={{ fontSize: '0.72rem', color: 'var(--accent-emerald)' }}>100% Officially grounded</div>
           </div>
@@ -161,7 +161,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           {pendingReviewDrafts.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--text-muted)' }}>
               <CheckCircle2 size={36} color="var(--accent-emerald)" style={{ margin: '0 auto 8px', opacity: 0.8 }} />
-              <p style={{ fontSize: '0.88rem' }}>Tidak ada draf yang menunggu persetujuan saat ini.</p>
+              <p style={{ fontSize: '0.88rem' }}>No drafts are currently awaiting approval.</p>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -207,7 +207,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="card-panel">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Sparkles size={18} color="var(--primary)" />
+
               <h3 style={{ fontSize: '1.05rem', fontWeight: 700 }}>Official Tone & Terminology Guidelines</h3>
             </div>
             <button 
@@ -235,7 +235,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
             <div>
               <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '6px' }}>
-                Larangan Istilah / Banned Words
+                Banned Terms
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                 {brandProfile.bannedWords.map((b, idx) => (
@@ -248,7 +248,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
 
             <div style={{ marginTop: '4px', padding: '10px 12px', borderRadius: '8px', background: 'rgba(2, 132, 199, 0.08)', border: '1px dashed rgba(2, 132, 199, 0.3)', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-              <strong>BUMD Anti-Hallucination Principle:</strong> VibeContent rejects public claims without official SK or SOP references. If data is unregistered, draft will be marked <code>[Perlu Verifikasi]</code>.
+              <strong>BUMD Anti-Hallucination Principle:</strong> VibeContent rejects public claims without official SK or SOP references. If data is unregistered, draft will be marked <code>[Needs Verification]</code>.
             </div>
           </div>
         </div>
@@ -274,12 +274,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
-                <th style={{ padding: '12px 14px' }}>Judul Naskah</th>
+                <th style={{ padding: '12px 14px' }}>Draft Title</th>
                 <th style={{ padding: '12px 14px' }}>Format</th>
-                <th style={{ padding: '12px 14px' }}>Status Alur</th>
+                <th style={{ padding: '12px 14px' }}>Workflow Status</th>
                 <th style={{ padding: '12px 14px' }}>Grounding</th>
                 <th style={{ padding: '12px 14px' }}>Version</th>
-                <th style={{ padding: '12px 14px', textAlign: 'right' }}>Aksi</th>
+                <th style={{ padding: '12px 14px', textAlign: 'right' }}>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -291,10 +291,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       {d.title}
                     </td>
                     <td style={{ padding: '12px 14px', color: 'var(--text-secondary)' }}>
-                      {d.format === 'copy_caption' && 'Caption Sosmed'}
-                      {d.format === 'teks_promosi' && 'Siaran Pers'}
+                      {d.format === 'copy_caption' && 'Social Media Caption'}
+                      {d.format === 'teks_promosi' && 'Press Release'}
                       {d.format === 'naskah_singkat' && '9:16 Video Script'}
-                      {d.format === 'brief_visual' && 'Grafis Visual'}
+                      {d.format === 'brief_visual' && 'Visual Graphic'}
                     </td>
                     <td style={{ padding: '12px 14px' }}>
                       <span className={`status-pill ${d.status}`}>
@@ -312,7 +312,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         </span>
                       ) : (
                         <span className="grounding-badge warning">
-                          <AlertTriangle size={12} /> Perlu Verifikasi
+                          <AlertTriangle size={12} /> Needs Verification
                         </span>
                       )}
                     </td>

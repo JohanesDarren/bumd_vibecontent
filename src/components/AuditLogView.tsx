@@ -98,10 +98,10 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({
           >
             <option value="all">All Object Types</option>
             <option value="draft">Content Drafts</option>
-            <option value="review">Penelaahan & Persetujuan</option>
+            <option value="review">Review & Approval</option>
             <option value="dokumen">Knowledge Base Documents</option>
-            <option value="brand_profile">Panduan Merek</option>
-            <option value="ekspor">Pengeksporan</option>
+            <option value="brand_profile">Brand Guidelines</option>
+            <option value="ekspor">Export</option>
           </select>
         </div>
       </div>
@@ -112,18 +112,18 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
-                <th style={{ padding: '12px 14px' }}>Waktu Kejadian</th>
-                <th style={{ padding: '12px 14px' }}>Aktor & Peran</th>
-                <th style={{ padding: '12px 14px' }}>Tindakan (Action)</th>
-                <th style={{ padding: '12px 14px' }}>Objek Terkait</th>
-                <th style={{ padding: '12px 14px' }}>Rincian Metadata</th>
+                <th style={{ padding: '12px 14px' }}>Event Time</th>
+                <th style={{ padding: '12px 14px' }}>Actor & Role</th>
+                <th style={{ padding: '12px 14px' }}>Action</th>
+                <th style={{ padding: '12px 14px' }}>Related Object</th>
+                <th style={{ padding: '12px 14px' }}>Metadata Details</th>
               </tr>
             </thead>
             <tbody>
               {filteredLogs.map(log => (
                 <tr key={log.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                   <td style={{ padding: '12px 14px', whiteSpace: 'nowrap', color: 'var(--text-muted)', fontSize: '0.78rem', fontFamily: 'var(--font-mono)' }}>
-                    {new Date(log.timestamp).toLocaleDateString('id-ID', {
+                    {new Date(log.timestamp).toLocaleDateString('en-US', {
                       day: 'numeric',
                       month: 'short',
                       year: 'numeric',

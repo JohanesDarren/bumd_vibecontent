@@ -5,7 +5,7 @@ import {
   PenTool, 
   FileEdit, 
   Image as ImageIcon, 
-
+  CalendarDays,
   CheckSquare, 
   FolderArchive, 
   BookOpen, 
@@ -50,6 +50,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {navButton('brief_studio', 'Brief & Generation', PenTool)}
           {navButton('editor', 'Editor & Versions', FileEdit)}
           {navButton('visual_studio', 'Visual Studio', ImageIcon)}
+          {navButton('content_scheduling', 'Content Scheduling', CalendarDays)}
 
         </div>
 

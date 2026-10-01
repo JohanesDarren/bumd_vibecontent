@@ -44,18 +44,18 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
   const [newTitle, setNewTitle] = useState('');
   const [newCategory, setNewCategory] = useState<DocumentCategory>('sop_layanan');
   const [newOwner, setNewOwner] = useState(activeUser.department);
-  const [newVersionon, setNewVersionon] = useState('v1.0');
-  const [newEffectiveDate, setNewEffectiveDate] = useState('2026');
+  const [newVersionon, setNewVersionon] = useState('');
+  const [newEffectiveDate, setNewEffectiveDate] = useState('');
   const [newInitialStatus, setNewInitialStatus] = useState<DocumentStatus>('aktif');
   const [newContent, setNewContent] = useState('');
-  const [newSectionName, setNewSectionName] = useState('Bab 1 - Ketentuan Pokok Pelayanan');
+  const [newSectionName, setNewSectionName] = useState('');
 
   const isAdminOrOwner = activeUser.role === 'admin' || activeUser.role === 'reviewer';
 
   const handleConfirmUpload = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim() || !newContent.trim()) {
-      alert('Judul dan konten dokumen wajib diisi.');
+      alert('Document title and content are required.');
       return;
     }
 
@@ -84,8 +84,8 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
       effectiveDate: newEffectiveDate,
       status: newInitialStatus,
       uploadDate: new Date().toISOString(),
-      fileSize: '1.2 MB',
-      summary: newContent.slice(0, 160) + '...',
+      fileSize: '',
+      summary: newContent.slice(0, 160),
       chunks: [chunk]
     };
 
@@ -100,9 +100,9 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
     <div>
       <div className="page-header-row">
         <div>
-          <h2 className="page-title">Basis Pengetahuan Resmi (RAG Knowledge Base)</h2>
+          <h2 className="page-title">Official Knowledge Base (RAG Knowledge Base)</h2>
           <p className="page-subtitle">
-            Pusat dokumen resmi BUMD <strong>{activeWorkspace.name}</strong>. RAG hanya mengambil informasi dari dokumen yang berstatus <strong>Active</strong>.
+            Central hub of official <strong>{activeWorkspace.name}</strong> documents. RAG only retrieves information from documents with <strong>Active</strong> status.
           </p>
         </div>
 
@@ -112,7 +112,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
             onClick={() => setShowUploadModal(true)}
           >
             <UploadCloud size={16} />
-            <span>Unggah Dokumen Baru</span>
+            <span>Upload New Document</span>
           </button>
         )}
       </div>
@@ -135,11 +135,11 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <ShieldCheck size={20} color="var(--primary)" />
           <span style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
-            <strong>Prinsip Anti-Halusinasi (PRD F-04):</strong> Hanya dokumen berstatus <strong>Active</strong> yang menjadi konteks retrieval AI. Dokumen <em>Menunggu Persetujuan</em> atau <em>Usang</em> diabaikan secara ketat oleh sistem.
+            <strong>Anti-Hallucination Principle (PRD F-04):</strong> Only documents with <strong>Active</strong> status become the AI retrieval context. Documents <em>Pending Approval</em> or <em>Outdated</em> are strictly ignored by the system.
           </span>
         </div>
         <span style={{ fontSize: '0.78rem', color: 'var(--accent-cyan)', fontWeight: 700 }}>
-          {documents.filter(d => d.status === 'aktif').length} Dokumen Active Terindeks
+          {documents.filter(d => d.status === 'aktif').length} Active Documents Indexed
         </span>
       </div>
 
@@ -149,13 +149,13 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
-                <th style={{ padding: '12px 14px' }}>Judul Dokumen Resmi</th>
-                <th style={{ padding: '12px 14px' }}>Kategori</th>
-                <th style={{ padding: '12px 14px' }}>Penanggung Jawab</th>
-                <th style={{ padding: '12px 14px' }}>Version / Berlaku</th>
-                <th style={{ padding: '12px 14px' }}>Status RAG</th>
-                <th style={{ padding: '12px 14px' }}>Potongan (Chunks)</th>
-                <th style={{ padding: '12px 14px', textAlign: 'right' }}>Aksi</th>
+                <th style={{ padding: '12px 14px' }}>Official Document Title</th>
+                <th style={{ padding: '12px 14px' }}>Category</th>
+                <th style={{ padding: '12px 14px' }}>Owner</th>
+                <th style={{ padding: '12px 14px' }}>Version / Effective</th>
+                <th style={{ padding: '12px 14px' }}>RAG Status</th>
+                <th style={{ padding: '12px 14px' }}>Chunks</th>
+                <th style={{ padding: '12px 14px', textAlign: 'right' }}>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -166,17 +166,17 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
                       {doc.title}
                     </div>
                     <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                      Ukuran: {doc.fileSize} • Diunggah: {new Date(doc.uploadDate).toLocaleDateString('id-ID')}
+                      Size: {doc.fileSize} • Uploaded: {new Date(doc.uploadDate).toLocaleDateString('en-US')}
                     </div>
                   </td>
 
                   <td style={{ padding: '14px' }}>
                     <span style={{ fontSize: '0.72rem', padding: '3px 8px', borderRadius: '6px', background: 'var(--bg-tertiary)', border: '1px solid var(--border-subtle)' }}>
-                      {doc.category === 'sk_direksi' && 'SK Direksi'}
-                      {doc.category === 'sop_layanan' && 'SOP Pelayanan'}
-                      {doc.category === 'tarif_resmi' && 'Tarif Resmi'}
-                      {doc.category === 'panduan_merek' && 'Panduan Merek'}
-                      {doc.category === 'laporan_tahunan' && 'Laporan Tahunan'}
+                      {doc.category === 'sk_direksi' && 'Board Decree'}
+                      {doc.category === 'sop_layanan' && 'Service SOP'}
+                      {doc.category === 'tarif_resmi' && 'Official Tariff'}
+                      {doc.category === 'panduan_merek' && 'Brand Guidelines'}
+                      {doc.category === 'laporan_tahunan' && 'Annual Report'}
                     </span>
                   </td>
 
@@ -207,13 +207,13 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
                         value={doc.status}
                         onChange={e => onUpdateStatus(doc.id, e.target.value as DocumentStatus)}
                       >
-                        <option value="aktif">Status: Active (Dipakai RAG)</option>
-                        <option value="menunggu_persetujuan"> Menunggu Persetujuan</option>
-                        <option value="usang"> Usang / Nonaktif</option>
+                        <option value="aktif">Status: Active (Used by RAG)</option>
+                        <option value="menunggu_persetujuan"> Pending Approval</option>
+                        <option value="usang"> Outdated / Inactive</option>
                       </select>
                     ) : (
                       <span className={`status-pill ${doc.status}`}>
-                        {doc.status === 'aktif' ? 'Active' : (doc.status === 'menunggu_persetujuan' ? 'Menunggu' : 'Usang')}
+                        {doc.status === 'aktif' ? 'Active' : (doc.status === 'menunggu_persetujuan' ? 'Pending' : 'Outdated')}
                       </span>
                     )}
                   </td>
@@ -226,7 +226,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
                     <button 
                       className="btn btn-secondary btn-sm"
                       onClick={() => setSelectedDoc(doc)}
-                      title="Lihat Potongan Teks Chunks"
+                      title="View Text Chunks"
                     >
                       <Eye size={12} />
                       <span>Detail</span>
@@ -246,7 +246,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
             <div className="modal-header">
               <div>
                 <span style={{ fontSize: '0.72rem', color: 'var(--accent-cyan)', fontWeight: 700, textTransform: 'uppercase' }}>
-                  Detail Indeks Knowledge Base Documents
+                  Knowledge Base Index Details
                 </span>
                 <h3 style={{ fontSize: '1.15rem', fontWeight: 800, marginTop: '2px' }}>
                   {selectedDoc.title}
@@ -264,11 +264,11 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', padding: '12px', background: 'var(--bg-tertiary)', borderRadius: '10px', fontSize: '0.78rem' }}>
                 <div><span style={{ color: 'var(--text-muted)' }}>Status:</span> <strong>{selectedDoc.status.toUpperCase()}</strong></div>
                 <div><span style={{ color: 'var(--text-muted)' }}>Owner:</span> <strong>{selectedDoc.owner}</strong></div>
-                <div><span style={{ color: 'var(--text-muted)' }}>Masa Berlaku:</span> <strong>{selectedDoc.effectiveDate}</strong></div>
+                <div><span style={{ color: 'var(--text-muted)' }}>Effective Period:</span> <strong>{selectedDoc.effectiveDate}</strong></div>
               </div>
 
               <div>
-                <h4 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '8px' }}>Ringkasan Isi</h4>
+                <h4 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '8px' }}>Content Summary</h4>
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
                   {selectedDoc.summary}
                 </p>
@@ -277,7 +277,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
               <div>
                 <h4 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <Layers size={16} color="var(--primary)" />
-                  <span>Potongan Vektor Chunks ({selectedDoc.chunks.length})</span>
+                  <span>Vector Chunks ({selectedDoc.chunks.length})</span>
                 </h4>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   {selectedDoc.chunks.map(chunk => (
@@ -292,7 +292,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
                       }}
                     >
                       <div style={{ fontWeight: 700, color: 'var(--accent-cyan)', marginBottom: '4px' }}>
-                        {chunk.section} {chunk.page ? `(Hal ${chunk.page})` : ''}
+                        {chunk.section} {chunk.page ? `(Page ${chunk.page})` : ''}
                       </div>
                       <div style={{ color: 'var(--text-primary)', lineHeight: 1.5 }}>
                         {chunk.content}
@@ -328,17 +328,17 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
         <div className="modal-overlay">
           <div className="modal-card">
             <div className="modal-header">
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Unggah Dokumen Sumber Resmi Baru</h3>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Upload New Official Source Document</h3>
               <button className="btn btn-secondary btn-sm" onClick={() => setShowUploadModal(false)}>X</button>
             </div>
             <form onSubmit={handleConfirmUpload}>
               <div className="modal-body">
                 <div className="form-group">
-                  <label className="form-label">Judul Dokumen Resmi *</label>
+                  <label className="form-label">Official Document Title *</label>
                   <input 
                     type="text" 
                     className="form-input" 
-                    placeholder="Contoh: SK Direksi No. 55/2026: Tarif Uji Laboratorium Air Bersih"
+                    placeholder="e.g.: Board Decree No. 55/2026: Clean Water Laboratory Testing Tariff"
                     value={newTitle}
                     onChange={e => setNewTitle(e.target.value)}
                     required
@@ -347,35 +347,35 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   <div className="form-group">
-                    <label className="form-label">Kategori Dokumen</label>
+                    <label className="form-label">Document Category</label>
                     <select 
                       className="form-select"
                       value={newCategory}
                       onChange={e => setNewCategory(e.target.value as DocumentCategory)}
                     >
-                      <option value="sk_direksi">SK Direksi</option>
-                      <option value="sop_layanan">SOP Layanan</option>
-                      <option value="tarif_resmi">Tarif Resmi</option>
-                      <option value="panduan_merek">Panduan Merek</option>
-                      <option value="laporan_tahunan">Laporan Tahunan</option>
+                      <option value="sk_direksi">Board Decree</option>
+                      <option value="sop_layanan">Service SOP</option>
+                      <option value="tarif_resmi">Official Tariff</option>
+                      <option value="panduan_merek">Brand Guidelines</option>
+                      <option value="laporan_tahunan">Annual Report</option>
                     </select>
                   </div>
 
                   <div className="form-group">
-                    <label className="form-label">Status Awal Dokumen</label>
+                    <label className="form-label">Initial Document Status</label>
                     <select 
                       className="form-select"
                       value={newInitialStatus}
                       onChange={e => setNewInitialStatus(e.target.value as DocumentStatus)}
                     >
-                      <option value="aktif">Active (Langsung Bisa Dipakai RAG)</option>
-                      <option value="menunggu_persetujuan">Menunggu Persetujuan (Pending)</option>
+                      <option value="aktif">Active (Immediately usable by RAG)</option>
+                      <option value="menunggu_persetujuan">Pending Approval (Pending)</option>
                     </select>
                   </div>
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Bagian / Pasal / Section</label>
+                  <label className="form-label">Section / Article</label>
                   <input 
                     type="text" 
                     className="form-input"
@@ -385,11 +385,11 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Konten Teks Dokumen Resmi *</label>
+                  <label className="form-label">Official Document Text Content *</label>
                   <textarea 
                     className="form-textarea" 
                     rows={5}
-                    placeholder="Ketik atau tempel teks kutipan SK Direksi atau SOP resmi di sini..."
+                    placeholder="Type or paste the Board Decree or official SOP excerpt here..."
                     value={newContent}
                     onChange={e => setNewContent(e.target.value)}
                     required
@@ -402,7 +402,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
                   Cancel
                 </button>
                 <button type="submit" className="btn btn-primary">
-                  Indeks & Simpan ke Knowledge Base
+                  Index & Save to Knowledge Base
                 </button>
               </div>
             </form>

@@ -81,6 +81,7 @@ export interface BrandProfile {
   organizationName: string;
   unitDepartment: string;
   defaultLanguage: string;
+  targetAudiences: string[];
   toneOfVoice: string[];
   terminology: TerminologyItem[];
   bannedWords: BannedWordItem[];
@@ -237,10 +238,9 @@ export interface AuditLog {
 export type ActiveTab = 
   | 'dashboard' 
   | 'brief_studio' 
-  | 'editor' 
-  | 'visual_studio' 
-
-  | 'review_approval' 
+  | 'editor'  | 'visual_studio' 
+  | 'content_scheduling'
+  | 'review_approval'  
   | 'library' 
   | 'knowledge_base' 
   | 'brand_profile' 

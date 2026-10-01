@@ -45,6 +45,7 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
   const [newReplacement, setNewReplacement] = useState('');
 
   // CTA add
+  const [newAudience, setNewAudience] = useState('');
   const [newCtaLabel, setNewCtaLabel] = useState('');
   const [newCtaText, setNewCtaText] = useState('');
 
@@ -61,7 +62,7 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
     if (!newTerm.trim()) return;
     const item: TerminologyItem = {
       term: newTerm.trim(),
-      definition: newDef.trim() || 'Definisi resmi BUMD',
+      definition: newDef.trim() || 'Official BUMD definition',
       mandatory: true
     };
     setProfile({ ...profile, terminology: [...profile.terminology, item] });
@@ -79,8 +80,8 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
     if (!newBanned.trim()) return;
     const item: BannedWordItem = {
       word: newBanned.trim(),
-      reason: newReason.trim() || 'Melanggar kaidah penyiaran publik BUMD',
-      suggestedReplacement: newReplacement.trim() || 'istilah baku terukur'
+      reason: newReason.trim() || 'Violates BUMD public communication standards',
+      suggestedReplacement: newReplacement.trim() || 'measured formal term'
     };
     setProfile({ ...profile, bannedWords: [...profile.bannedWords, item] });
     setNewBanned('');
@@ -100,11 +101,25 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
       id: `cta-${Date.now()}`,
       label: newCtaLabel.trim(),
       text: newCtaText.trim(),
-      channel: 'Semua Kanal'
+      channel: 'All Channels'
     };
     setProfile({ ...profile, officialCTAs: [...profile.officialCTAs, item] });
     setNewCtaLabel('');
     setNewCtaText('');
+  };
+
+  const handleAddAudience = () => {
+    const v = newAudience.trim();
+    const current = profile.targetAudiences ?? [];
+    if (!v || current.includes(v)) return;
+    setProfile({ ...profile, targetAudiences: [...current, v] });
+    setNewAudience('');
+  };
+
+  const handleDeleteAudience = (index: number) => {
+    const list = [...(profile.targetAudiences ?? [])];
+    list.splice(index, 1);
+    setProfile({ ...profile, targetAudiences: list });
   };
 
   const handleDeleteCta = (id: string) => {
@@ -118,9 +133,9 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
     <div>
       <div className="page-header-row">
         <div>
-          <h2 className="page-title">Profil Organisasi & Panduan Merek</h2>
+          <h2 className="page-title">Organization Profile & Brand Guidelines</h2>
           <p className="page-subtitle">
-            Standarisasi bahasa, terminologi wajib, dan larangan istilah untuk menjaga konsistensi materi komunikasi <strong>{activeWorkspace.name}</strong>.
+            Standardize language, mandatory terminology, and banned terms to keep <strong>{activeWorkspace.name}</strong> communications consistent.
           </p>
         </div>
 
@@ -131,14 +146,14 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
             onClick={handleSave}
           >
             <Save size={16} />
-            <span>{saveSuccess ? 'Tersimpan!' : 'Simpan Perubahan'}</span>
+            <span>{saveSuccess ? 'Saved!' : 'Save Changes'}</span>
           </button>
         )}
       </div>
 
       {!isAdmin && (
         <div style={{ padding: '12px 18px', borderRadius: '10px', background: 'var(--bg-tertiary)', marginBottom: '20px', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-           Anda sedang membuka dalam mode tampilan peran <strong>{activeUser.role.toUpperCase()}</strong>. Hanya <strong>Administrator / Knowledge Owner</strong> yang memiliki izin memperbarui panduan merek.
+           You are viewing in <strong>{activeUser.role.toUpperCase()}</strong> role mode. Only <strong>Administrators / Knowledge Owners</strong> may update the brand guidelines.
         </div>
       )}
 
@@ -147,13 +162,13 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div className="card-panel">
             <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Sparkles size={18} color="var(--primary)" />
-              <span>Identitas Resmi Organisasi</span>
+
+              <span>Official Organization Identity</span>
             </h3>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div className="form-group">
-                <label className="form-label">Nama Badan Usaha / Lembaga</label>
+                <label className="form-label">Business Entity / Institution Name</label>
                 <input 
                   type="text" 
                   className="form-input" 
@@ -164,7 +179,7 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
               </div>
 
               <div className="form-group">
-                <label className="form-label">Unit Kerja Penanggung Jawab</label>
+                <label className="form-label">Responsible Business Unit</label>
                 <input 
                   type="text" 
                   className="form-input" 
@@ -175,7 +190,7 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
               </div>
 
               <div className="form-group">
-                <label className="form-label">Bahasa Baku Default</label>
+                <label className="form-label">Default Formal Language</label>
                 <input 
                   type="text" 
                   className="form-input" 
@@ -186,7 +201,7 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
               </div>
 
               <div className="form-group">
-                <label className="form-label">Penafian Resmi (Official Disclaimer)</label>
+                <label className="form-label">Official Disclaimer</label>
                 <textarea 
                   className="form-textarea" 
                   rows={2}
@@ -198,10 +213,67 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
             </div>
           </div>
 
+          {/* Target Audiences */}
+          <div className="card-panel">
+            <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '12px' }}>
+              Target Audiences
+            </h3>
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '12px' }}>
+              Shown as selectable options in Brief Studio.
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '14px' }}>
+              {(profile.targetAudiences ?? []).map((aud, idx) => (
+                <span
+                  key={idx}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '8px',
+                    background: 'var(--bg-tertiary)',
+                    border: '1px solid var(--border-subtle)',
+                    fontSize: '0.8rem',
+                    fontWeight: 600,
+                    color: 'var(--text-primary)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  {aud}
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteAudience(idx)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#f43f5e', display: 'flex' }}
+                      title="Remove audience"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  )}
+                </span>
+              ))}
+            </div>
+            {isAdmin && (
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="E.g.: City residents"
+                  value={newAudience}
+                  onChange={e => setNewAudience(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddAudience(); } }}
+                />
+                <button type="button" className="btn btn-secondary btn-sm" onClick={handleAddAudience}>
+                  <Plus size={14} />
+                  <span>Add</span>
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* Tone of Voice */}
           <div className="card-panel">
             <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '12px' }}>
-              Pilar Nada Bahasa (Tone of Voice)
+              Tone of Voice Pillars
             </h3>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
               {profile.toneOfVoice.map((tone, idx) => (
@@ -217,7 +289,7 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
                     color: 'var(--text-primary)'
                   }}
                 >
-                  Status: {tone}
+                  {tone}
                 </span>
               ))}
             </div>
@@ -230,7 +302,7 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
           <div className="card-panel">
             <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <BookOpen size={18} color="var(--accent-cyan)" />
-              <span>Glosarium Istilah Resmi (Terminology)</span>
+              <span>Official Terminology Glossary</span>
             </h3>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
@@ -274,14 +346,14 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
                 <input 
                   type="text" 
                   className="form-input" 
-                  placeholder="Istilah resmi..."
+                  placeholder="Official term..."
                   value={newTerm}
                   onChange={e => setNewTerm(e.target.value)}
                 />
                 <input 
                   type="text" 
                   className="form-input" 
-                  placeholder="Definisi / konteks penggunaan..."
+                  placeholder="Definition / usage context..."
                   value={newDef}
                   onChange={e => setNewDef(e.target.value)}
                 />
@@ -296,7 +368,7 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
           <div className="card-panel">
             <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px', color: '#fb7185' }}>
               <AlertTriangle size={18} />
-              <span>Larangan Istilah Publik (Banned Words)</span>
+              <span>Public Terms Ban (Banned Words)</span>
             </h3>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
@@ -318,10 +390,10 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
                       <s>"{b.word}"</s>
                     </span>
                     <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                      Alasan: {b.reason}
+                      Reason: {b.reason}
                     </div>
                     <div style={{ fontSize: '0.74rem', color: '#34d399', fontWeight: 600 }}>
-                      Gunakan gantinya: "{b.suggestedReplacement}"
+                      Use instead: "{b.suggestedReplacement}"
                     </div>
                   </div>
                   {isAdmin && (
@@ -343,21 +415,21 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
                 <input 
                   type="text" 
                   className="form-input" 
-                  placeholder="Kata dilarang..."
+                  placeholder="Banned word..."
                   value={newBanned}
                   onChange={e => setNewBanned(e.target.value)}
                 />
                 <input 
                   type="text" 
                   className="form-input" 
-                  placeholder="Alasan larangan..."
+                  placeholder="Reason for ban..."
                   value={newReason}
                   onChange={e => setNewReason(e.target.value)}
                 />
                 <input 
                   type="text" 
                   className="form-input" 
-                  placeholder="Kata pengganti..."
+                  placeholder="Replacement word..."
                   value={newReplacement}
                   onChange={e => setNewReplacement(e.target.value)}
                 />
@@ -372,7 +444,7 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
           <div className="card-panel">
             <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <MessageSquare size={18} color="var(--primary)" />
-              <span>Call to Action (CTA) Resmi Terdaftar</span>
+              <span>Registered Official Call to Action (CTA)</span>
             </h3>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
@@ -416,14 +488,14 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
                 <input 
                   type="text" 
                   className="form-input" 
-                  placeholder="Nama label CTA..."
+                  placeholder="CTA label name..."
                   value={newCtaLabel}
                   onChange={e => setNewCtaLabel(e.target.value)}
                 />
                 <input 
                   type="text" 
                   className="form-input" 
-                  placeholder="Kalimat lengkap ajakan Call to Action..."
+                  placeholder="Full call-to-action sentence..."
                   value={newCtaText}
                   onChange={e => setNewCtaText(e.target.value)}
                 />

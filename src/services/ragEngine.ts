@@ -33,6 +33,19 @@ export interface GeneratedOutput {
   qualityCheck: QualityCheck;
 }
 
+/**
+ * Grounding produced by the remote Multi-Tenant RAG & Jev AI Service.
+ * When supplied, generation is grounded on real retrieved sources instead of the
+ * in-browser keyword retrieval below (which stays as an offline fallback).
+ */
+export interface RemoteGrounding {
+  answer: string;
+  citations: GroundedCitation[];
+  unsupportedClaims: string[];
+  grounded: boolean;
+  model?: string;
+}
+
 // Perform client-side semantic & keyword retrieval over approved active documents
 export function retrieveKnowledge(
   queryText: string,
@@ -107,28 +120,15 @@ export function retrieveKnowledge(
 
   // Detect potential unsupported topics
   const unsupportedClaims: string[] = [];
-  const unsupportedTriggers = [
-    { trigger: 'diskon 50%', label: 'Diskon 50% tiket/tarif' },
-    { trigger: 'internasional', label: 'Layanan cabang internasional' },
-    { trigger: 'uji lab mandiri', label: 'Uji lab air sumur mandiri (Status Dokumen masih DRAFT / Belum Disahkan)' },
-    { trigger: 'gratis seumur hidup', label: 'Klaim gratis seumur hidup' },
-    { trigger: 'hadiah undian mobil', label: 'Program hadiah undian mobil' }
-  ];
-
-  unsupportedTriggers.forEach(item => {
-    if (normalizedQuery.includes(item.trigger)) {
-      unsupportedClaims.push(item.label);
-    }
-  });
 
   // If matched chunks is 0, add a general unsupported notice
   const isAdequate = topMatches.length > 0;
   let explanation = '';
   if (!isAdequate) {
-    explanation = 'Knowledge base aktif tidak memuat rujukan resmi yang memadai untuk topik brief ini. Konten dihasilkan dengan tanda peringatan [Perlu Verifikasi].';
-    unsupportedClaims.push('Klaim faktual spesifik dalam brief belum ditemukan dalam active documents organisasi.');
+    explanation = 'The active knowledge base does not contain adequate official references for this brief topic. Content is generated with a [Needs Verification] warning marker.';
+    unsupportedClaims.push('Specific factual claims in the brief were not found in the organization\'s active documents.');
   } else {
-    explanation = `Ditemukan ${topMatches.length} rujukan resmi terverifikasi dari ${Array.from(new Set(topMatches.map(m => m.document.title))).length} active documents.`;
+    explanation = `Found ${topMatches.length} verified official references from ${Array.from(new Set(topMatches.map(m => m.document.title))).length} active documents.`;
   }
 
   return {
@@ -162,7 +162,7 @@ export function runQualityCheck(
   const hasCta = Boolean(
     brief.cta && (
       normalizedContent.includes(brief.cta.toLowerCase().slice(0, 20)) ||
-      brandProfile.officialCTAs.some(c => normalizedContent.includes(c.label.toLowerCase()) || normalizedContent.includes('hubungi') || normalizedContent.includes('unduh') || normalizedContent.includes('kunjungi'))
+      brandProfile.officialCTAs.some(c => normalizedContent.includes(c.label.toLowerCase()) || normalizedContent.includes('contact') || normalizedContent.includes('download') || normalizedContent.includes('visit'))
     )
   );
 
@@ -190,14 +190,14 @@ export function runQualityCheck(
   return {
     briefCompliance: {
       score: briefScore,
-      details: hasCta ? 'Pesan utama dan Call-to-Action tersemat sesuai brief.' : 'Pesan utama tercakup, disarankan melengkapi Call-to-Action resmi.',
+      details: hasCta ? 'Key message and Call-to-Action are embedded according to the brief.' : 'Key message covered; recommend adding the official Call-to-Action.',
       passed: briefScore >= 80
     },
     toneCompliance: {
       score: Math.max(50, toneScore),
       details: bannedWordsFound.length === 0 
-        ? `Sesuai nada panduan merek (${brief.tone || 'Formal Korporat'}). Bebas dari istilah terlarang.`
-        : `Ditemukan istilah yang tidak dianjurkan: "${bannedWordsFound.join(', ')}".`,
+        ? `Matches the brand guideline tone (${brief.tone || 'Corporate Formal'}). Free of banned terms.`
+        : `Non-recommended terms found: "${bannedWordsFound.join(', ')}".`,
       passed: bannedWordsFound.length === 0
     },
     factualGrounding: {
@@ -210,135 +210,151 @@ export function runQualityCheck(
     bannedWordsFound,
     ctaCompliance: {
       hasCta,
-      details: hasCta ? 'Call to action resmi telah disematkan.' : 'CTA belum terdeteksi secara eksplisit.'
+      details: hasCta ? 'Official call to action has been embedded.' : 'CTA not explicitly detected yet.'
     },
     overallStatus
   };
 }
 
-// Generate grounded BUMD corporate content
+// Generate grounded BUMD corporate content.
+// Pass `remote` to ground on the live RAG service; omit it to use the offline keyword engine.
 export function generateContentFromBrief(
   brief: ContentBrief,
   brandProfile: BrandProfile,
   documents: KnowledgeDocument[],
-  workspaceId: string
+  workspaceId: string,
+  remote?: RemoteGrounding
 ): GeneratedOutput {
-  // Run RAG
-  const query = `${brief.title} ${brief.keyMessage} ${brief.targetAudience} ${brief.selectedProduct || ''}`;
-  const rag = retrieveKnowledge(query, documents, workspaceId);
+  let citations: GroundedCitation[];
+  let unsupported: string[];
+  let groundedKeyMessage: string;
+
+  if (remote) {
+    citations = remote.citations;
+    unsupported = remote.unsupportedClaims;
+    if (remote.grounded && remote.answer.trim()) {
+      groundedKeyMessage = remote.answer.trim();
+    } else if (citations.length > 0) {
+      groundedKeyMessage = brief.keyMessage;
+    } else {
+      groundedKeyMessage = 'The requested information is not yet available in active official sources. Add or confirm the source with the Knowledge Owner before using this claim.';
+    }
+  } else {
+    const query = `${brief.title} ${brief.keyMessage} ${brief.targetAudience} ${brief.selectedProduct || ''}`;
+    const rag = retrieveKnowledge(query, documents, workspaceId);
+    citations = rag.groundedCitations;
+    unsupported = rag.unsupportedClaims;
+    groundedKeyMessage = rag.isAdequate
+      ? brief.keyMessage
+      : 'The requested information is not yet available in active official sources. Add or confirm the source with the Knowledge Owner before using this claim.';
+  }
 
   let generatedText = '';
   let scenes: VideoScriptScene[] | undefined = undefined;
   let visualAsset: VisualAsset | undefined = undefined;
 
-  const citations = rag.groundedCitations;
-  const unsupported = rag.unsupportedClaims;
-  const groundedKeyMessage = rag.isAdequate
-    ? brief.keyMessage
-    : 'Informasi yang diminta belum tersedia di sumber resmi aktif. Tambahkan atau konfirmasikan sumber melalui Knowledge Owner sebelum menggunakan klaim ini.';
-
   const citationSummary = citations.length > 0
     ? citations.map((c, i) => `[${i + 1}] ${c.documentTitle} (${c.section})`).join('\n')
-    : 'Belum ada rujukan active documents.';
+    : 'No active document references yet.';
 
   const ungroundedNotice = unsupported.length > 0
-    ? `\n\nCATATAN GROUNDING: ${unsupported.map(u => `[Perlu Verifikasi: ${u}]`).join(' ')}`
+    ? `\n\nGROUNDING NOTES: ${unsupported.map(u => `[Needs Verification: ${u}]`).join(' ')}`
     : '';
 
   // Generate according to format
   if (brief.format === 'copy_caption') {
-    generatedText = `[DRAFT KORPORAT - BELUM DISETUJUI]
+    generatedText = `[CORPORATE DRAFT - NOT YET APPROVED]
 
  ${brief.title.toUpperCase()}
 
-Sahabat ${brandProfile.organizationName},
+Dear ${brandProfile.organizationName} community,
 
 ${groundedKeyMessage}
 
-${citations.length > 0 ? `Berdasarkan ketentuan resmi:\n${citations.map(c => `• ${c.excerpt.slice(0, 140)}... [References: ${c.documentTitle}, Hal ${c.page || 1}]`).join('\n')}` : 'Informasi lebih lanjut akan diumumkan sesuai kebijakan resmi perumda.'}
+${citations.length > 0 ? `Based on official provisions:\n${citations.map(c => `• ${c.excerpt.slice(0, 140)}... [References: ${c.documentTitle}, Page ${c.page || 1}]`).join('\n')}` : 'Further information will be announced according to official corporate policy.'}
 
-${brief.limitations ? ` Catatan Penting: ${brief.limitations}\n` : ''}
-${brief.cta || brandProfile.officialCTAs[0]?.text || 'Hubungi kanal resmi kami untuk informasi lebih lanjut.'}
+${brief.limitations ? ` Important Notes: ${brief.limitations}\n` : ''}
+${brief.cta || brandProfile.officialCTAs[0]?.text || 'Contact our official channels for more information.'}
 
-#BUMDProfesional #${brandProfile.organizationName.replace(/\s+/g, '')} #LayananMasyarakat #InfoResmi${ungroundedNotice}`;
+#ProfessionalBUMD #${brandProfile.organizationName.replace(/\s+/g, '')} #PublicServices #OfficialInfo${ungroundedNotice}`;
   } 
   else if (brief.format === 'teks_promosi') {
-    const todayStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-    generatedText = `[DRAFT SIARAN PERS / PENGUMUMAN RESMI]
-Nomor Dispositions: DRAFT-${Date.now().toString().slice(-4)}
+    const todayStr = new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });
+    generatedText = `[OFFICIAL PRESS RELEASE / ANNOUNCEMENT DRAFT]
+Disposition Number: DRAFT-${Date.now().toString().slice(-4)}
 
 ${brief.title.toUpperCase()}
 
 ${brandProfile.unitDepartment.toUpperCase()} — ${todayStr}
 
-Dalam rangka memberikan pelayanan publik yang prima dan transparan bagi masyarakat ${brandProfile.organizationName}, kami menyampaikan pokok-pokok kebijakan dan informasi layanan sebagai berikut:
+In order to provide excellent and transparent public service to the community of ${brandProfile.organizationName}, we hereby convey the key policy points and service information as follows:
 
-1. LATAR BELAKANG & TUJUAN
-${groundedKeyMessage} Target program ini ditujukan bagi ${brief.targetAudience} guna mewujudkan tata kelola layanan daerah yang akuntabel dan berkesinambungan.
+1. BACKGROUND & OBJECTIVES
+${groundedKeyMessage} This program targets ${brief.targetAudience} to build accountable and sustainable regional service governance.
 
-2. KETENTUAN RESMI BERDASARKAN DOKUMEN KNOWLEDGE BASE
-${citations.length > 0 ? citations.map((c, i) => `2.${i + 1}. ${c.excerpt} (Sumber: ${c.documentTitle}, ${c.section})`).join('\n\n') : '2.1. Ketentuan rinci menunggu pengesahan dokumen rujukan resmi.'}
+2. OFFICIAL PROVISIONS BASED ON KNOWLEDGE BASE DOCUMENTS
+${citations.length > 0 ? citations.map((c, i) => `2.${i + 1}. ${c.excerpt} (Source: ${c.documentTitle}, ${c.section})`).join('\n\n') : '2.1. Detailed provisions await ratification of the official reference document.'}
 
-3. KANAL LAYANAN & CALL TO ACTION
-${brief.cta || brandProfile.officialCTAs[0]?.text || 'Silakan menghubungi pusat informasi resmi BUMD.'}
+3. SERVICE CHANNELS & CALL TO ACTION
+${brief.cta || brandProfile.officialCTAs[0]?.text || 'Please contact the official BUMD information center.'}
 
-Sekretariat & Hubungan Masyarakat
+Secretariat & Public Relations
 ${brandProfile.organizationName}
-Kanal Komunikasi Resmi Terdaftar: ${brandProfile.approvedChannels.slice(0, 2).join(' | ')}${ungroundedNotice}`;
+Registered Official Communication Channels: ${brandProfile.approvedChannels.slice(0, 2).join(' | ')}${ungroundedNotice}`;
   } 
   else if (brief.format === 'naskah_singkat') {
-    generatedText = `[DRAFT NASKAH VIDEO EDUKASI SINGKAT]
-Judul: ${brief.title}
-Target Durasi: 45 - 60 Detik
+    generatedText = `[SHORT EDUCATIONAL VIDEO SCRIPT DRAFT]
+Title: ${brief.title}
+Target Duration: 45 - 60 Seconds
 Format: Reels / TikTok / YouTube Shorts (9:16)
-Pesan Utama: ${groundedKeyMessage}
-References Fakta Terkait:
+Key Message: ${groundedKeyMessage}
+Related Fact References:
 ${citationSummary}${ungroundedNotice}`;
 
     scenes = [
       {
         sceneNumber: 1,
-        visualDirection: `Opening hook: Presenter atau talent tersenyum di depan latar instalasi/fasilitas ${brandProfile.organizationName}, membawa kartu informasi.`,
-        audioNarration: `Talent: "Warga sudah tahu belum? Ada kabar penting dan resmi mengenai ${brief.keyMessage.slice(0, 45)}!"`,
+        visualDirection: `Opening hook: Presenter or talent smiles in front of the ${brandProfile.organizationName} installation/facility backdrop, holding an information card.`,
+        audioNarration: `Talent: "Have you heard? There is important official news regarding ${brief.keyMessage.slice(0, 45)}!"`,
         textOnScreen: `${brief.title.slice(0, 30).toUpperCase()} `,
         citationId: citations[0]?.id,
         citationNote: citations[0]?.documentTitle
       },
       {
         sceneNumber: 2,
-        visualDirection: 'Kamera beralih ke infografis gerak yang memperlihatkan poin utama ketentuan rujukan resmi.',
+        visualDirection: 'The camera switches to a motion infographic showing the key points of the official reference provisions.',
         audioNarration: citations[0] 
-          ? `Narator: "${citations[0].excerpt.slice(0, 110)}."`
-          : `Narator: "Program ini hadir untuk mempermudah seluruh kebutuhan masyarakat."`,
-        textOnScreen: citations[0] ? `SUMBER: ${citations[0].section.slice(0, 28)} ` : 'INFO LAYANAN RESMI',
+          ? `Narrator: "${citations[0].excerpt.slice(0, 110)}."`
+          : `Narrator: "This program exists to make all community needs easier."`,
+        textOnScreen: citations[0] ? `SOURCE: ${citations[0].section.slice(0, 28)} ` : 'OFFICIAL SERVICE INFO',
         citationId: citations[0]?.id,
         citationNote: citations[0]?.documentTitle
       },
       {
         sceneNumber: 3,
-        visualDirection: 'Talent mempraktikkan langkah praktis (misal: mengakses portal/aplikasi atau menunjukkan bukti layanan).',
-        audioNarration: `Talent: "${brief.limitations || 'Semua proses dapat diakses secara transparan dan tertib sesuai prosedur resmi.'}"`,
-        textOnScreen: 'PROSES MUDAH & TRANSPARAN',
+        visualDirection: 'The talent demonstrates practical steps (e.g.: accessing the portal/app or showing service evidence).',
+        audioNarration: `Talent: "${brief.limitations || 'All processes can be accessed transparently and orderly according to official procedures.'}"`,
+        textOnScreen: 'EASY & TRANSPARENT PROCESS',
         citationId: citations[1]?.id,
         citationNote: citations[1]?.documentTitle
       },
       {
         sceneNumber: 4,
-        visualDirection: `Closing bumper: Logo resmi ${brandProfile.organizationName} dan informasi Call to Action resmi.`,
-        audioNarration: `Narator: "${brief.cta || brandProfile.officialCTAs[0]?.text || 'Hubungi kami sekarang!'}"`,
-        textOnScreen: `${brief.cta ? brief.cta.slice(0, 35) : 'INFO LEBIH LANJUT DI KANAL RESMI'}`,
+        visualDirection: `Closing bumper: Official ${brandProfile.organizationName} logo and official Call to Action information.`,
+        audioNarration: `Narrator: "${brief.cta || brandProfile.officialCTAs[0]?.text || 'Contact us now!'}"`,
+        textOnScreen: `${brief.cta ? brief.cta.slice(0, 35) : 'MORE INFO ON OFFICIAL CHANNELS'}`,
         citationId: undefined,
-        citationNote: 'CTA Penutup'
+        citationNote: 'Closing CTA'
       }
     ];
   } 
   else {
     // brief_visual
-    generatedText = `[DRAFT PANDUAN VISUAL & GRAFIS KORPORAT]
+    generatedText = `[CORPORATE VISUAL & GRAPHIC GUIDE DRAFT]
 Design Theme: ${brief.title}
-Warna Utama: ${brandProfile.organizationName} Official Color
-Pesan Kunci: ${groundedKeyMessage}
-Ketentuan Brand: Logo resmi BUMD wajib ditempatkan di pojok kanan atas, tidak diubah proporsi atau warnanya.`;
+Primary Color: ${brandProfile.organizationName} Official Color
+Key Message: ${groundedKeyMessage}
+Brand Provisions: The official BUMD logo must be placed in the top-right corner, without altering its proportions or colors.`;
   }
 
   // Create visual asset companion
@@ -347,12 +363,12 @@ Ketentuan Brand: Logo resmi BUMD wajib ditempatkan di pojok kanan atas, tidak di
     headline: brief.title.slice(0, 45).toUpperCase(),
     subheadline: brief.keyMessage.slice(0, 75),
     aspectRatio: brief.format === 'naskah_singkat' ? '9:16' : (brief.format === 'teks_promosi' ? '16:9' : '1:1'),
-    primaryColor: '#0284c7',
-    accentColor: '#38bdf8',
-    badgeText: 'PUBLIKASI RESMI BUMD',
-    ctaText: brief.cta ? brief.cta.slice(0, 45) : (brandProfile.officialCTAs[0]?.label || 'Kunjungi Kanal Resmi'),
-    disclaimer: brandProfile.officialDisclaimer || 'Berdasarkan dokumen resmi yang telah disahkan direksi.',
-    visualPrompt: `Professional corporate graphic with clean layout for ${brandProfile.organizationName}, displaying "${brief.title.slice(0, 35)}", clean Indonesian typography, verified stamp badge, high contrast, official blue and cyan tones`,
+    primaryColor: '',
+    accentColor: '',
+    badgeText: '',
+    ctaText: brief.cta ? brief.cta.slice(0, 45) : (brandProfile.officialCTAs[0]?.label || ''),
+    disclaimer: brandProfile.officialDisclaimer || '',
+    visualPrompt: `Professional corporate graphic with clean layout for ${brandProfile.organizationName}, displaying "${brief.title.slice(0, 35)}", clean typography, verified stamp badge, high contrast, official blue and cyan tones`,
     templateStyle: 'corporate'
   };
 
@@ -391,37 +407,32 @@ export function refineDraftContent(
       .join('\n\n');
     return {
       newContent: `${shortened}\n\n${brandProfile.officialCTAs[0]?.text || ''}`,
-      summary: 'Diringkas lebih padat dengan memangkas kalimat penjelas berulang.'
+      summary: 'Condensed by trimming repeated explanatory sentences.'
     };
   } 
   else if (refinementType === 'formal') {
-    const formalHeader = `[FORMAT RESMI KORPORAT BUMD]\nKepada Yth. Seluruh Pemangku Kepentingan dan Pelanggan ${brandProfile.organizationName},\n\n`;
-    const polished = currentContent
-      .replace(/Sahabat/gi, 'Bapak/Ibu Pelanggan Terhormat')
-      .replace(/Yuk,/gi, 'Kami mengimbau kepada seluruh masyarakat untuk')
-      .replace(/Udah/gi, 'Sudah');
+    const formalHeader = `[OFFICIAL CORPORATE FORMAT]\nTo: All Stakeholders and Customers of ${brandProfile.organizationName},\n\n`;
     return {
-      newContent: formalHeader + polished,
-      summary: 'Peningkatan tingkat formalitas bahasa sesuai kaidah tata naskah dinas BUMD.'
+      newContent: formalHeader + currentContent,
+      summary: 'Elevated language formality according to official drafting standards.'
     };
   } 
   else if (refinementType === 'persuasive') {
-    const persuasivePrefix = `Kabar gembira dan solusi terbaik untuk kenyamanan Anda sekeluarga!\n\n`;
     return {
-      newContent: persuasivePrefix + currentContent,
-      summary: 'Penyesuaian gaya bahasa menjadi lebih persuasif dan mengajak peran aktif masyarakat.'
+      newContent: currentContent,
+      summary: 'Language style adjusted to be more persuasive and invite active community participation.'
     };
   } 
   else {
     // X Thread format
     const threadParts = [
-      `1/3  [PENGUMUMAN RESMI] ${brandProfile.organizationName}\n\n${lines.slice(0, 3).join(' ')}`,
-      `2/3  Ketentuan & References Resmi:\n${lines.slice(3, 7).join(' ')}`,
-      `3/3 Info lengkap & layanan pengaduan: ${brandProfile.officialCTAs[0]?.text || ''}`
+      `1/3  [OFFICIAL ANNOUNCEMENT] ${brandProfile.organizationName}\n\n${lines.slice(0, 3).join(' ')}`,
+      `2/3  Official Provisions & References:\n${lines.slice(3, 7).join(' ')}`,
+      `3/3 Full info & complaint services: ${brandProfile.officialCTAs[0]?.text || ''}`
     ];
     return {
       newContent: threadParts.join('\n\n---\n\n'),
-      summary: 'Adaptasi format naskah menjadi utas/thread ringkas untuk kanal media sosial X.'
+      summary: 'Draft adapted into a concise thread format for the X social media channel.'
     };
   }
 }

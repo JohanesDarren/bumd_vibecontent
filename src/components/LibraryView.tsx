@@ -55,9 +55,9 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     <div>
       <div className="page-header-row">
         <div>
-          <h2 className="page-title">Pustaka Konten (Content Library)</h2>
+          <h2 className="page-title">Content Library</h2>
           <p className="page-subtitle">
-            Koleksi seluruh draf naskah, siaran pers, dan skrip video resmi milik <strong>{activeWorkspace.name}</strong>.
+            Collection of all official drafts, press releases, and video scripts belonging to <strong>{activeWorkspace.name}</strong>.
           </p>
         </div>
       </div>
@@ -72,7 +72,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               type="text" 
               className="form-input" 
               style={{ paddingLeft: '36px' }}
-              placeholder="Cari judul, kata kunci naskah, atau topik..."
+              placeholder="Search by title, keywords, or topic..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
             />
@@ -85,11 +85,11 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value as any)}
             >
-              <option value="all">Semua Status Persetujuan</option>
-              <option value="draft">Draft (Draf)</option>
+              <option value="all">All Approval Statuses</option>
+              <option value="draft">Draft</option>
               <option value="menunggu_review">Pending Review</option>
               <option value="revisi_diminta">Revision Requested</option>
-              <option value="disetujui">Approved (Approved)</option>
+              <option value="disetujui">Approved</option>
               <option value="diarsipkan">Archived</option>
             </select>
           </div>
@@ -115,9 +115,9 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       {filteredDrafts.length === 0 ? (
         <div className="card-panel" style={{ textAlign: 'center', padding: '48px 24px' }}>
           <FileText size={40} color="var(--text-muted)" style={{ margin: '0 auto 12px' }} />
-          <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Tidak Ditemukan Naskah</h3>
+          <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>No Drafts Found</h3>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-            Sesuaikan kata kunci pencarian atau ubah filter status di atas.
+            Adjust your search keywords or change the status filter above.
           </p>
         </div>
       ) : (
@@ -162,7 +162,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
                     <span>By: <strong>{draft.creatorName}</strong></span>
-                    <span>{new Date(draft.updatedAt).toLocaleDateString('id-ID')}</span>
+                    <span>{new Date(draft.updatedAt).toLocaleDateString('en-US')}</span>
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
@@ -172,7 +172,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                       </span>
                     ) : (
                       <span className="grounding-badge warning">
-                        <AlertTriangle size={12} /> Perlu Verifikasi
+                        <AlertTriangle size={12} /> Needs Verification
                       </span>
                     )}
 
@@ -180,7 +180,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                       <button 
                         className="btn btn-secondary btn-sm"
                         onClick={() => onOpenEditor(draft.id)}
-                        title="Open di Editor"
+                        title="Open in Editor"
                       >
                         <Eye size={14} />
                         <span>Open</span>
@@ -188,14 +188,14 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                       <button 
                         className="btn btn-primary btn-sm"
                         onClick={() => onOpenExportModal(draft)}
-                        title="Ekspor Naskah"
+                        title="Export Draft"
                       >
                         <Share2 size={14} />
-                        <span>Ekspor</span>
+                        <span>Export</span>
                       </button>
                       {draft.status !== 'diarsipkan' && (
-                        <button className="btn btn-secondary btn-sm" onClick={() => onArchiveDraft(draft.id)} title="Arsipkan draft">
-                          <Archive size={14}/><span>Arsipkan</span>
+                        <button className="btn btn-secondary btn-sm" onClick={() => onArchiveDraft(draft.id)} title="Archive draft">
+                          <Archive size={14}/><span>Archive</span>
                         </button>
                       )}
                     </div>
