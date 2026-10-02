@@ -6,10 +6,21 @@ import { canAccessTab, canTransitionDraft, filterUsersForWorkspace } from './pol
 const creator = { role: 'creator' as const, workspaceId: 'ws-a' };
 const admin = { role: 'admin' as const, workspaceId: 'ws-a' };
 
-test('role navigation follows PRD responsibilities', () => {
+test('role navigation follows PRD responsibilities', async () => {
   assert.equal(canAccessTab(creator.role, 'brief_studio'), true);
 
   assert.equal(canAccessTab(admin.role, 'user_management'), true);
+  assert.doesNotMatch(await readFile(new URL('./policies.ts', import.meta.url), 'utf8'), /reviewer/);
+});
+
+test('only creator/admin roles remain; transitions can only approve', async () => {
+  const [types, labels] = await Promise.all([
+    readFile(new URL('../types/index.ts', import.meta.url), 'utf8'),
+    readFile(new URL('./labels.ts', import.meta.url), 'utf8')
+  ]);
+  assert.doesNotMatch(types, /reviewer/);
+  assert.doesNotMatch(labels, /reviewer/i);
+  assert.equal(canTransitionDraft(admin.role, 'draft', 'menunggu_review'), false);
 });
 
 test('user interface does not expose knowledge-base management', async () => {

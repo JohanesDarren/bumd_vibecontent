@@ -6,7 +6,7 @@ import { knowledgeBaseIdFor, ragDeleteDocument, ragIndexDocument, ragListDocumen
 const DEMO_PASSWORD = 'DemoPass123';
 
 // Local demo seed: resets the database and inserts one workspace with a
-// ready-to-use account for each role (admin, reviewer, creator), plus a brand
+// ready-to-use account for each role (admin, creator), plus a brand
 // profile and one active knowledge document so the app is immediately usable.
 const workspaceId = 'org-demo-tirta';
 
@@ -17,7 +17,7 @@ const avatar = (initials: string, color: string) => {
 
 const users = [
   { id: 'usr-demo-admin', name: 'Andi Prasetyo', email: 'admin@tirta.demo', role: 'admin', title: 'Knowledge Administrator', department: 'Corporate Secretariat', initials: 'AP', color: '#0284c7' },
-  { id: 'usr-demo-reviewer', name: 'Sari Wulandari', email: 'reviewer@tirta.demo', role: 'reviewer', title: 'Reviewer / Approver', department: 'Public Relations', initials: 'SW', color: '#059669' },
+
   { id: 'usr-demo-creator', name: 'Budi Santoso', email: 'creator@tirta.demo', role: 'creator', title: 'Content Creator', department: 'Creative Communications', initials: 'BS', color: '#7c3aed' }
 ];
 

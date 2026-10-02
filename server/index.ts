@@ -1,4 +1,5 @@
 import './env.ts';
+import { generateVisual, VisualError } from './visual.ts';
 import { ragConfigured } from './env.ts';
 import { knowledgeBaseIdFor, ragDeleteDocument, ragIndexDocument, ragListDocuments, ragQuery, ragRefine, ragSearch, ragStatus } from './rag.ts';
 import express from 'express';
@@ -10,6 +11,11 @@ app.use(cors({ origin: true }));
 app.use(express.json({ limit: '1mb' }));
 
 const isNonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0;
+
+app.post('/api/visual/generate', async (req, res) => {
+  try { res.json(await generateVisual(req.body)); }
+  catch (error) { const e = error as VisualError; res.status(e.status || 500).json({ error: e.message, code: e.code || 'VISUAL_ERROR' }); }
+});
 
 // ── RAG service integration (best-effort: the app must keep working when the service is down) ──
 const knowledgeText = (doc: any): string => {

@@ -23,6 +23,8 @@ export async function runMigrations() {
   await pool.query(`INSERT INTO schema_migrations(name) VALUES ('001_initial') ON CONFLICT DO NOTHING`);
   const auth = await readFile(join(here, 'migrations', '002_auth.sql'), 'utf8');
   await pool.query(auth);
+  const removeReviewer = await readFile(join(here, 'migrations', '003_remove_reviewer_role.sql'), 'utf8');
+  await pool.query(removeReviewer);
 }
 
 const scrypt = promisify(nodeCrypto.scrypt);
