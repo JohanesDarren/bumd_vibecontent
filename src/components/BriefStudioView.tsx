@@ -32,7 +32,8 @@ import {
   CornerDownLeft,
   Zap,
   AlertTriangle,
-  ExternalLink
+  ExternalLink,
+  MoreVertical
 } from 'lucide-react';
 
 interface BriefStudioViewProps {
@@ -44,20 +45,36 @@ interface BriefStudioViewProps {
   onOpenEditor: (draftId: string) => void;
   onGenerateDraft: (brief: ContentBrief, output: GeneratedOutput) => Promise<void> | void;
   onNavigate?: (tab: ActiveTab) => void;
+  onDeleteDraft?: (draftId: string) => void;
 }
 
 /** Strip analyst-style artifacts from a raw RAG answer before it becomes copy. */
 function sanitizeRagAnswer(raw: string): string {
-  return raw
-    .replace(/\[\d+\]/g, '') // citation markers like [1], [2]
+  let text = raw
+    .replace(/\[\d+\]/g, ''); // citation markers like [1], [2]
+
+  // The backend model sometimes emits several attempts: a truncated draft,
+  // then its internal planning notes, then the final draft. When a markdown
+  // heading appears more than once, keep only the last (final) attempt.
+  const headingMatches = [...text.matchAll(/^#{1,3} .*$/gm)];
+  if (headingMatches.length > 1) {
+    const lastHeading = headingMatches[headingMatches.length - 1];
+    text = text.slice(lastHeading.index ?? 0);
+  }
+
+  return text
     .split('\n')
     .filter(line => {
       const t = line.trim();
       if (!t) return true;
-      // Drop meta commentary lines about the retrieval context itself.
-      return !/^(tidak ditemukan dalam konteks|catatan:|disclaimer|perhitungan, bukan)/i.test(t);
+      // Drop meta commentary / chain-of-thought lines about the task itself.
+      return !/^(tidak ditemukan dalam konteks|catatan:|disclaimer|perhitungan, bukan)/i.test(t)
+        && !/^(enough\b|ensure\b|also avoid|i'?ll\b|rule \d|actually\b|borderline\b|done\s*[—-]|let me\b|wait[,. ]|step \d|note to self|final answer|revised? draft|draft \d)/i.test(t);
     })
     .join('\n')
+    // Remove stray foreign-script characters (e.g. Hangul/CJK decoding noise)
+    // and any punctuation glued to them; Indonesian copy must be Latin-only.
+    .replace(/[\u3000-\u9fff\uac00-\ud7af\uff00-\uffef]/g, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
@@ -88,7 +105,8 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
   drafts,
   onOpenEditor,
   onGenerateDraft,
-  onNavigate
+  onNavigate,
+  onDeleteDraft
 }) => {
   const [title, setTitle] = useState('');
   const [campaign, setCampaign] = useState('');
@@ -100,6 +118,8 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
   const [selectedCta, setSelectedCta] = useState(brandProfile.officialCTAs[0]?.text || '');
   const [limitations, setLimitations] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+
 
 
   // Editor & Streaming state
@@ -187,10 +207,28 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
       createdBy: activeUser.id
     };
 
-    // The remote RAG API is the only knowledge source.
+    // The remote RAG API is the only knowledge source. ALL brief parameters are
+    // sent as structured writing guidance so the copy follows audience, tone,
+    // channel, CTA and limitations — not just the raw title + key message.
+    const FORMAT_LABELS: Record<ContentFormat, string> = {
+      copy_caption: 'Copy & Caption Media Sosial (Feed / Carousel)',
+      teks_promosi: 'Teks Promosi Resmi & Siaran Pers',
+      naskah_singkat: 'Naskah Video Pendek 9:16 (Reels/TikTok/Shorts)',
+      brief_visual: 'Brief Visual & Panduan Infografis'
+    };
+    const briefGuidance = [
+      `Judul konten: ${title}`,
+      campaign ? `Nama kampanye/program: ${campaign}` : '',
+      `Format output: ${FORMAT_LABELS[format]}`, channel ? `Kanal distribusi: ${channel}` : '',
+      targetAudience ? `Target audiens: ${targetAudience}` : '',
+      tone ? `Nada suara: ${tone}` : '',
+      `Pesan kunci & fakta yang harus disampaikan: ${keyMessage}`,
+      selectedCta ? `CTA resmi: ${selectedCta}` : '',
+      limitations ? `Batasan/panduan gaya (jangan disalin ke naskah): ${limitations}` : ''
+    ].filter(Boolean).join('\n');
     let remote: RemoteGrounding;
     try {
-      const rag = await apiService.ragQuery(activeWorkspace.id, `${title} ${keyMessage}`, 5);
+      const rag = await apiService.ragQuery(activeWorkspace.id, briefGuidance, 5);
       const citations = (rag.sources || [])
         .filter(hit => typeof hit.content === 'string' && hit.content.trim()) // skip empty chunks
         .map(toCitation);
@@ -247,10 +285,47 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
           <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
             {drafts.map(draft => (
               <div key={draft.id} style={{ minWidth: '220px', padding: '10px', border: '1px solid var(--border-subtle)', borderRadius: '10px', background: 'var(--bg-tertiary)' }}>
-                <div style={{ fontSize: '0.82rem', fontWeight: 700, marginBottom: '5px' }}>{draft.title}</div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '5px' }}>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 700, paddingRight: '8px' }}>{draft.title}</div>
+                  <div style={{ position: 'relative' }}>
+                    <button 
+                      type="button" 
+                      style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px', color: 'var(--text-muted)' }}
+                      onClick={() => setOpenDropdownId(openDropdownId === draft.id ? null : draft.id)}
+                    >
+                      <MoreVertical size={16} />
+                    </button>
+                    {openDropdownId === draft.id && (
+                      <div style={{ 
+                        position: 'absolute', right: 0, top: '24px', background: 'var(--bg-secondary)', 
+                        border: '1px solid var(--border-subtle)', borderRadius: '6px', padding: '4px', 
+                        display: 'flex', flexDirection: 'column', gap: '4px', zIndex: 50, minWidth: '130px',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                      }}>
+                        <button 
+                          type="button" 
+                          className="btn btn-secondary btn-sm" 
+                          style={{ width: '100%', justifyContent: 'flex-start', border: 'none', background: 'transparent' }} 
+                          onClick={() => { setOpenDropdownId(null); onOpenEditor(draft.id); }}
+                        >
+                          Buka di Editor
+                        </button>
+                        {draft.status === 'draft' && onDeleteDraft && (
+                          <button 
+                            type="button" 
+                            className="btn btn-secondary btn-sm" 
+                            style={{ width: '100%', justifyContent: 'flex-start', border: 'none', background: 'transparent', color: 'var(--accent-red)' }} 
+                            onClick={() => { setOpenDropdownId(null); onDeleteDraft(draft.id); }}
+                          >
+                            Hapus
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div>
                   <span className={`status-pill ${draft.status}`} style={{ fontSize: '0.62rem' }}>{draft.status.replace('_', ' ')}</span>
-                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => onOpenEditor(draft.id)}>Buka di Editor</button>
                 </div>
               </div>
             ))}

@@ -363,6 +363,13 @@ export function App() {
               onOpenEditor={(id) => { setSelectedDraftId(id); setCurrentTab('editor'); }}
               onGenerateDraft={handleGenerateDraft}
               onNavigate={setCurrentTab}
+              onDeleteDraft={async (id) => {
+                if (window.confirm('Apakah Anda yakin ingin menghapus draf ini?')) {
+                  await apiService.deleteDraft(activeWorkspace.id, id);
+                  await loadData(activeWorkspace.id);
+                  showToast('Draf berhasil dihapus.');
+                }
+              }}
             />
           )}
 

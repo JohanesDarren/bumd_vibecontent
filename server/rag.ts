@@ -82,17 +82,23 @@ export function ragQuery(workspaceId: string, query: string, topK = 5) {
   // the query must steer the model away from analyst-style replies (citation
   // markers like [1], meta commentary about the knowledge base, internal
   // disclaimers) — those used to leak verbatim into the generated draft.
+  // Brief parameters (audience, tone, channel, CTA, limitations) arrive inside
+  // `query` as writing GUIDANCE: the model must apply them, never copy them
+  // verbatim into the copy, and must emit exactly one final ready-to-use draft
+  // with no chain-of-thought, multiple attempts, or mixed foreign languages.
   const copywritingQuery = [
     'PERAN: kamu adalah penulis copywriting korporat BUMD.',
-    'TUGAS: berdasarkan HANYA dokumen resmi pada knowledge base, tulis naskah copywriting siap pakai (prosa mengalir, bukan poin analisis) yang menyampaikan pesan berikut.',
+    'TUGAS: berdasarkan HANYA dokumen resmi pada knowledge base, tulis SATU naskah copywriting final siap pakai (prosa mengalir, bukan poin analisis) sesuai panduan brief di bawah.',
     'ATURAN WAJIB:',
     '1. Hanya gunakan fakta yang ada di dokumen; jangan mengarang angka atau tanggal.',
-    '2. Keluarkan HANYA teks copywriting-nya dalam Bahasa Indonesia, dengan kalimat utuh yang mengalir.',
-    '3. DILARANG menyertakan: penanda sitasi seperti [1] atau [2], komentar meta tentang konteks/knowledge base/dokumen (misalnya "tidak ditemukan dalam konteks", "perhitungan, bukan isi dekret"), atau disclaimer internal.',
-    '4. Jika sebagian data tidak ditemukan di dokumen, jangan disebut sama sekali; cukup tulis bagian yang didukung dokumen.',
-    '5. Akhiri dengan ajakan bertindak (call to action) yang natural.',
+    '2. Keluarkan HANYA SATU VERSI FINAL teks copywriting dalam Bahasa Indonesia yang baku. DILARANG menampilkan proses berpikir, catatan perencanaan, analisis, atau beberapa alternatif draf.',
+    '3. DILARANG menyertakan: penanda sitasi seperti [1] atau [2], komentar meta/penalaran internal dalam bahasa apa pun (misalnya "Enough", "Ensure", "Rule 1", "Done", "I will keep"), atau disclaimer internal.',
+    '4. Parameter brief seperti Target Audiens, Nada Suara, Kanal Distribusi, CTA, dan Batasan adalah PANDUAN MENULIS: pakai untuk mengatur gaya, isi, dan penutup naskah — JANGAN pernah menyalin teks panduannya mentah-mentah ke dalam naskah.',
+    '5. Jika sebagian data tidak ditemukan di dokumen, jangan disebut sama sekali; cukup tulis bagian yang didukung dokumen.',
+    '6. Tulis seluruh naskah dalam Bahasa Indonesia yang utuh dan baku; DILARANG mencampur kata/karakter bahasa asing (Inggris, Korea, Mandarin, dll).',
+    '7. Akhiri dengan ajakan bertindak (call to action) yang natural berdasarkan CTA resmi pada brief.',
     '',
-    'PESAN YANG HARUS DISAMPAIKAN:',
+    'PANDUAN BRIEF:',
     query
   ].join('\n');
   return call<RagQueryResult>('/query', {

@@ -268,6 +268,14 @@ export function generateContentFromBrief(
 
   // Generate according to format
   if (brief.format === 'copy_caption') {
+    // Brief fields like `limitations` are writing guidance for the generator,
+    // not publishable copy — they must never be echoed into the draft.
+    // Raw citation excerpts are only appended in the offline fallback (no
+    // remote answer); when the RAG service produced the body it already
+    // contains the facts, so extra blocks would make the copy unusable.
+    const fallbackReferenceBlock = !remote && citations.length > 0
+      ? `Dasar ketentuan resmi:\n${citations.map(c => `• ${c.excerpt.slice(0, 140)}... [Referensi: ${c.documentTitle}, Halaman ${c.page || 1}]`).join('\n')}\n\n`
+      : '';
     generatedText = `[DRAF KORPORAT - BELUM DISETUJUI]
 
 ${brief.title.toUpperCase()}
@@ -276,9 +284,7 @@ Salam, warga ${brandProfile.organizationName}!
 
 ${keyMessageBlock}
 
-${citations.length > 0 ? `Dasar ketentuan resmi:\n${citations.map(c => `• ${c.excerpt.slice(0, 140)}... [Referensi: ${c.documentTitle}, Halaman ${c.page || 1}]`).join('\n')}` : 'Informasi lebih lanjut akan disampaikan sesuai kebijakan resmi perusahaan.'}
-
-${brief.limitations ? `Catatan penting: ${brief.limitations}\n` : ''}${brief.cta || brandProfile.officialCTAs[0]?.text || 'Hubungi kanal resmi kami untuk informasi selengkapnya.'}
+${fallbackReferenceBlock}${brief.cta || brandProfile.officialCTAs[0]?.text || 'Hubungi kanal resmi kami untuk informasi selengkapnya.'}
 
 #BUMDProfesional #${brandProfile.organizationName.replace(/\s+/g, '')} #PelayananPublik #InfoResmi${ungroundedNotice}`;
   } 
