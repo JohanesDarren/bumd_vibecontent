@@ -23,6 +23,8 @@ export async function runMigrations() {
   await pool.query(`INSERT INTO schema_migrations(name) VALUES ('001_initial') ON CONFLICT DO NOTHING`);
   const auth = await readFile(join(here, 'migrations', '002_auth.sql'), 'utf8');
   await pool.query(auth);
+  const settings = await readFile(join(here, 'migrations', '003_workspace_settings.sql'), 'utf8');
+  await pool.query(settings);
 }
 
 const scrypt = promisify(nodeCrypto.scrypt);
@@ -42,7 +44,7 @@ export async function verifyPassword(password:string, stored:string):Promise<boo
 export async function organizationExists(id:string){const result=await pool.query('SELECT 1 FROM organizations WHERE id=$1',[id]);return (result.rowCount||0)>0;}
 
 export async function clearAllData() {
-  await pool.query('TRUNCATE audit_events, review_comments, draft_citations, draft_versions, content_drafts, content_briefs, knowledge_chunks, knowledge_sources, brand_profiles, memberships, users, organizations RESTART IDENTITY CASCADE');
+  await pool.query('TRUNCATE audit_events, review_comments, draft_citations, draft_versions, content_drafts, content_briefs, knowledge_chunks, knowledge_sources, brand_profiles, workspace_settings, memberships, users, organizations RESTART IDENTITY CASCADE');
 }
 
 export async function createOrganizationWithAdmin(input:{organizationName:string;code:string;sector:string;city:string;adminName:string;adminEmail:string;adminPassword?:string}) {
@@ -89,15 +91,16 @@ export async function listWorkspaceDrafts(workspaceId:string) {
 export async function listBootstrap(workspaceId?:string) {
   const workspacesResult=await pool.query('SELECT id,name,code,sector,city,tagline,primary_color AS "primaryColor",accent_color AS "accentColor",description FROM organizations ORDER BY created_at');
   const targetWorkspaceId=workspaceId || workspacesResult.rows[0]?.id;
-  if(!targetWorkspaceId) return {workspaces:[],users:[],documents:[],drafts:[],auditLogs:[],brandProfile:null};
-  const [users,documents,drafts,auditLogs,brand] = await Promise.all([
+  if(!targetWorkspaceId) return {workspaces:[],users:[],documents:[],drafts:[],auditLogs:[],brandProfile:null,settings:null};
+  const [users,documents,drafts,auditLogs,brand,settings] = await Promise.all([
     pool.query('SELECT u.id,u.name,u.email,u.avatar,u.title,u.department,m.organization_id AS "workspaceId",m.role FROM users u JOIN memberships m ON m.user_id=u.id WHERE m.organization_id=$1 AND m.active',[targetWorkspaceId]),
     pool.query(`SELECT s.id,s.organization_id AS "workspaceId",s.title,s.category,s.owner,s.version,s.effective_date AS "effectiveDate",s.status,s.upload_date AS "uploadDate",s.file_size AS "fileSize",s.summary,COALESCE(jsonb_agg(jsonb_build_object('id',c.id,'documentId',c.source_id,'section',c.section,'page',c.page,'content',c.content,'keywords',c.keywords)) FILTER (WHERE c.id IS NOT NULL),'[]') chunks FROM knowledge_sources s LEFT JOIN knowledge_chunks c ON c.source_id=s.id WHERE s.organization_id=$1 GROUP BY s.id`,[targetWorkspaceId]),
     listWorkspaceDrafts(targetWorkspaceId),
     pool.query('SELECT id::text,organization_id AS "workspaceId",created_at AS timestamp,actor_name AS "actorName",actor_role AS "actorRole",action,object_type AS "objectType",object_id AS "objectId",object_name AS "objectName",details FROM audit_events WHERE organization_id=$1 ORDER BY created_at DESC',[targetWorkspaceId]),
-    pool.query('SELECT data FROM brand_profiles WHERE organization_id=$1',[targetWorkspaceId])
+    pool.query('SELECT data FROM brand_profiles WHERE organization_id=$1',[targetWorkspaceId]),
+    pool.query('SELECT data FROM workspace_settings WHERE organization_id=$1',[targetWorkspaceId])
   ]);
-  return { workspaces:workspacesResult.rows, users:users.rows, documents:documents.rows, drafts, auditLogs:auditLogs.rows, brandProfile:brand.rows[0]?.data ?? null };
+  return { workspaces:workspacesResult.rows, users:users.rows, documents:documents.rows, drafts, auditLogs:auditLogs.rows, brandProfile:brand.rows[0]?.data ?? null, settings:settings.rows[0]?.data ?? null };
 }
 
 export async function replaceDraft(draft:any) {
@@ -121,6 +124,9 @@ export async function replaceDraft(draft:any) {
 }
 
 export async function saveBrand(profile:any){await pool.query('INSERT INTO brand_profiles(organization_id,data,updated_at) VALUES($1,$2::jsonb,now()) ON CONFLICT(organization_id) DO UPDATE SET data=EXCLUDED.data,updated_at=now()',[profile.workspaceId,JSON.stringify(profile)]);return profile;}
+
+export async function getWorkspaceSettings(workspaceId:string){const result=await pool.query('SELECT data FROM workspace_settings WHERE organization_id=$1',[workspaceId]);return result.rows[0]?.data ?? null;}
+export async function saveWorkspaceSettings(workspaceId:string,data:any){await pool.query('INSERT INTO workspace_settings(organization_id,data,updated_at) VALUES($1,$2::jsonb,now()) ON CONFLICT(organization_id) DO UPDATE SET data=EXCLUDED.data,updated_at=now()',[workspaceId,JSON.stringify(data)]);return data;}
 
 export async function saveKnowledgeSource(source:any){
   const client=await pool.connect();try{await client.query('BEGIN');await client.query(`INSERT INTO knowledge_sources(id,organization_id,title,category,owner,version,effective_date,status,upload_date,file_size,summary) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT(id) DO UPDATE SET title=EXCLUDED.title,category=EXCLUDED.category,owner=EXCLUDED.owner,version=EXCLUDED.version,effective_date=EXCLUDED.effective_date,status=EXCLUDED.status,file_size=EXCLUDED.file_size,summary=EXCLUDED.summary`,[source.id,source.workspaceId,source.title,source.category,source.owner,source.version,source.effectiveDate,source.status,source.uploadDate,source.fileSize,source.summary]);await client.query('DELETE FROM knowledge_chunks WHERE source_id=$1',[source.id]);for(const chunk of source.chunks||[]) await client.query('INSERT INTO knowledge_chunks(id,source_id,section,page,content,keywords) VALUES($1,$2,$3,$4,$5,$6)',[chunk.id,source.id,chunk.section,chunk.page||null,chunk.content,chunk.keywords||[]]);await client.query('COMMIT');return source;}catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}

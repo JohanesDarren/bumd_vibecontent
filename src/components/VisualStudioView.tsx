@@ -1,4 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+
+
 import { apiService } from '../services/apiService';
 import { 
   ContentDraft, 
@@ -11,7 +13,6 @@ import {
   Download, 
   Copy, 
   ShieldCheck, 
-  CheckCircle2, 
   Layout, 
   Smartphone, 
   Monitor, 
@@ -51,7 +52,14 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
   const [visual, setVisual] = useState<VisualAsset>(defaultVisual);
   const [copiedPrompt, setCopiedPrompt] = useState(false);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(draft?.visualAsset?.generatedImageUrl || null);
-  const [fallbackImageUrl, setFallbackImageUrl] = useState<string | null>(null);
+
+  const [metadata, setMetadata] = useState('');
+
+
+
+  const version = useRef(0);
+  useEffect(() => () => { version.current++; }, []);
+  const clearOutput = () => { version.current++; setGeneratedImageUrl(null); setImageLoaded(false); setMetadata(''); };
   const [imageLoaded, setImageLoaded] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState('');
@@ -69,11 +77,16 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
       visualPrompt: ''
     });
     setGeneratedImageUrl(null);
-    setFallbackImageUrl(null);
+    clearOutput();
     setImageLoaded(false);
     setGenerationError('');
     setMediaError('');
-  }, [draft?.id]);
+  }, [draft?.id, activeWorkspace.id]);
+
+  const updateVisual = (patch: Partial<VisualAsset>) => {
+    setVisual(current => ({ ...current, ...patch }));
+    clearOutput();
+  };
 
   const handleCopyPrompt = () => {
     navigator.clipboard.writeText(visual.visualPrompt);
@@ -81,55 +94,18 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
     setTimeout(() => setCopiedPrompt(false), 2000);
   };
 
-  const handlePreviewError = () => {
-    if (fallbackImageUrl && generatedImageUrl !== fallbackImageUrl) {
-      setGeneratedImageUrl(fallbackImageUrl);
-      setImageLoaded(false);
-      return;
-    }
-    setMediaError('Generated image could not be loaded.');
-    setImageLoaded(false);
-  };
-
   const handleGenerate = async () => {
-    const activeDraft = draft;
-    if (!activeDraft) return;
-    setIsGenerating(true);
-    setGenerationError('');
-    setMediaError('');
-    setImageLoaded(false);
-    const clip = (value: string) => value.trim().slice(0, 120);
-    const textParts = [
-      visual.headline && `HEADLINE: "${clip(visual.headline)}"`,
-      visual.subheadline && `SUBHEADLINE: "${clip(visual.subheadline)}"`,
-      visual.badgeText && `BADGE: "${clip(visual.badgeText)}"`,
-      visual.ctaText && `CTA: "${clip(visual.ctaText)}"`
-    ].filter(Boolean);
-    const textInstruction = textParts.length
-      ? `Render these exact text elements visibly in the artwork; do not omit them: ${textParts.join(' | ')}.`
-      : 'Do not render any text in the artwork.';
-    const creativeDirection = visual.visualPrompt.trim().slice(0, 700);
-    const prompt = `${creativeDirection}. Brand colors: ${visual.primaryColor}, ${visual.accentColor}. ${textInstruction}`;
+    if (!draft) return;
+    clearOutput();
+    const requestVersion=version.current;
+    setIsGenerating(true);setGenerationError('');setMediaError('');
     try {
-      const providerPrompt = `${creativeDirection}. ${textParts.length ? `${textInstruction} editorial poster typography layout` : 'editorial visual composition'}. High-quality composition, clear subject, coherent lighting, strong focal point, visually faithful to the creative direction.`.slice(0, 900);
-      const result = await apiService.generateVisual({ prompt, providerPrompt, aspectRatio: visual.aspectRatio, headline: visual.headline, subheadline: visual.subheadline, badgeText: visual.badgeText, ctaText: visual.ctaText });
-      if (!result.imageUrl || !result.imageUrl.startsWith('http')) throw new Error('Image provider returned no valid preview URL.');
-      // Render immediately. The <img> element owns load/error state; do not block the UI on a second preload request.
-      setFallbackImageUrl(result.fallbackImageUrl || null);
+      const result=await apiService.generateVisual({workspaceId:activeWorkspace.id,prompt:visual.visualPrompt,aspectRatio:visual.aspectRatio,headline:visual.headline,subheadline:visual.subheadline,badgeText:visual.badgeText,ctaText:visual.ctaText,disclaimer:visual.disclaimer,primaryColor:visual.primaryColor,accentColor:visual.accentColor});
+      if(requestVersion!==version.current)return;
       setGeneratedImageUrl(result.imageUrl);
-      setImageLoaded(false);
-      const nextVisual = { ...visual, generatedImageUrl: result.imageUrl };
-      setVisual(nextVisual);
-      try {
-        await apiService.saveDraft({ ...activeDraft, visualAsset: nextVisual, updatedAt: new Date().toISOString() });
-      } catch (saveError) {
-        console.warn('Generated image preview succeeded, but draft save failed:', saveError);
-      }
-    } catch (error) {
-      setGenerationError(error instanceof Error ? error.message : 'Image generation failed');
-    } finally {
-      setIsGenerating(false);
-    }
+      setMetadata(`${result.provider} · ${result.model} · JPEG`);
+    } catch(error) {if(requestVersion===version.current)setGenerationError(error instanceof Error?error.message:'Visual design failed');}
+    finally {setIsGenerating(false);}
   };
 
   // Dimension helpers for preview
@@ -193,7 +169,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
               <button 
                 type="button"
                 className={`btn btn-sm ${visual.aspectRatio === '1:1' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setVisual({ ...visual, aspectRatio: '1:1' })}
+                onClick={() => updateVisual({ aspectRatio: '1:1' })}
               >
                 <Square size={14} />
                 <span>1:1 Feed</span>
@@ -201,7 +177,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
               <button 
                 type="button"
                 className={`btn btn-sm ${visual.aspectRatio === '9:16' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setVisual({ ...visual, aspectRatio: '9:16' })}
+                onClick={() => updateVisual({ aspectRatio: '9:16' })}
               >
                 <Smartphone size={14} />
                 <span>9:16 Story</span>
@@ -209,7 +185,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
               <button 
                 type="button"
                 className={`btn btn-sm ${visual.aspectRatio === '16:9' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setVisual({ ...visual, aspectRatio: '16:9' })}
+                onClick={() => updateVisual({ aspectRatio: '16:9' })}
               >
                 <Monitor size={14} />
                 <span>16:9 Banner</span>
@@ -224,7 +200,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
               type="text" 
               className="form-input" 
               value={visual.headline}
-              onChange={e => setVisual({ ...visual, headline: e.target.value })}
+              onChange={e => updateVisual({ headline: e.target.value })}
             />
           </div>
 
@@ -234,7 +210,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
               className="form-textarea" 
               rows={2}
               value={visual.subheadline}
-              onChange={e => setVisual({ ...visual, subheadline: e.target.value })}
+              onChange={e => updateVisual({ subheadline: e.target.value })}
             />
           </div>
 
@@ -246,7 +222,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
                 type="text" 
                 className="form-input" 
                 value={visual.badgeText}
-                onChange={e => setVisual({ ...visual, badgeText: e.target.value })}
+                onChange={e => updateVisual({ badgeText: e.target.value })}
               />
             </div>
             <div className="form-group">
@@ -255,7 +231,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
                 type="text" 
                 className="form-input" 
                 value={visual.ctaText}
-                onChange={e => setVisual({ ...visual, ctaText: e.target.value })}
+                onChange={e => updateVisual({ ctaText: e.target.value })}
               />
             </div>
           </div>
@@ -267,11 +243,11 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
               className="form-textarea"
               rows={5}
               value={visual.visualPrompt}
-              onChange={e => setVisual({ ...visual, visualPrompt: e.target.value })}
+              onChange={e => updateVisual({ visualPrompt: e.target.value })}
               placeholder="Describe the visual you want: mood, composition, subject, lighting, art direction, camera angle, materials, and colors…"
             />
             <div style={{ marginTop: '6px', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-              Free-form prompt. The app adds approved brief and brand context automatically.
+              Cloudflare FLUX.1 schnell: 2048 characters total including copy and palette. Text accuracy is not guaranteed; review before publishing.
             </div>
           </div>
 
@@ -282,9 +258,9 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
               <span>Brand Asset Compliance:</span>
             </div>
             <ul style={{ paddingLeft: '18px', display: 'flex', flexDirection: 'column', gap: '4px', color: 'var(--text-secondary)' }}>
-              <li>The official BUMD logo is placed in the top-right corner at original proportions.</li>
-              <li>Dominant colors use the official palette ({activeWorkspace.primaryColor}).</li>
-              <li>A legal disclaimer is displayed at the bottom of the graphic.</li>
+              <li>AI-generated raster image; no automatic official logo placement.</li>
+              <li>FLUX receives the requested palette ({activeWorkspace.primaryColor}).</li>
+              <li>Copy and disclaimer are requested in the image, not typeset. Verify spelling and brand compliance.</li>
             </ul>
           </div>
         </div>
@@ -307,22 +283,8 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
               transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
             }}
           >
-            {generatedImageUrl && <img src={generatedImageUrl} alt="Generated visual preview" onLoad={() => setImageLoaded(true)} onError={() => { if (fallbackImageUrl && generatedImageUrl !== fallbackImageUrl) { setGeneratedImageUrl(fallbackImageUrl); setImageLoaded(false); } else { setMediaError('Generated image could not be loaded.'); setImageLoaded(false); } }} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }} />}
-            {/* Background Decorative Rings */}
-            <div 
-              style={{
-                position: 'absolute',
-                top: '-40px',
-                right: '-40px',
-                width: '180px',
-                height: '180px',
-                borderRadius: '50%',
-                background: `radial-gradient(circle, ${activeWorkspace.primaryColor} 0%, transparent 70%)`,
-                opacity: 0.4
-              }}
-            />
+            {generatedImageUrl ? <img src={generatedImageUrl} alt={visual.visualPrompt || 'Cloudflare FLUX generated image'} onLoad={() => setImageLoaded(true)} onError={() => {setMediaError('Image preview could not be loaded.');setImageLoaded(false);}} style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'contain'}} /> : <p style={{color:'#fff'}}>No generated artwork. Enter creative direction, then generate an image.</p>}
 
-            {!generatedImageUrl && <div style={{ position: 'relative', zIndex: 2, margin: 'auto', color: 'rgba(255,255,255,0.65)', textAlign: 'center' }}>Preview appears after generation.</div>}
           </div>
 
           <div style={{ display: 'flex', gap: '10px', width: '100%', justifyContent: 'center', flexWrap: 'wrap' }}>
@@ -332,18 +294,17 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
             </button>
             <button className="btn btn-primary" onClick={handleGenerate} disabled={isGenerating}>
               <Sparkles size={16} />
-              <span>{isGenerating ? 'Membuat gambar…' : generatedImageUrl ? 'Regenerasi Gambar' : 'Buat Gambar Gratis'}</span>
+              <span>{isGenerating ? 'FLUX membuat gambar…' : generatedImageUrl ? 'Desain Ulang' : 'Buat Gambar AI'}</span>
             </button>
           </div>
           {generationError && <div style={{ color: '#fb7185', fontSize: '0.8rem' }}>{generationError}</div>}
           {mediaError && <div style={{ color: '#fb7185', fontSize: '0.8rem' }}>{mediaError}</div>}
           {generatedImageUrl && !imageLoaded && <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Loading preview…</div>}
-          {generatedImageUrl && imageLoaded && <a className="btn btn-secondary" href={generatedImageUrl} target="_blank" rel="noreferrer" download>
-            <Download size={16} /> Download Generated Image
-          </a>}
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            Preview first. Download unlocks after the image loads. Free MVP generation via Pollinations.AI / FLUX.
-          </div>
+          {generatedImageUrl && imageLoaded && <a className="btn btn-secondary" href={generatedImageUrl} download="flux-image.jpg"><Download size={16}/> Download Image JPEG</a>}
+          <p role="status">Video unavailable: FLUX.1 schnell generates still images only.</p>
+          {metadata && <p style={{fontSize:12}}>{metadata}</p>}
+          <div style={{fontSize:'0.8rem',color:'var(--text-muted)'}}>Cloudflare Workers AI · FLUX.1 schnell. Free-tier quota applies; no automatic retry or plan upgrade. Aspect ratio requests guide composition; the downloaded JPEG retains the model’s native dimensions. Downloads unlock after preview loads. Outputs stay in this session; download to retain them.</div>
+
         </div>
       </div>
     </div>

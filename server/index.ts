@@ -1,9 +1,10 @@
 import './env.ts';
+import { generateVisual, VisualError } from './visual.ts';
 import { ragConfigured } from './env.ts';
 import { knowledgeBaseIdFor, ragDeleteDocument, ragIndexDocument, ragListDocuments, ragQuery, ragSearch, ragStatus } from './rag.ts';
 import express from 'express';
 import cors from 'cors';
-import { authenticateUser, claimLegacyPassword, clearAllData, createDraft, createOrganizationWithAdmin, createUserMembership, deleteBrand, deleteDraft, deleteKnowledgeSource, deleteUserMembership, getUserWorkspaces, listBootstrap, listWorkspaceDrafts, organizationExists, pool, registerUser, replaceDraft, saveBrand, saveKnowledgeSource, updateOrganization } from './database.ts';
+import { authenticateUser, claimLegacyPassword, clearAllData, createDraft, createOrganizationWithAdmin, createUserMembership, deleteBrand, deleteDraft, deleteKnowledgeSource, deleteUserMembership, getWorkspaceSettings, getUserWorkspaces, listBootstrap, listWorkspaceDrafts, organizationExists, pool, registerUser, replaceDraft, saveBrand, saveKnowledgeSource, saveWorkspaceSettings, updateOrganization } from './database.ts';
 
 const app = express();
 app.use(cors({ origin: true }));
@@ -11,25 +12,9 @@ app.use(express.json({ limit: '1mb' }));
 
 const isNonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0;
 
-// Free MVP image generation. Pollinations hosts the image model; no API key required.
 app.post('/api/visual/generate', async (req, res) => {
-  const { prompt, aspectRatio = '1:1' } = req.body || {};
-  if (!isNonEmptyString(prompt)) return res.status(400).json({ error: 'prompt is required' });
-  const dimensions = aspectRatio === '9:16' ? [576, 1024] : aspectRatio === '16:9' ? [1024, 576] : [768, 768];
-  const seed = Math.floor(Math.random() * 2147483647);
-  const imageBaseUrl = process.env.IMAGE_GENERATION_URL || 'https://image.pollinations.ai/prompt';
-  const imageModel = process.env.IMAGE_GENERATION_MODEL || 'flux';
-  const providerPrompt = typeof req.body?.providerPrompt === 'string' && req.body.providerPrompt.trim() ? req.body.providerPrompt.trim() : prompt.trim();
-  const imageUrl = `${imageBaseUrl}/${encodeURIComponent(providerPrompt)}?width=${dimensions[0]}&height=${dimensions[1]}&seed=${seed}&nologo=true&model=${encodeURIComponent(imageModel)}`;
-  const escapeSvg = (value: unknown) => String(value || '').replace(/[&<>\"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', "'": '&apos;' }[char] || char));
-  const { headline = '', subheadline = '', badgeText = '', ctaText = '' } = req.body || {};
-  const palettes = [['#064e3b', '#eab308'], ['#075985', '#22c55e'], ['#7c2d12', '#facc15'], ['#312e81', '#38bdf8']];
-  const palette = palettes[seed % palettes.length];
-  const circleX = 80 + (seed % Math.max(120, dimensions[0] - 160));
-  const circleY = 80 + ((seed >> 4) % Math.max(120, dimensions[1] - 160));
-  const fallbackSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${dimensions[0]}" height="${dimensions[1]}" viewBox="0 0 ${dimensions[0]} ${dimensions[1]}"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${palette[0]}"/><stop offset="1" stop-color="${palette[1]}"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#g)"/><circle cx="${circleX}" cy="${circleY}" r="${100 + (seed % 100)}" fill="#fff" opacity=".12"/><circle cx="${dimensions[0] - circleX / 2}" cy="${dimensions[1] - circleY / 3}" r="${40 + (seed % 60)}" fill="#fff" opacity=".08"/><text x="48" y="${Math.round(dimensions[1] * .28)}" fill="white" font-family="Arial" font-size="${dimensions[0] > 700 ? 42 : 30}" font-weight="700">${escapeSvg(headline)}</text><text x="48" y="${Math.round(dimensions[1] * .38)}" fill="white" opacity=".9" font-family="Arial" font-size="${dimensions[0] > 700 ? 24 : 18}">${escapeSvg(subheadline)}</text>${badgeText ? `<rect x="48" y="42" width="180" height="36" rx="18" fill="#fff" opacity=".2"/><text x="66" y="67" fill="white" font-family="Arial" font-size="18">${escapeSvg(badgeText)}</text>` : ''}${ctaText ? `<rect x="48" y="${dimensions[1] - 100}" width="220" height="48" rx="12" fill="#fff"/><text x="70" y="${dimensions[1] - 69}" fill="${palette[0]}" font-family="Arial" font-size="18" font-weight="700">${escapeSvg(ctaText)}</text>` : ''}</svg>`;
-  const fallbackImageUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(fallbackSvg)}`;
-  res.json({ imageUrl, fallbackImageUrl, provider: 'Pollinations.AI', model: imageModel });
+  try { res.json(await generateVisual(req.body)); }
+  catch(error) { const e=error as VisualError; res.status(e.status||500).json({error:e.message,code:e.code||'VISUAL_ERROR'}); }
 });
 
 // ── RAG service integration (best-effort: the app must keep working when the service is down) ──
@@ -84,6 +69,8 @@ app.get('/api/workspaces/:workspaceId/drafts', async (req,res,next) => { try { r
 app.post('/api/drafts', async (req,res,next) => { try { const {workspaceId,title,format,creatorId,content}=req.body||{}; if(!workspaceId||!title||!format||!creatorId||!content) return res.status(400).json({error:'workspaceId, title, format, creatorId, and content are required'}); res.status(201).json(await createDraft({workspaceId,title,format,creatorId,content,sourceIds:req.body?.sourceIds})); } catch(error){next(error);} });
 app.put('/api/drafts/:id',async(req,res,next)=>{try{if(req.params.id!==req.body?.id)return res.status(400).json({error:'Draft ID mismatch'});if(!isNonEmptyString(req.body.workspaceId))return res.status(400).json({error:'workspaceId is required'});res.json(await replaceDraft(req.body));}catch(error){next(error);}});
 app.put('/api/brand-profile',async(req,res,next)=>{try{if(!isNonEmptyString(req.body?.workspaceId))return res.status(400).json({error:'workspaceId is required'});res.json(await saveBrand(req.body));}catch(error){next(error);}});
+app.get('/api/workspaces/:workspaceId/settings',async(req,res,next)=>{try{if(!(await organizationExists(req.params.workspaceId)))return res.status(404).json({error:'Organization not found'});res.json(await getWorkspaceSettings(req.params.workspaceId));}catch(error){next(error);}});
+app.put('/api/workspaces/:workspaceId/settings',async(req,res,next)=>{try{if(!(await organizationExists(req.params.workspaceId)))return res.status(404).json({error:'Organization not found'});const data=req.body;if(!data||typeof data!=='object'||Array.isArray(data))return res.status(400).json({error:'A settings object is required'});res.json(await saveWorkspaceSettings(req.params.workspaceId,data));}catch(error){next(error);}});
 app.put('/api/knowledge-sources/:id',async(req,res,next)=>{try{if(req.params.id!==req.body?.id)return res.status(400).json({error:'Source ID mismatch'});if(!isNonEmptyString(req.body.workspaceId))return res.status(400).json({error:'workspaceId is required'});const saved=await saveKnowledgeSource(req.body);const ragSynced=await syncKnowledgeDocToRag(req.body.workspaceId,saved);res.json({...saved,ragSynced});}catch(error){next(error);}});
 app.put('/api/organizations/:id',async(req,res,next)=>{try{if(!(await organizationExists(req.params.id)))return res.status(404).json({error:'Organization not found'});const {name,code,sector,city}=req.body||{};if(!isNonEmptyString(name)||!isNonEmptyString(code)||!isNonEmptyString(sector)||!isNonEmptyString(city))return res.status(400).json({error:'name, code, sector, and city are required'});res.json(await updateOrganization(req.params.id,req.body));}catch(error){next(error);}});
 app.post('/api/organizations/:id/users',async(req,res,next)=>{try{if(!(await organizationExists(req.params.id)))return res.status(404).json({error:'Organization not found'});const {name,email,role}=req.body||{};if(!isNonEmptyString(name)||!isNonEmptyString(email))return res.status(400).json({error:'name and email are required'});if(!['creator','admin'].includes(role))return res.status(400).json({error:'role must be creator or admin'});res.status(201).json(await createUserMembership(req.params.id,req.body));}catch(error){next(error);}});
@@ -93,8 +80,8 @@ app.delete('/api/organizations/:workspaceId/brand-profile',async(req,res,next)=>
 app.delete('/api/organizations/:workspaceId/drafts/:id',async(req,res,next)=>{try{await deleteDraft(req.params.workspaceId,req.params.id);res.json({ok:true});}catch(error){next(error);}});
 // ── RAG service proxy routes ──
 app.get('/api/rag/status',async(_req,res,next)=>{try{if(!ragConfigured())return res.json({configured:false,ready:false});const status=await ragStatus();res.json({configured:true,ready:status.status==='ready',dependencies:status.dependencies,detail:status.detail});}catch(error){res.json({configured:true,ready:false,error:error instanceof Error?error.message:String(error)});}});
-app.post('/api/rag/search',async(req,res,next)=>{try{const{workspaceId,query,topK}=req.body||{};if(!isNonEmptyString(workspaceId))return res.status(400).json({error:'workspaceId is required'});if(!isNonEmptyString(query))return res.status(400).json({error:'query is required'});res.json(await ragSearch(workspaceId,query,Number(topK)||5));}catch(error){next(error);}});
-app.post('/api/rag/query',async(req,res,next)=>{try{const{workspaceId,query,topK}=req.body||{};if(!isNonEmptyString(workspaceId))return res.status(400).json({error:'workspaceId is required'});if(!isNonEmptyString(query))return res.status(400).json({error:'query is required'});res.json(await ragQuery(workspaceId,query,Number(topK)||5));}catch(error){next(error);}});
+app.post('/api/rag/search',async(req,res,next)=>{try{const{workspaceId,query,topK,options}=req.body||{};if(!isNonEmptyString(workspaceId))return res.status(400).json({error:'workspaceId is required'});if(!isNonEmptyString(query))return res.status(400).json({error:'query is required'});const opts=options??(Number(topK)>0?{top_k:Number(topK)}:undefined);res.json(await ragSearch(workspaceId,query,opts));}catch(error){next(error);}});
+app.post('/api/rag/query',async(req,res,next)=>{try{const{workspaceId,query,topK,options}=req.body||{};if(!isNonEmptyString(workspaceId))return res.status(400).json({error:'workspaceId is required'});if(!isNonEmptyString(query))return res.status(400).json({error:'query is required'});const opts=options??(Number(topK)>0?{top_k:Number(topK)}:undefined);res.json(await ragQuery(workspaceId,query,opts));}catch(error){next(error);}});
 app.post('/api/rag/sync',async(req,res,next)=>{try{const{workspaceId}=req.body||{};if(!isNonEmptyString(workspaceId))return res.status(400).json({error:'workspaceId is required'});const data=await listBootstrap(workspaceId);let indexed=0,failed=0;for(const doc of data.documents){const ok=doc.status==='aktif'?await syncKnowledgeDocToRag(workspaceId,doc):await removeKnowledgeDocFromRag(workspaceId,doc.id);if(ok)indexed++;else failed++;}res.json({knowledgeBaseId:knowledgeBaseIdFor(workspaceId),indexed,failed,total:data.documents.length});}catch(error){next(error);}});
 // Remove remote-KB entries that no longer correspond to any DB document (e.g. after a demo reset).
 app.post('/api/rag/prune',async(req,res,next)=>{try{const{workspaceId}=req.body||{};if(!isNonEmptyString(workspaceId))return res.status(400).json({error:'workspaceId is required'});const data=await listBootstrap(workspaceId);const validIds=new Set(data.documents.map((d:any)=>d.id));const listed=await ragListDocuments(workspaceId);const docs=(listed as any)?.documents||[];let removed=0,failed=0;for(const entry of docs){const id=entry?.document_id||entry?.id;if(id&&!validIds.has(String(id))){const ok=await removeKnowledgeDocFromRag(workspaceId,String(id));if(ok)removed++;else failed++;}}res.json({knowledgeBaseId:knowledgeBaseIdFor(workspaceId),removed,failed,total:docs.length});}catch(error){next(error);}});
