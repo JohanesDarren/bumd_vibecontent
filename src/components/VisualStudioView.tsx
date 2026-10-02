@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { apiService } from '../services/apiService';
 import { 
   ContentDraft, 
   BrandProfile, 
@@ -41,7 +42,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
     primaryColor: activeWorkspace.primaryColor,
     accentColor: activeWorkspace.accentColor,
     badgeText: '',
-    ctaText: brandProfile.officialCTAs[0]?.label || '',
+    ctaText: '',
     disclaimer: brandProfile.officialDisclaimer || '',
     visualPrompt: `High quality corporate graphic design for ${activeWorkspace.name}, modern minimalist aesthetic, clean typography, official color accents`,
     templateStyle: 'corporate'
@@ -49,20 +50,86 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
 
   const [visual, setVisual] = useState<VisualAsset>(defaultVisual);
   const [copiedPrompt, setCopiedPrompt] = useState(false);
+  const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(draft?.visualAsset?.generatedImageUrl || null);
+  const [fallbackImageUrl, setFallbackImageUrl] = useState<string | null>(null);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState('');
+  const [mediaError, setMediaError] = useState('');
   const approvedDrafts = drafts.filter(item => item.status === 'disetujui');
 
   useEffect(() => {
-    setVisual(draft?.visualAsset || {
+    setVisual({
       ...defaultVisual,
       id: `vis-${draft?.id || 'new'}-${Date.now()}`,
-      headline: draft?.title || ''
+      headline: '',
+      subheadline: '',
+      badgeText: '',
+      ctaText: '',
+      visualPrompt: ''
     });
+    setGeneratedImageUrl(null);
+    setFallbackImageUrl(null);
+    setImageLoaded(false);
+    setGenerationError('');
+    setMediaError('');
   }, [draft?.id]);
 
   const handleCopyPrompt = () => {
     navigator.clipboard.writeText(visual.visualPrompt);
     setCopiedPrompt(true);
     setTimeout(() => setCopiedPrompt(false), 2000);
+  };
+
+  const handlePreviewError = () => {
+    if (fallbackImageUrl && generatedImageUrl !== fallbackImageUrl) {
+      setGeneratedImageUrl(fallbackImageUrl);
+      setImageLoaded(false);
+      return;
+    }
+    setMediaError('Generated image could not be loaded.');
+    setImageLoaded(false);
+  };
+
+  const handleGenerate = async () => {
+    const activeDraft = draft;
+    if (!activeDraft) return;
+    setIsGenerating(true);
+    setGenerationError('');
+    setMediaError('');
+    setImageLoaded(false);
+    const clip = (value: string) => value.trim().slice(0, 120);
+    const textParts = [
+      visual.headline && `HEADLINE: "${clip(visual.headline)}"`,
+      visual.subheadline && `SUBHEADLINE: "${clip(visual.subheadline)}"`,
+      visual.badgeText && `BADGE: "${clip(visual.badgeText)}"`,
+      visual.ctaText && `CTA: "${clip(visual.ctaText)}"`
+    ].filter(Boolean);
+    const textInstruction = textParts.length
+      ? `Render these exact text elements visibly in the artwork; do not omit them: ${textParts.join(' | ')}.`
+      : 'Do not render any text in the artwork.';
+    const creativeDirection = visual.visualPrompt.trim().slice(0, 700);
+    const prompt = `${creativeDirection}. Brand colors: ${visual.primaryColor}, ${visual.accentColor}. ${textInstruction}`;
+    try {
+      const providerPrompt = `${creativeDirection}. ${textParts.length ? `${textInstruction} editorial poster typography layout` : 'editorial visual composition'}. High-quality composition, clear subject, coherent lighting, strong focal point, visually faithful to the creative direction.`.slice(0, 900);
+      const result = await apiService.generateVisual({ prompt, providerPrompt, aspectRatio: visual.aspectRatio, headline: visual.headline, subheadline: visual.subheadline, badgeText: visual.badgeText, ctaText: visual.ctaText });
+      if (!result.imageUrl || !result.imageUrl.startsWith('http')) throw new Error('Image provider returned no valid preview URL.');
+      // Render immediately. The <img> element owns load/error state; do not block the UI on a second preload request.
+      setFallbackImageUrl(result.fallbackImageUrl || null);
+      setGeneratedImageUrl(result.imageUrl);
+      setImageLoaded(false);
+      const nextVisual = { ...visual, generatedImageUrl: result.imageUrl };
+      setVisual(nextVisual);
+      try {
+        await apiService.saveDraft({ ...activeDraft, visualAsset: nextVisual, updatedAt: new Date().toISOString() });
+      } catch (saveError) {
+        console.warn('Generated image preview succeeded, but draft save failed:', saveError);
+      }
+    } catch (error) {
+      setGenerationError(error instanceof Error ? error.message : 'Image generation failed');
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   // Dimension helpers for preview
@@ -102,15 +169,6 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button 
-            className="btn btn-secondary"
-            onClick={handleCopyPrompt}
-          >
-            <Copy size={16} />
-            <span>{copiedPrompt ? 'Prompt Tersalin!' : 'Salin Prompt AI'}</span>
-          </button>
-        </div>
       </div>
 
       <div className="card-panel" style={{ marginBottom: '20px', padding: '14px' }}>
@@ -161,7 +219,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
 
           {/* Headline & Subheadline */}
           <div className="form-group">
-            <label className="form-label">Headline Text</label>
+            <label className="form-label">Headline Text <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span></label>
             <input 
               type="text" 
               className="form-input" 
@@ -171,7 +229,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
           </div>
 
           <div className="form-group">
-            <label className="form-label">Sub-headline Text</label>
+            <label className="form-label">Sub-headline Text <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span></label>
             <textarea 
               className="form-textarea" 
               rows={2}
@@ -183,7 +241,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
           {/* Badge & CTA */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
             <div className="form-group">
-              <label className="form-label">Badge Text</label>
+              <label className="form-label">Badge Text <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span></label>
               <input 
                 type="text" 
                 className="form-input" 
@@ -192,7 +250,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
               />
             </div>
             <div className="form-group">
-              <label className="form-label">CTA Button Text</label>
+              <label className="form-label">CTA Text <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span></label>
               <input 
                 type="text" 
                 className="form-input" 
@@ -202,19 +260,19 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
             </div>
           </div>
 
-          {/* Style Template */}
+          {/* Free-form creative direction */}
           <div className="form-group">
-            <label className="form-label">Visual Style Theme</label>
-            <select 
-              className="form-select"
-              value={visual.templateStyle}
-              onChange={e => setVisual({ ...visual, templateStyle: e.target.value as any })}
-            >
-              <option value="corporate">Corporate BUMD (Navy & Cyan)</option>
-              <option value="modern_bold">Modern Bold (Emerald & Lime)</option>
-              <option value="clean_service">Clean Public Service (Sky Blue)</option>
-              <option value="infographic">Verified Data Infographic</option>
-            </select>
+            <label className="form-label">Creative Direction</label>
+            <textarea
+              className="form-textarea"
+              rows={5}
+              value={visual.visualPrompt}
+              onChange={e => setVisual({ ...visual, visualPrompt: e.target.value })}
+              placeholder="Describe the visual you want: mood, composition, subject, lighting, art direction, camera angle, materials, and colors…"
+            />
+            <div style={{ marginTop: '6px', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+              Free-form prompt. The app adds approved brief and brand context automatically.
+            </div>
           </div>
 
           {/* Brand Compliance Checklist */}
@@ -245,14 +303,11 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
               overflow: 'hidden',
               boxShadow: '0 20px 40px -15px rgba(0,0,0,0.7)',
               border: '2px solid rgba(255,255,255,0.15)',
-              background: visual.templateStyle === 'modern_bold'
-                ? 'linear-gradient(135deg, #064e3b 0%, #0f172a 100%)'
-                : (visual.templateStyle === 'clean_service'
-                  ? 'linear-gradient(135deg, #075985 0%, #0c4a6e 100%)'
-                  : 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)'),
+              backgroundColor: visual.primaryColor || '#0f172a',
               transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
             }}
           >
+            {generatedImageUrl && <img src={generatedImageUrl} alt="Generated visual preview" onLoad={() => setImageLoaded(true)} onError={() => { if (fallbackImageUrl && generatedImageUrl !== fallbackImageUrl) { setGeneratedImageUrl(fallbackImageUrl); setImageLoaded(false); } else { setMediaError('Generated image could not be loaded.'); setImageLoaded(false); } }} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }} />}
             {/* Background Decorative Rings */}
             <div 
               style={{
@@ -267,95 +322,27 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
               }}
             />
 
-            {/* Header: Badge & Organization Logo Placeholder */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', zIndex: 2 }}>
-              <span 
-                style={{
-                  fontSize: '0.68rem',
-                  fontWeight: 800,
-                  letterSpacing: '0.08em',
-                  textTransform: 'uppercase',
-                  padding: '4px 10px',
-                  borderRadius: '9999px',
-                  background: activeWorkspace.primaryColor,
-                  color: 'white',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
-                }}
-              >
-                {visual.badgeText}
-              </span>
-
-              {/* Official BUMD Logo Badge */}
-              <div 
-                style={{
-                  padding: '4px 10px',
-                  borderRadius: '6px',
-                  background: 'rgba(255, 255, 255, 0.1)',
-                  backdropFilter: 'blur(8px)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  fontSize: '0.65rem',
-                  fontWeight: 700,
-                  color: 'white',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}
-              >
-                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#38bdf8' }} />
-                <span>{activeWorkspace.code}</span>
-              </div>
-            </div>
-
-            {/* Middle: Headline & Subheadline */}
-            <div style={{ position: 'relative', zIndex: 2, margin: 'auto 0' }}>
-              <h3 
-                style={{
-                  fontSize: visual.aspectRatio === '9:16' ? '1.4rem' : (visual.aspectRatio === '16:9' ? '1.5rem' : '1.35rem'),
-                  fontWeight: 800,
-                  lineHeight: 1.25,
-                  letterSpacing: '-0.02em',
-                  color: '#ffffff',
-                  marginBottom: '10px',
-                  textShadow: '0 2px 4px rgba(0,0,0,0.5)'
-                }}
-              >
-                {visual.headline}
-              </h3>
-              <p 
-                style={{
-                  fontSize: visual.aspectRatio === '9:16' ? '0.85rem' : '0.82rem',
-                  color: '#cbd5e1',
-                  lineHeight: 1.5
-                }}
-              >
-                {visual.subheadline}
-              </p>
-            </div>
-
-            {/* Footer: CTA & Disclaimer */}
-            <div style={{ position: 'relative', zIndex: 2, display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <div 
-                style={{
-                  padding: '8px 16px',
-                  borderRadius: '10px',
-                  background: 'linear-gradient(135deg, #0284c7, #06b6d4)',
-                  color: 'white',
-                  fontWeight: 700,
-                  fontSize: '0.78rem',
-                  textAlign: 'center',
-                  boxShadow: '0 4px 12px rgba(2, 132, 199, 0.4)'
-                }}
-              >
-                {visual.ctaText}
-              </div>
-              <div style={{ fontSize: '0.62rem', color: '#94a3b8', textAlign: 'center', fontStyle: 'italic' }}>
-                {visual.disclaimer}
-              </div>
-            </div>
+            {!generatedImageUrl && <div style={{ position: 'relative', zIndex: 2, margin: 'auto', color: 'rgba(255,255,255,0.65)', textAlign: 'center' }}>Preview appears after generation.</div>}
           </div>
 
+          <div style={{ display: 'flex', gap: '10px', width: '100%', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button className="btn btn-secondary" onClick={handleCopyPrompt}>
+              <Copy size={16} />
+              <span>{copiedPrompt ? 'Prompt Tersalin!' : 'Salin Prompt AI'}</span>
+            </button>
+            <button className="btn btn-primary" onClick={handleGenerate} disabled={isGenerating}>
+              <Sparkles size={16} />
+              <span>{isGenerating ? 'Membuat gambar…' : generatedImageUrl ? 'Regenerasi Gambar' : 'Buat Gambar Gratis'}</span>
+            </button>
+          </div>
+          {generationError && <div style={{ color: '#fb7185', fontSize: '0.8rem' }}>{generationError}</div>}
+          {mediaError && <div style={{ color: '#fb7185', fontSize: '0.8rem' }}>{mediaError}</div>}
+          {generatedImageUrl && !imageLoaded && <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Loading preview…</div>}
+          {generatedImageUrl && imageLoaded && <a className="btn btn-secondary" href={generatedImageUrl} target="_blank" rel="noreferrer" download>
+            <Download size={16} /> Download Generated Image
+          </a>}
           <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            The graphic preview auto-syncs with the <strong>{activeWorkspace.name}</strong> brand palette.
+            Preview first. Download unlocks after the image loads. Free MVP generation via Pollinations.AI / FLUX.
           </div>
         </div>
       </div>

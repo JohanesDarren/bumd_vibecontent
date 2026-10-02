@@ -11,6 +11,27 @@ app.use(express.json({ limit: '1mb' }));
 
 const isNonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0;
 
+// Free MVP image generation. Pollinations hosts the image model; no API key required.
+app.post('/api/visual/generate', async (req, res) => {
+  const { prompt, aspectRatio = '1:1' } = req.body || {};
+  if (!isNonEmptyString(prompt)) return res.status(400).json({ error: 'prompt is required' });
+  const dimensions = aspectRatio === '9:16' ? [576, 1024] : aspectRatio === '16:9' ? [1024, 576] : [768, 768];
+  const seed = Math.floor(Math.random() * 2147483647);
+  const imageBaseUrl = process.env.IMAGE_GENERATION_URL || 'https://image.pollinations.ai/prompt';
+  const imageModel = process.env.IMAGE_GENERATION_MODEL || 'flux';
+  const providerPrompt = typeof req.body?.providerPrompt === 'string' && req.body.providerPrompt.trim() ? req.body.providerPrompt.trim() : prompt.trim();
+  const imageUrl = `${imageBaseUrl}/${encodeURIComponent(providerPrompt)}?width=${dimensions[0]}&height=${dimensions[1]}&seed=${seed}&nologo=true&model=${encodeURIComponent(imageModel)}`;
+  const escapeSvg = (value: unknown) => String(value || '').replace(/[&<>\"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', "'": '&apos;' }[char] || char));
+  const { headline = '', subheadline = '', badgeText = '', ctaText = '' } = req.body || {};
+  const palettes = [['#064e3b', '#eab308'], ['#075985', '#22c55e'], ['#7c2d12', '#facc15'], ['#312e81', '#38bdf8']];
+  const palette = palettes[seed % palettes.length];
+  const circleX = 80 + (seed % Math.max(120, dimensions[0] - 160));
+  const circleY = 80 + ((seed >> 4) % Math.max(120, dimensions[1] - 160));
+  const fallbackSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${dimensions[0]}" height="${dimensions[1]}" viewBox="0 0 ${dimensions[0]} ${dimensions[1]}"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${palette[0]}"/><stop offset="1" stop-color="${palette[1]}"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#g)"/><circle cx="${circleX}" cy="${circleY}" r="${100 + (seed % 100)}" fill="#fff" opacity=".12"/><circle cx="${dimensions[0] - circleX / 2}" cy="${dimensions[1] - circleY / 3}" r="${40 + (seed % 60)}" fill="#fff" opacity=".08"/><text x="48" y="${Math.round(dimensions[1] * .28)}" fill="white" font-family="Arial" font-size="${dimensions[0] > 700 ? 42 : 30}" font-weight="700">${escapeSvg(headline)}</text><text x="48" y="${Math.round(dimensions[1] * .38)}" fill="white" opacity=".9" font-family="Arial" font-size="${dimensions[0] > 700 ? 24 : 18}">${escapeSvg(subheadline)}</text>${badgeText ? `<rect x="48" y="42" width="180" height="36" rx="18" fill="#fff" opacity=".2"/><text x="66" y="67" fill="white" font-family="Arial" font-size="18">${escapeSvg(badgeText)}</text>` : ''}${ctaText ? `<rect x="48" y="${dimensions[1] - 100}" width="220" height="48" rx="12" fill="#fff"/><text x="70" y="${dimensions[1] - 69}" fill="${palette[0]}" font-family="Arial" font-size="18" font-weight="700">${escapeSvg(ctaText)}</text>` : ''}</svg>`;
+  const fallbackImageUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(fallbackSvg)}`;
+  res.json({ imageUrl, fallbackImageUrl, provider: 'Pollinations.AI', model: imageModel });
+});
+
 // ── RAG service integration (best-effort: the app must keep working when the service is down) ──
 const knowledgeText = (doc: any): string => {
   const chunks = (doc.chunks || [])
