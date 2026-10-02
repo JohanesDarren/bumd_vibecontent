@@ -8,6 +8,7 @@ import {
   Workspace,
   User,
   GroundedCitation,
+  KnowledgeDocument,
   ActiveTab
 } from '../types';
 import { 
@@ -16,6 +17,16 @@ import {
   GeneratedOutput 
 } from '../services/ragEngine';
 import { apiService, RagHit, RagStatus } from '../services/apiService';
+import {
+  AppSettings,
+  toRagOptions,
+  GROUNDING_LEVEL_LABELS,
+  buildRetrievalQuery,
+  shouldCallRemote,
+  shouldPersistDraft,
+  redactCitationExcerpts
+} from '../services/appSettings';
+import { guardRagResponse, normalizeScore } from '../services/ragGuard';
 import { 
   Sparkles, 
 
@@ -33,7 +44,10 @@ import {
   Zap,
   AlertTriangle,
   ExternalLink,
-  MoreVertical
+  MoreVertical,
+  ShieldCheck,
+  SlidersHorizontal,
+  Lock
 } from 'lucide-react';
 
 interface BriefStudioViewProps {
@@ -42,6 +56,8 @@ interface BriefStudioViewProps {
   activeWorkspace: Workspace;
   activeUser: User;
   drafts: ContentDraft[];
+  documents: KnowledgeDocument[];
+  settings: AppSettings;
   onOpenEditor: (draftId: string) => void;
   onGenerateDraft: (brief: ContentBrief, output: GeneratedOutput) => Promise<void> | void;
   onNavigate?: (tab: ActiveTab) => void;
@@ -51,8 +67,8 @@ interface BriefStudioViewProps {
 /** Map a live RAG search hit to the citation shape the workspace expects. */
 function toCitation(hit: RagHit, index: number): GroundedCitation {
   const content = typeof hit.content === 'string' ? hit.content.trim() : '';
-  const rawScore = typeof hit.score === 'number' ? hit.score : 0;
-  const relevanceScore = rawScore <= 1 ? Math.round(rawScore * 100) : Math.round(rawScore);
+  // Use the real relevance score — never inflate it, so weak sources stay visible.
+  const relevanceScore = Math.min(100, Math.round(normalizeScore(hit.score) * 100));
   return {
     id: `cit-${index}`,
     documentId: hit.document_id || `unknown-${index}`,
@@ -72,6 +88,8 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
   activeWorkspace,
   activeUser,
   drafts,
+  documents,
+  settings,
   onOpenEditor,
   onGenerateDraft,
   onNavigate,
@@ -104,6 +122,12 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
   const [ragService, setRagService] = useState<RagStatus | null>(null);
   const [ragModel, setRagModel] = useState<string | null>(null);
   const [usedRemoteRag, setUsedRemoteRag] = useState(false);
+  // The workspace settings live in the parent (loaded from the server), so the
+  // status strip always reflects exactly what generation will use.
+  const [privacyNotice, setPrivacyNotice] = useState<string | null>(null);
+  const [ragNotice, setRagNotice] = useState<string | null>(null);
+  const groundingLevel = settings.grounding.level;
+  const privacyHigh = !settings.privacy.allowRemoteGeneration;
 
   useEffect(() => {
     let active = true;
@@ -159,6 +183,12 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
     }
 
     setIsGenerating(true);
+    setPrivacyNotice(null);
+    setRagNotice(null);
+
+    // `settings` comes from the parent, which loads and saves them per-workspace
+    // in PostgreSQL — changes made in Pengaturan & Bantuan take effect immediately.
+    const grounding = settings.grounding;
 
     const brief: ContentBrief = {
       id: `brf-${Date.now()}`,
@@ -172,7 +202,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
       keyMessage,
       cta: selectedCta,
       limitations,
-      language: brandProfile.defaultLanguage,
+      language: settings.defaultLanguage || brandProfile.defaultLanguage,
       createdAt: new Date().toISOString(),
       createdBy: activeUser.id
     };
@@ -189,68 +219,86 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
       limitations ? `Batasan/Syarat Penting: ${limitations}` : '',
       `Pesan Kunci & Fakta:\n${keyMessage}`
     ].filter(Boolean).join('\n');
-    const retrievalQuery = [
-      campaign,
-      title,
-      keyMessage,
-      limitations
-    ].filter(Boolean).join('\n');
-
+    let output: GeneratedOutput;
     let remote: RemoteGrounding = {
       answer: '',
       citations: [],
       unsupportedClaims: [],
       grounded: false
     };
-    if (ragService && (!ragService.configured || !ragService.ready)) {
-      const reason = ragService.error || 'Layanan RAG belum siap.';
-      remote.unsupportedClaims = [`${reason} Isi brief disimpan sebagai draf yang perlu diverifikasi.`];
+    if (!shouldCallRemote(settings)) {
       setUsedRemoteRag(false);
       setRagModel(null);
-      setGenerationError('Layanan RAG belum siap. Draf cadangan tetap dibuat dari brief dan ditandai untuk verifikasi.');
+      output = generateContentFromBrief(brief, brandProfile, documents, activeWorkspace.id);
+      setPrivacyNotice('Mode privasi tinggi aktif — konten dibuat lokal dari dokumen aktif tanpa memanggil layanan RAG eksternal.');
     } else {
-      try {
-        const [rag, retrieval] = await Promise.all([
-          apiService.ragQuery(activeWorkspace.id, structuredQuery, 5),
-          apiService.ragSearch(activeWorkspace.id, retrievalQuery, 5)
-        ]);
-        const querySources = (rag.sources || [])
-          .filter(hit => typeof hit.content === 'string' && hit.content.trim())
-          .map(toCitation);
-        const searchSources = (retrieval.results || [])
-          .filter(hit => typeof hit.content === 'string' && hit.content.trim())
-          .map(toCitation);
-        const citations = querySources.length ? querySources : searchSources;
-        const unsupported = rag.grounded
-          ? []
-          : [rag.no_answer_reason
-              ? `Knowledge base belum dapat mem-grounding klaim ini (${rag.no_answer_reason}).`
-              : 'Klaim faktual dalam brief belum ditemukan pada dokumen aktif.'];
-        if (rag.grounded && !citations.length) {
-          unsupported.push('Layanan RAG menyatakan grounded, tetapi tidak mengembalikan sumber resmi dari query maupun pencarian. Periksa indexing dan sinkronisasi knowledge base.');
-        }
-        remote = { answer: rag.answer || '', citations, unsupportedClaims: unsupported, grounded: Boolean(rag.grounded), model: rag.model };
-        setRagModel(rag.model || null);
-        setUsedRemoteRag(true);
-        if (!rag.grounded || !citations.length) {
-          const reason = rag.no_answer_reason || (!citations.length
-            ? 'Pencarian tidak menemukan potongan sumber resmi yang dapat ditampilkan.'
-            : 'Jawaban tidak memperoleh dukungan yang cukup dari dokumen resmi.');
-          setGenerationError(`Copy belum dapat dianggap berbasis fakta resmi: ${reason} Draf akan disusun dari input Anda dan ditandai untuk verifikasi. Pastikan dokumen terkait berstatus aktif dan sudah tersinkron ke knowledge base workspace ini.`);
-        }
-      } catch (error) {
-        console.error('ragQuery failed:', error);
-        const reason = error instanceof Error ? error.message : 'Layanan RAG tidak dapat dihubungi.';
+      if (ragService && (!ragService.configured || !ragService.ready)) {
+        const reason = ragService.error || 'Layanan RAG belum siap.';
         remote.unsupportedClaims = [`${reason} Isi brief disimpan sebagai draf yang perlu diverifikasi.`];
         setUsedRemoteRag(false);
         setRagModel(null);
-        setGenerationError('Layanan RAG gagal. Draf cadangan dibuat dari brief, tanpa mengarang fakta, dan perlu diverifikasi sebelum dipublikasikan.');
+        setGenerationError('Layanan RAG belum siap. Draf cadangan tetap dibuat dari brief dan ditandai untuk verifikasi.');
+      } else {
+        const retrievalQuery = buildRetrievalQuery(settings, { title, keyMessage, targetAudience, tone, channel, format });
+        const queryForRag = settings.privacy.includeBrandContextInQuery
+          ? structuredQuery
+          : [`Judul: ${title}`, `Pesan Kunci & Fakta:\n${keyMessage}`].join('\n');
+        try {
+          const rag = await apiService.ragQuery(activeWorkspace.id, queryForRag, toRagOptions(grounding));
+          const guarded = guardRagResponse({
+            answer: rag.answer,
+            grounded: rag.grounded,
+            sources: rag.sources,
+            threshold: grounding.threshold
+          });
+          let citationHits = guarded.sources.filter(hit => typeof hit.content === 'string' && hit.content.trim());
+          if (!citationHits.length) {
+            try {
+              const retrieval = await apiService.ragSearch(activeWorkspace.id, retrievalQuery, toRagOptions(grounding));
+              citationHits = (retrieval.results || [])
+                .filter(hit => typeof hit.content === 'string' && hit.content.trim() && normalizeScore(hit.score) >= grounding.threshold);
+            } catch (error) {
+              console.warn('ragSearch citation lookup failed:', error);
+            }
+          }
+          const citations = redactCitationExcerpts(settings, citationHits.map(toCitation));
+          const unsupported = [...guarded.unsupportedClaims];
+          if (!rag.grounded && rag.no_answer_reason) {
+            unsupported.push(`Knowledge base tidak dapat menggrounding klaim ini (${rag.no_answer_reason}).`);
+          }
+          remote = { answer: guarded.answer, citations, unsupportedClaims: unsupported, grounded: guarded.grounded, model: rag.model };
+          setRagModel(rag.model || null);
+          setUsedRemoteRag(true);
+          setRagNotice(
+            guarded.usedFallback
+              ? 'RAG tidak menemukan bukti yang cukup pada ambang relevansi ini; draf memakai penanda Perlu Verifikasi.'
+              : (guarded.notes.length > 0 ? guarded.notes.join(' ') : null)
+          );
+          if (!guarded.grounded) {
+            setGenerationError(`Copy belum dapat dianggap berbasis fakta resmi: ${guarded.unsupportedClaims.join(' ')} Draf pengganti berasal dari brief dan perlu diverifikasi.`);
+          }
+        } catch (error) {
+          console.error('ragQuery failed:', error);
+          const reason = error instanceof Error ? error.message : 'Layanan RAG tidak dapat dihubungi.';
+          remote.unsupportedClaims = [`${reason} Isi brief disimpan sebagai draf yang perlu diverifikasi.`];
+          setUsedRemoteRag(false);
+          setRagModel(null);
+          setGenerationError('Layanan RAG gagal. Draf cadangan dibuat dari brief, tanpa mengarang fakta, dan perlu diverifikasi sebelum dipublikasikan.');
+        }
       }
+      output = generateContentFromBrief(brief, brandProfile, [], activeWorkspace.id, remote);
     }
 
-    const output = generateContentFromBrief(brief, brandProfile, [], activeWorkspace.id, remote);
     if (remote.grounded && output.qualityCheck.briefCompliance.details !== 'Pesan kunci dan CTA sesuai dengan brief.') {
       setGenerationError(`Jawaban RAG tidak lolos pemeriksaan kualitas dan tidak digunakan. ${output.qualityCheck.briefCompliance.details} Draf pengganti berasal dari brief dan perlu diverifikasi.`);
+    }
+
+    setIsGenerating(false);
+    streamText(output.content);
+
+    if (!shouldPersistDraft(settings)) {
+      setPrivacyNotice('Mode privasi: draf tidak disimpan ke database. Salin hasilnya sebelum meninggalkan halaman ini.');
+      return;
     }
 
     try {
@@ -259,8 +307,6 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
       console.error('Failed to save generated draft', error);
       setGenerationError(`Draf tidak berhasil disimpan: ${error instanceof Error ? error.message : 'kesalahan tidak diketahui'}. Salin teks dari editor sebelum meninggalkan halaman.`);
     }
-    setIsGenerating(false);
-    streamText(output.content);
   };
 
 
@@ -275,6 +321,45 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
           </p>
         </div>
       </div>
+
+      {/* Status of the live settings that generation will use */}
+      <div className="card-panel" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '20px', padding: '14px 18px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <SlidersHorizontal size={18} color="var(--accent-cyan)" />
+          <div>
+            <div style={{ fontSize: '0.8rem', fontWeight: 700 }}>Skala Grounding: {GROUNDING_LEVEL_LABELS[groundingLevel] || 'Kustom'}</div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+              {privacyHigh
+                ? 'Mode privasi tinggi — generasi lokal tanpa layanan eksternal.'
+                : `Konteks RAG: ${ragService ? (ragService.ready ? 'Online' : ragService.configured ? 'Degraded' : 'Offline') : 'memeriksa…'}${ragModel ? ` · ${ragModel}` : ''}`}
+            </div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <span className={`status-pill ${privacyHigh ? 'revisi_diminta' : (usedRemoteRag ? 'disetujui' : 'draft')}`} style={{ fontSize: '0.66rem' }}>
+            {privacyHigh ? 'Privasi Tinggi' : usedRemoteRag ? 'Grounded live' : 'Siap Digunakan'}
+          </span>
+          {onNavigate && (
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => onNavigate('settings_help')}>
+              <ShieldCheck size={13} /> Atur di Pengaturan
+            </button>
+          )}
+        </div>
+      </div>
+
+      {privacyNotice && (
+        <div className="card-panel" style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px', padding: '12px 16px', borderColor: 'var(--accent-amber)' }}>
+          <Lock size={16} color="var(--accent-amber)" />
+          <span style={{ fontSize: '0.8rem' }}>{privacyNotice}</span>
+        </div>
+      )}
+
+      {ragNotice && (
+        <div className="card-panel" style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px', padding: '12px 16px', borderColor: 'var(--accent-cyan)' }}>
+          <ShieldCheck size={16} color="var(--accent-cyan)" />
+          <span style={{ fontSize: '0.8rem' }}>{ragNotice}</span>
+        </div>
+      )}
 
       <div className="card-panel" style={{ marginBottom: '20px', padding: '16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>

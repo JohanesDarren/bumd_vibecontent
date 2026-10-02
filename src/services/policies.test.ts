@@ -32,6 +32,8 @@ test('generation workflow exposes saved drafts and approved-only visual selectio
   assert.match(brief, /onOpenEditor\(draft\.id\)/);
   assert.match(visual, /approvedDrafts/);
   assert.match(visual, /status === 'disetujui'/);
+  assert.match(visual, /Creative Direction|Arahan Kreatif/);
+  assert.doesNotMatch(visual, /Visual Style Theme/);
 });
 
 test('user can self-approve an editable draft', () => {

@@ -1,4 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+
+
+import { apiService } from '../services/apiService';
 import { 
   ContentDraft, 
   BrandProfile, 
@@ -6,11 +9,9 @@ import {
   VisualAsset 
 } from '../types';
 import { 
-  Sparkles, 
   Download, 
   Copy, 
   ShieldCheck, 
-  CheckCircle2, 
   Layout, 
   Smartphone, 
   Monitor, 
@@ -41,7 +42,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
     primaryColor: activeWorkspace.primaryColor,
     accentColor: activeWorkspace.accentColor,
     badgeText: '',
-    ctaText: brandProfile.officialCTAs[0]?.label || '',
+    ctaText: '',
     disclaimer: brandProfile.officialDisclaimer || '',
     visualPrompt: `High quality corporate graphic design for ${activeWorkspace.name}, modern minimalist aesthetic, clean typography, official color accents`,
     templateStyle: 'corporate'
@@ -49,20 +50,61 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
 
   const [visual, setVisual] = useState<VisualAsset>(defaultVisual);
   const [copiedPrompt, setCopiedPrompt] = useState(false);
+  const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(draft?.visualAsset?.generatedImageUrl || null);
+
+  const [metadata, setMetadata] = useState('');
+
+
+
+  const version = useRef(0);
+  useEffect(() => () => { version.current++; }, []);
+  const clearOutput = () => { version.current++; setGeneratedImageUrl(null); setImageLoaded(false); setMetadata(''); };
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState('');
+  const [mediaError, setMediaError] = useState('');
   const approvedDrafts = drafts.filter(item => item.status === 'disetujui');
 
   useEffect(() => {
-    setVisual(draft?.visualAsset || {
+    setVisual({
       ...defaultVisual,
       id: `vis-${draft?.id || 'new'}-${Date.now()}`,
-      headline: draft?.title || ''
+      headline: '',
+      subheadline: '',
+      badgeText: '',
+      ctaText: '',
+      visualPrompt: ''
     });
-  }, [draft?.id]);
+    setGeneratedImageUrl(null);
+    clearOutput();
+    setImageLoaded(false);
+    setGenerationError('');
+    setMediaError('');
+  }, [draft?.id, activeWorkspace.id]);
+
+  const updateVisual = (patch: Partial<VisualAsset>) => {
+    setVisual(current => ({ ...current, ...patch }));
+    clearOutput();
+  };
 
   const handleCopyPrompt = () => {
     navigator.clipboard.writeText(visual.visualPrompt);
     setCopiedPrompt(true);
     setTimeout(() => setCopiedPrompt(false), 2000);
+  };
+
+  const handleGenerate = async () => {
+    if (!draft) return;
+    clearOutput();
+    const requestVersion=version.current;
+    setIsGenerating(true);setGenerationError('');setMediaError('');
+    try {
+      const result=await apiService.generateVisual({workspaceId:activeWorkspace.id,prompt:visual.visualPrompt,aspectRatio:visual.aspectRatio,headline:visual.headline,subheadline:visual.subheadline,badgeText:visual.badgeText,ctaText:visual.ctaText,disclaimer:visual.disclaimer,primaryColor:visual.primaryColor,accentColor:visual.accentColor});
+      if(requestVersion!==version.current)return;
+      setGeneratedImageUrl(result.imageUrl);
+      setMetadata(`${result.provider} · ${result.model} · JPEG`);
+    } catch(error) {if(requestVersion===version.current)setGenerationError(error instanceof Error?error.message:'Visual design failed');}
+    finally {setIsGenerating(false);}
   };
 
   // Dimension helpers for preview
@@ -102,15 +144,6 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button 
-            className="btn btn-secondary"
-            onClick={handleCopyPrompt}
-          >
-            <Copy size={16} />
-            <span>{copiedPrompt ? 'Prompt Tersalin!' : 'Salin Prompt AI'}</span>
-          </button>
-        </div>
       </div>
 
       <div className="card-panel" style={{ marginBottom: '20px', padding: '14px' }}>
@@ -135,7 +168,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
               <button 
                 type="button"
                 className={`btn btn-sm ${visual.aspectRatio === '1:1' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setVisual({ ...visual, aspectRatio: '1:1' })}
+                onClick={() => updateVisual({ aspectRatio: '1:1' })}
               >
                 <Square size={14} />
                 <span>1:1 Feed</span>
@@ -143,7 +176,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
               <button 
                 type="button"
                 className={`btn btn-sm ${visual.aspectRatio === '9:16' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setVisual({ ...visual, aspectRatio: '9:16' })}
+                onClick={() => updateVisual({ aspectRatio: '9:16' })}
               >
                 <Smartphone size={14} />
                 <span>9:16 Story</span>
@@ -151,7 +184,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
               <button 
                 type="button"
                 className={`btn btn-sm ${visual.aspectRatio === '16:9' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setVisual({ ...visual, aspectRatio: '16:9' })}
+                onClick={() => updateVisual({ aspectRatio: '16:9' })}
               >
                 <Monitor size={14} />
                 <span>16:9 Banner</span>
@@ -159,62 +192,21 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
             </div>
           </div>
 
-          {/* Headline & Subheadline */}
+
+
+          {/* Free-form creative direction */}
           <div className="form-group">
-            <label className="form-label">Headline Text</label>
-            <input 
-              type="text" 
-              className="form-input" 
-              value={visual.headline}
-              onChange={e => setVisual({ ...visual, headline: e.target.value })}
+            <label className="form-label">Arahan Kreatif</label>
+            <textarea
+              className="form-textarea"
+              rows={5}
+              value={visual.visualPrompt}
+              onChange={e => updateVisual({ visualPrompt: e.target.value })}
+              placeholder="Jelaskan visual yang Anda inginkan: suasana, komposisi, subjek, pencahayaan, arah seni, sudut kamera, dan warna…"
             />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Sub-headline Text</label>
-            <textarea 
-              className="form-textarea" 
-              rows={2}
-              value={visual.subheadline}
-              onChange={e => setVisual({ ...visual, subheadline: e.target.value })}
-            />
-          </div>
-
-          {/* Badge & CTA */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-            <div className="form-group">
-              <label className="form-label">Badge Text</label>
-              <input 
-                type="text" 
-                className="form-input" 
-                value={visual.badgeText}
-                onChange={e => setVisual({ ...visual, badgeText: e.target.value })}
-              />
+            <div style={{ marginTop: '6px', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+              Cloudflare FLUX.1 schnell: Maksimal 2048 karakter. Akurasi teks pada gambar tidak dijamin; periksa kembali sebelum dipublikasikan.
             </div>
-            <div className="form-group">
-              <label className="form-label">CTA Button Text</label>
-              <input 
-                type="text" 
-                className="form-input" 
-                value={visual.ctaText}
-                onChange={e => setVisual({ ...visual, ctaText: e.target.value })}
-              />
-            </div>
-          </div>
-
-          {/* Style Template */}
-          <div className="form-group">
-            <label className="form-label">Visual Style Theme</label>
-            <select 
-              className="form-select"
-              value={visual.templateStyle}
-              onChange={e => setVisual({ ...visual, templateStyle: e.target.value as any })}
-            >
-              <option value="corporate">Corporate BUMD (Navy & Cyan)</option>
-              <option value="modern_bold">Modern Bold (Emerald & Lime)</option>
-              <option value="clean_service">Clean Public Service (Sky Blue)</option>
-              <option value="infographic">Verified Data Infographic</option>
-            </select>
           </div>
 
           {/* Brand Compliance Checklist */}
@@ -224,9 +216,9 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
               <span>Brand Asset Compliance:</span>
             </div>
             <ul style={{ paddingLeft: '18px', display: 'flex', flexDirection: 'column', gap: '4px', color: 'var(--text-secondary)' }}>
-              <li>The official BUMD logo is placed in the top-right corner at original proportions.</li>
-              <li>Dominant colors use the official palette ({activeWorkspace.primaryColor}).</li>
-              <li>A legal disclaimer is displayed at the bottom of the graphic.</li>
+              <li>Gambar raster yang dihasilkan AI; tidak ada penempatan logo resmi otomatis.</li>
+              <li>Sistem menerima palet warna yang diminta ({activeWorkspace.primaryColor}).</li>
+              <li>Periksa kesesuaian merek dengan panduan visual BUMD sebelum digunakan.</li>
             </ul>
           </div>
         </div>
@@ -245,118 +237,31 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
               overflow: 'hidden',
               boxShadow: '0 20px 40px -15px rgba(0,0,0,0.7)',
               border: '2px solid rgba(255,255,255,0.15)',
-              background: visual.templateStyle === 'modern_bold'
-                ? 'linear-gradient(135deg, #064e3b 0%, #0f172a 100%)'
-                : (visual.templateStyle === 'clean_service'
-                  ? 'linear-gradient(135deg, #075985 0%, #0c4a6e 100%)'
-                  : 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)'),
+              backgroundColor: visual.primaryColor || '#0f172a',
               transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
             }}
           >
-            {/* Background Decorative Rings */}
-            <div 
-              style={{
-                position: 'absolute',
-                top: '-40px',
-                right: '-40px',
-                width: '180px',
-                height: '180px',
-                borderRadius: '50%',
-                background: `radial-gradient(circle, ${activeWorkspace.primaryColor} 0%, transparent 70%)`,
-                opacity: 0.4
-              }}
-            />
+            {generatedImageUrl ? <img src={generatedImageUrl} alt={visual.visualPrompt || 'Cloudflare FLUX generated image'} onLoad={() => setImageLoaded(true)} onError={() => {setMediaError('Gagal memuat pratinjau gambar.');setImageLoaded(false);}} style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'contain'}} /> : <p style={{color:'#fff', textAlign: 'center'}}>Belum ada artwork. Masukkan arahan kreatif, lalu buat gambar AI.</p>}
 
-            {/* Header: Badge & Organization Logo Placeholder */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', zIndex: 2 }}>
-              <span 
-                style={{
-                  fontSize: '0.68rem',
-                  fontWeight: 800,
-                  letterSpacing: '0.08em',
-                  textTransform: 'uppercase',
-                  padding: '4px 10px',
-                  borderRadius: '9999px',
-                  background: activeWorkspace.primaryColor,
-                  color: 'white',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
-                }}
-              >
-                {visual.badgeText}
-              </span>
-
-              {/* Official BUMD Logo Badge */}
-              <div 
-                style={{
-                  padding: '4px 10px',
-                  borderRadius: '6px',
-                  background: 'rgba(255, 255, 255, 0.1)',
-                  backdropFilter: 'blur(8px)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  fontSize: '0.65rem',
-                  fontWeight: 700,
-                  color: 'white',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}
-              >
-                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#38bdf8' }} />
-                <span>{activeWorkspace.code}</span>
-              </div>
-            </div>
-
-            {/* Middle: Headline & Subheadline */}
-            <div style={{ position: 'relative', zIndex: 2, margin: 'auto 0' }}>
-              <h3 
-                style={{
-                  fontSize: visual.aspectRatio === '9:16' ? '1.4rem' : (visual.aspectRatio === '16:9' ? '1.5rem' : '1.35rem'),
-                  fontWeight: 800,
-                  lineHeight: 1.25,
-                  letterSpacing: '-0.02em',
-                  color: '#ffffff',
-                  marginBottom: '10px',
-                  textShadow: '0 2px 4px rgba(0,0,0,0.5)'
-                }}
-              >
-                {visual.headline}
-              </h3>
-              <p 
-                style={{
-                  fontSize: visual.aspectRatio === '9:16' ? '0.85rem' : '0.82rem',
-                  color: '#cbd5e1',
-                  lineHeight: 1.5
-                }}
-              >
-                {visual.subheadline}
-              </p>
-            </div>
-
-            {/* Footer: CTA & Disclaimer */}
-            <div style={{ position: 'relative', zIndex: 2, display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <div 
-                style={{
-                  padding: '8px 16px',
-                  borderRadius: '10px',
-                  background: 'linear-gradient(135deg, #0284c7, #06b6d4)',
-                  color: 'white',
-                  fontWeight: 700,
-                  fontSize: '0.78rem',
-                  textAlign: 'center',
-                  boxShadow: '0 4px 12px rgba(2, 132, 199, 0.4)'
-                }}
-              >
-                {visual.ctaText}
-              </div>
-              <div style={{ fontSize: '0.62rem', color: '#94a3b8', textAlign: 'center', fontStyle: 'italic' }}>
-                {visual.disclaimer}
-              </div>
-            </div>
           </div>
 
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            The graphic preview auto-syncs with the <strong>{activeWorkspace.name}</strong> brand palette.
+          <div style={{ display: 'flex', gap: '10px', width: '100%', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button className="btn btn-secondary" onClick={handleCopyPrompt}>
+              <Copy size={16} />
+              <span>{copiedPrompt ? 'Prompt Tersalin!' : 'Salin Prompt AI'}</span>
+            </button>
+            <button className="btn btn-primary" onClick={handleGenerate} disabled={isGenerating}>
+              <span>{isGenerating ? 'Membuat gambar AI…' : generatedImageUrl ? 'Desain Ulang' : 'Buat Gambar AI'}</span>
+            </button>
           </div>
+          {generationError && <div style={{ color: '#fb7185', fontSize: '0.8rem' }}>{generationError}</div>}
+          {mediaError && <div style={{ color: '#fb7185', fontSize: '0.8rem' }}>{mediaError}</div>}
+          {generatedImageUrl && !imageLoaded && <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Loading preview…</div>}
+          {generatedImageUrl && imageLoaded && <a className="btn btn-secondary" href={generatedImageUrl} download="flux-image.jpg"><Download size={16}/> Download Image JPEG</a>}
+          <p role="status">Video tidak tersedia: FLUX.1 schnell hanya dapat menghasilkan gambar statis.</p>
+          {metadata && <p style={{fontSize:12}}>{metadata}</p>}
+          <div style={{fontSize:'0.8rem',color:'var(--text-muted)'}}>Cloudflare Workers AI · FLUX.1 schnell. Kuota gratis berlaku; tidak ada sistem retri otomatis. Proporsi gambar mengatur komposisi karya; JPEG yang diunduh mempertahankan dimensi asli dari model. Hasil hanya tersimpan dalam sesi ini; segera unduh untuk menyimpannya.</div>
+
         </div>
       </div>
     </div>

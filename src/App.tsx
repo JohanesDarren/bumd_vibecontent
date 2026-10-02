@@ -14,6 +14,7 @@ import {
 } from './types';
 import { apiService } from './services/apiService';
 import { generateContentFromBrief, GeneratedOutput } from './services/ragEngine';
+import { AppSettings, DEFAULT_SETTINGS, normalizeSettings } from './services/appSettings';
 
 // Components
 import { Header } from './components/Header';
@@ -65,6 +66,8 @@ export function App() {
   const [documents, setDocuments] = useState<KnowledgeDocument[]>([]);
   const [drafts, setDrafts] = useState<ContentDraft[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  // Per-workspace settings are owned by the server (workspace_settings table).
+  const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
 
   // Selection & Modal States
   const [selectedDraftId, setSelectedDraftId] = useState<string | undefined>(undefined);
@@ -85,6 +88,7 @@ export function App() {
     setDocuments(data.documents);
     setDrafts(data.drafts);
     setAuditLogs(data.auditLogs);
+    setAppSettings(normalizeSettings(data.settings));
 
     if (data.drafts.length > 0 && !selectedDraftId) setSelectedDraftId(data.drafts[0].id);
     setLoading(false);
@@ -114,6 +118,7 @@ export function App() {
     setDocuments(data.documents);
     setDrafts(data.drafts);
     setAuditLogs(data.auditLogs);
+    setAppSettings(normalizeSettings(data.settings));
     if (data.drafts.length > 0) setSelectedDraftId(data.drafts[0].id);
     setLoading(false);
   };
@@ -241,6 +246,17 @@ export function App() {
     showToast('Panduan merek dan profil BUMD berhasil diperbarui.');
   };
 
+  // Persist per-workspace grounding/privacy settings to PostgreSQL.
+  const handleSaveSettings = async (next: AppSettings) => {
+    if (!activeWorkspace) return;
+    try {
+      const saved = await apiService.saveSettings(activeWorkspace.id, next);
+      setAppSettings(normalizeSettings(saved));
+    } catch (error) {
+      showToast(`Gagal menyimpan pengaturan: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
   const handleOpenExport = (draft: ContentDraft) => setExportModalDraft(draft);
 
   // Create user membership
@@ -360,6 +376,8 @@ export function App() {
               activeWorkspace={activeWorkspace}
               activeUser={activeUser}
               drafts={drafts}
+              documents={documents}
+              settings={appSettings}
               onOpenEditor={(id) => { setSelectedDraftId(id); setCurrentTab('editor'); }}
               onGenerateDraft={handleGenerateDraft}
               onNavigate={setCurrentTab}
@@ -467,7 +485,14 @@ export function App() {
             <UserManagementView users={filterUsersForWorkspace(users, activeWorkspace.id)} activeWorkspace={activeWorkspace} onCreate={handleCreateUser} onDelete={handleDeleteUser} />
           )}
 
-          {currentTab === 'settings_help' && <SettingsHelpView />}
+          {currentTab === 'settings_help' && (
+            <SettingsHelpView
+              activeWorkspace={activeWorkspace}
+              settings={appSettings}
+              onSaveSettings={handleSaveSettings}
+              onNotify={showToast}
+            />
+          )}
         </main>
       </div>
 

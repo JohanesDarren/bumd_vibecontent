@@ -202,6 +202,7 @@ export interface VisualAsset {
   disclaimer: string;
   visualPrompt: string;
   templateStyle: 'corporate' | 'modern_bold' | 'clean_service' | 'infographic';
+  generatedImageUrl?: string;
 }
 
 export interface ContentDraft {
