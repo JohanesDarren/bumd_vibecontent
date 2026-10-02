@@ -1,8 +1,8 @@
-import type { AuditLog, BrandProfile, ContentDraft, KnowledgeDocument, User, Workspace } from '../types';
+import type { AuditLog, BrandProfile, ContentBrief, ContentDraft, KnowledgeDocument, User, Workspace } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:3005';
 
-type Bootstrap = { workspaces: Workspace[]; users: User[]; brandProfile: BrandProfile; documents: KnowledgeDocument[]; drafts: ContentDraft[]; auditLogs: AuditLog[] };
+type Bootstrap = { workspaces: Workspace[]; users: User[]; brandProfile: BrandProfile; documents: KnowledgeDocument[]; drafts: ContentDraft[]; briefs: ContentBrief[]; auditLogs: AuditLog[] };
 
 async function request<T>(path:string, init?:RequestInit):Promise<T>{
   const response=await fetch(`${API_URL}${path}`,{...init,headers:{'Content-Type':'application/json',...(init?.headers||{})}});
@@ -25,7 +25,7 @@ export const apiService={
   ragSearch:(workspaceId:string,query:string,topK?:number)=>request<{results:RagHit[]}>(`/api/rag/search`,{method:'POST',body:JSON.stringify({workspaceId,query,topK})}),
   ragQuery:(workspaceId:string,query:string,topK?:number)=>request<RagAnswer>(`/api/rag/query`,{method:'POST',body:JSON.stringify({workspaceId,query,topK})}),
   ragRefine:(workspaceId:string,draftContent:string,promptAction:string)=>request<{answer:string;model?:string}>(`/api/rag/refine`,{method:'POST',body:JSON.stringify({workspaceId,draftContent,promptAction})}),
-  saveDraft:(draft:ContentDraft)=>request<ContentDraft>(`/api/drafts/${draft.id}`,{method:'PUT',body:JSON.stringify(draft)}),
+  saveDraft:(draft:ContentDraft,brief?:ContentBrief)=>request<ContentDraft>(`/api/drafts/${draft.id}`,{method:'PUT',body:JSON.stringify({...draft,brief})}),
   saveBrand:(profile:BrandProfile)=>request<BrandProfile>('/api/brand-profile',{method:'PUT',body:JSON.stringify(profile)}),
   deleteBrand:(workspaceId:string)=>request<{ok:boolean}>(`/api/organizations/${workspaceId}/brand-profile`,{method:'DELETE'}),
 

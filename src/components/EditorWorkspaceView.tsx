@@ -585,7 +585,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
           {activeTabSide === 'grounding' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <h4 style={{ fontSize: '0.92rem', fontWeight: 700 }}>Referensi Sumber Terverifikasi</h4>
+                <h4 style={{ fontSize: '0.92rem', fontWeight: 700 }}>Sumber RAG yang Ditemukan</h4>
                 <span className="grounding-badge verified">
                   <ShieldCheck size={12} /> RAG Only
                 </span>
@@ -593,7 +593,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
 
               {!currentVer?.citations?.length ? (
                 <div style={{ padding: '16px', borderRadius: '10px', background: 'var(--bg-tertiary)', textAlign: 'center', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                  No official source references are associated with this draft.
+                  Tidak ada kutipan sumber yang dikembalikan atau ditemukan lewat pencarian RAG untuk draf ini.
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -632,10 +632,10 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
                 <div style={{ padding: '14px', borderRadius: '12px', background: 'rgba(244, 63, 94, 0.1)', border: '1px solid rgba(244, 63, 94, 0.35)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#fb7185', fontSize: '0.8rem', fontWeight: 700, marginBottom: '6px' }}>
                     <AlertTriangle size={14} />
-                    <span>Claims Not Supported by Knowledge Base</span>
+                    <span>Catatan Grounding dan Verifikasi</span>
                   </div>
                   <p style={{ fontSize: '0.75rem', color: 'var(--text-primary)', lineHeight: 1.4 }}>
-                    The system detected the following claims lack references in active documents:
+                      Catatan berikut menjelaskan keterbatasan dukungan RAG atau status draf; ini bukan hasil verifikasi semantik otomatis untuk setiap kalimat.
                   </p>
                   <ul style={{ paddingLeft: '16px', marginTop: '6px', fontSize: '0.75rem', color: '#fb7185' }}>
                     {currentVer.unsupportedClaims.map((claim, idx) => (
@@ -643,7 +643,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
                     ))}
                   </ul>
                   <div style={{ marginTop: '8px', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                    * Reviewers will see this warning when inspecting the draft.
+                    Peninjau tetap perlu mencocokkan klaim dengan kutipan dokumen aktif sebelum publikasi.
                   </div>
                 </div>
               )}
@@ -684,7 +684,9 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
                 <div>
                   <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>Dukungan Fakta (Grounding)</div>
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                    {liveCheck.factualGrounding.groundedClaims} dari {liveCheck.factualGrounding.totalClaims} klaim didukung sumber.
+                    {liveCheck.factualGrounding.passed
+                      ? 'Sumber rujukan tersedia; cocokkan setiap klaim dengan kutipan karena pemeriksaan otomatis bukan verifikasi semantik.'
+                      : `${liveCheck.factualGrounding.ungroundedClaims.length} catatan perlu diverifikasi; sumber yang terlampir bukan bukti bahwa semua klaim sudah cocok.`}
                   </div>
                 </div>
                 <span className={`score-badge ${liveCheck.factualGrounding.passed ? 'score-high' : 'score-low'}`}>

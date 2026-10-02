@@ -89,15 +89,16 @@ export async function listWorkspaceDrafts(workspaceId:string) {
 export async function listBootstrap(workspaceId?:string) {
   const workspacesResult=await pool.query('SELECT id,name,code,sector,city,tagline,primary_color AS "primaryColor",accent_color AS "accentColor",description FROM organizations ORDER BY created_at');
   const targetWorkspaceId=workspaceId || workspacesResult.rows[0]?.id;
-  if(!targetWorkspaceId) return {workspaces:[],users:[],documents:[],drafts:[],auditLogs:[],brandProfile:null};
-  const [users,documents,drafts,auditLogs,brand] = await Promise.all([
+  if(!targetWorkspaceId) return {workspaces:[],users:[],documents:[],drafts:[],briefs:[],auditLogs:[],brandProfile:null};
+  const [users,documents,drafts,briefs,auditLogs,brand] = await Promise.all([
     pool.query('SELECT u.id,u.name,u.email,u.avatar,u.title,u.department,m.organization_id AS "workspaceId",m.role FROM users u JOIN memberships m ON m.user_id=u.id WHERE m.organization_id=$1 AND m.active',[targetWorkspaceId]),
     pool.query(`SELECT s.id,s.organization_id AS "workspaceId",s.title,s.category,s.owner,s.version,s.effective_date AS "effectiveDate",s.status,s.upload_date AS "uploadDate",s.file_size AS "fileSize",s.summary,COALESCE(jsonb_agg(jsonb_build_object('id',c.id,'documentId',c.source_id,'section',c.section,'page',c.page,'content',c.content,'keywords',c.keywords)) FILTER (WHERE c.id IS NOT NULL),'[]') chunks FROM knowledge_sources s LEFT JOIN knowledge_chunks c ON c.source_id=s.id WHERE s.organization_id=$1 GROUP BY s.id`,[targetWorkspaceId]),
     listWorkspaceDrafts(targetWorkspaceId),
+    pool.query('SELECT data FROM content_briefs WHERE organization_id=$1 ORDER BY created_at DESC',[targetWorkspaceId]),
     pool.query('SELECT id::text,organization_id AS "workspaceId",created_at AS timestamp,actor_name AS "actorName",actor_role AS "actorRole",action,object_type AS "objectType",object_id AS "objectId",object_name AS "objectName",details FROM audit_events WHERE organization_id=$1 ORDER BY created_at DESC',[targetWorkspaceId]),
     pool.query('SELECT data FROM brand_profiles WHERE organization_id=$1',[targetWorkspaceId])
   ]);
-  return { workspaces:workspacesResult.rows, users:users.rows, documents:documents.rows, drafts, auditLogs:auditLogs.rows, brandProfile:brand.rows[0]?.data ?? null };
+  return { workspaces:workspacesResult.rows, users:users.rows, documents:documents.rows, drafts, briefs:briefs.rows.map(row=>row.data), auditLogs:auditLogs.rows, brandProfile:brand.rows[0]?.data ?? null };
 }
 
 export async function replaceDraft(draft:any) {
@@ -106,6 +107,11 @@ export async function replaceDraft(draft:any) {
     await client.query('BEGIN');
     const member=await client.query('SELECT u.name,m.role FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.organization_id=$1 AND m.user_id=$2 AND m.active',[draft.workspaceId,draft.createdBy]);
     if(!member.rowCount) throw new Error('Creator is not a member of this workspace');
+    if(draft.brief){
+      if(draft.brief.id!==draft.briefId||draft.brief.workspaceId!==draft.workspaceId||draft.brief.createdBy!==draft.createdBy) throw new Error('Brief does not match the draft workspace, ID, or creator');
+      const savedBrief=await client.query(`INSERT INTO content_briefs(id,organization_id,created_by,data) VALUES($1,$2,$3,$4::jsonb) ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data WHERE content_briefs.organization_id=EXCLUDED.organization_id RETURNING id`,[draft.brief.id,draft.workspaceId,draft.createdBy,JSON.stringify(draft.brief)]);
+      if(!savedBrief.rowCount) throw new Error('Brief ID already belongs to another workspace');
+    }
     await client.query(`INSERT INTO content_drafts(id,organization_id,brief_id,title,format,status,current_version,created_by,creator_name,visual_asset,approval_info,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12,$13) ON CONFLICT(id) DO UPDATE SET title=EXCLUDED.title,status=EXCLUDED.status,current_version=EXCLUDED.current_version,visual_asset=EXCLUDED.visual_asset,approval_info=EXCLUDED.approval_info,updated_at=EXCLUDED.updated_at`,[draft.id,draft.workspaceId,draft.briefId||null,draft.title,draft.format,draft.status,draft.currentVersionon,draft.createdBy,draft.creatorName,JSON.stringify(draft.visualAsset||null),JSON.stringify(draft.approvalInfo||null),draft.createdAt,draft.updatedAt]);
     await client.query('DELETE FROM draft_versions WHERE draft_id=$1',[draft.id]);
     for(const version of draft.versions){

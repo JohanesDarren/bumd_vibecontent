@@ -12,6 +12,7 @@ test('empty database returns empty bootstrap without mock fallback', async () =>
   assert.deepEqual(data.users, []);
   assert.deepEqual(data.documents, []);
   assert.deepEqual(data.drafts, []);
+  assert.deepEqual(data.briefs, []);
   assert.deepEqual(data.auditLogs, []);
   assert.equal(data.brandProfile, null);
 });

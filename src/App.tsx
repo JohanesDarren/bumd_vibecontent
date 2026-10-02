@@ -194,7 +194,7 @@ export function App() {
       creatorName: activeUser.name
     };
 
-    await apiService.saveDraft(newDraft);
+    await apiService.saveDraft(newDraft, brief);
     const refreshed = await apiService.bootstrap(activeWorkspace.id);
     setDrafts(refreshed.drafts);
     setAuditLogs(refreshed.auditLogs);

@@ -67,6 +67,7 @@ test('bootstrap returns workspaces, users, and empty lists', async () => {
   assert.equal(json.users.length, 1);
   assert.deepEqual(json.documents, []);
   assert.deepEqual(json.drafts, []);
+  assert.deepEqual(json.briefs, []);
   assert.deepEqual(json.auditLogs, []);
   assert.equal(json.brandProfile, null);
 });
@@ -118,6 +119,13 @@ test('draft PUT saves full draft with versions, comments, and approval', async (
   const now = new Date().toISOString();
   const saved = await api('PUT', `/api/drafts/${draft.id}`, {
     ...draft,
+    briefId: 'brf-ept-1',
+    brief: {
+      id: 'brf-ept-1', workspaceId, title: 'Brief tersimpan', targetAudience: 'Warga',
+      format: 'copy_caption', channel: 'Instagram', tone: 'Ramah',
+      keyMessage: 'Informasi resmi', cta: 'Hubungi kanal resmi',
+      language: 'Bahasa Indonesia', createdAt: now, createdBy: adminId
+    },
     title: 'Endpoint Draft v2',
     status: 'menunggu_review',
     currentVersionon: 2,
@@ -135,6 +143,9 @@ test('draft PUT saves full draft with versions, comments, and approval', async (
   const recheck = await api('GET', `/api/workspaces/${workspaceId}/drafts`);
   assert.equal(recheck.json[0].versions.length, 2);
   assert.equal(recheck.json[0].comments[0].text, 'note');
+  const bootstrap = await api('GET', `/api/bootstrap?workspaceId=${workspaceId}`);
+  assert.equal(bootstrap.json.briefs[0].id, 'brf-ept-1');
+  assert.equal(bootstrap.json.briefs[0].keyMessage, 'Informasi resmi');
 });
 
 test('brand profile PUT rejects missing workspaceId with 400', async () => {

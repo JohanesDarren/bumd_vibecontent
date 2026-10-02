@@ -48,37 +48,6 @@ interface BriefStudioViewProps {
   onDeleteDraft?: (draftId: string) => void;
 }
 
-/** Strip analyst-style artifacts from a raw RAG answer before it becomes copy. */
-function sanitizeRagAnswer(raw: string): string {
-  let text = raw
-    .replace(/\[\d+\]/g, ''); // citation markers like [1], [2]
-
-  // The backend model sometimes emits several attempts: a truncated draft,
-  // then its internal planning notes, then the final draft. When a markdown
-  // heading appears more than once, keep only the last (final) attempt.
-  const headingMatches = [...text.matchAll(/^#{1,3} .*$/gm)];
-  if (headingMatches.length > 1) {
-    const lastHeading = headingMatches[headingMatches.length - 1];
-    text = text.slice(lastHeading.index ?? 0);
-  }
-
-  return text
-    .split('\n')
-    .filter(line => {
-      const t = line.trim();
-      if (!t) return true;
-      // Drop meta commentary / chain-of-thought lines about the task itself.
-      return !/^(tidak ditemukan dalam konteks|catatan:|disclaimer|perhitungan, bukan)/i.test(t)
-        && !/^(enough\b|ensure\b|also avoid|i'?ll\b|rule \d|actually\b|borderline\b|done\s*[—-]|let me\b|wait[,. ]|step \d|note to self|final answer|revised? draft|draft \d)/i.test(t);
-    })
-    .join('\n')
-    // Remove stray foreign-script characters (e.g. Hangul/CJK decoding noise)
-    // and any punctuation glued to them; Indonesian copy must be Latin-only.
-    .replace(/[\u3000-\u9fff\uac00-\ud7af\uff00-\uffef]/g, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
-
 /** Map a live RAG search hit to the citation shape the workspace expects. */
 function toCitation(hit: RagHit, index: number): GroundedCitation {
   const content = typeof hit.content === 'string' ? hit.content.trim() : '';
@@ -91,8 +60,8 @@ function toCitation(hit: RagHit, index: number): GroundedCitation {
     section: hit.section || 'Knowledge Base',
     page: hit.page ?? undefined,
     excerpt: content,
-    relevanceScore: Math.min(99, Math.max(60, relevanceScore)),
-    verified: true,
+    relevanceScore: Math.min(100, Math.max(0, relevanceScore)),
+    verified: false,
     claimExcerpt: content.slice(0, 80) + (content.length > 80 ? '...' : '')
   };
 }
@@ -118,6 +87,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
   const [selectedCta, setSelectedCta] = useState(brandProfile.officialCTAs[0]?.text || '');
   const [limitations, setLimitations] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
 
 
@@ -207,58 +177,90 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
       createdBy: activeUser.id
     };
 
-    // The remote RAG API is the only knowledge source. ALL brief parameters are
-    // sent as structured writing guidance so the copy follows audience, tone,
-    // channel, CTA and limitations — not just the raw title + key message.
-    const FORMAT_LABELS: Record<ContentFormat, string> = {
-      copy_caption: 'Copy & Caption Media Sosial (Feed / Carousel)',
-      teks_promosi: 'Teks Promosi Resmi & Siaran Pers',
-      naskah_singkat: 'Naskah Video Pendek 9:16 (Reels/TikTok/Shorts)',
-      brief_visual: 'Brief Visual & Panduan Infografis'
-    };
-    const briefGuidance = [
-      `Judul konten: ${title}`,
-      campaign ? `Nama kampanye/program: ${campaign}` : '',
-      `Format output: ${FORMAT_LABELS[format]}`, channel ? `Kanal distribusi: ${channel}` : '',
-      targetAudience ? `Target audiens: ${targetAudience}` : '',
-      tone ? `Nada suara: ${tone}` : '',
-      `Pesan kunci & fakta yang harus disampaikan: ${keyMessage}`,
-      selectedCta ? `CTA resmi: ${selectedCta}` : '',
-      limitations ? `Batasan/panduan gaya (jangan disalin ke naskah): ${limitations}` : ''
+    setGenerationError(null);
+    const structuredQuery = [
+      `Judul: ${title}`,
+      campaign ? `Kampanye/Program: ${campaign}` : '',
+      `Format Output: ${format}`,
+      channel ? `Kanal Distribusi: ${channel}` : '',
+      targetAudience ? `Target Audiens: ${targetAudience}` : '',
+      tone ? `Nada Suara: ${tone}` : '',
+      selectedCta ? `Call to Action (CTA): ${selectedCta}` : '',
+      limitations ? `Batasan/Syarat Penting: ${limitations}` : '',
+      `Pesan Kunci & Fakta:\n${keyMessage}`
     ].filter(Boolean).join('\n');
-    let remote: RemoteGrounding;
-    try {
-      const rag = await apiService.ragQuery(activeWorkspace.id, briefGuidance, 5);
-      const citations = (rag.sources || [])
-        .filter(hit => typeof hit.content === 'string' && hit.content.trim()) // skip empty chunks
-        .map(toCitation);
-      const unsupported = rag.grounded
-        ? []
-        : [rag.no_answer_reason
-            ? `Knowledge base belum dapat mem-grounding klaim ini (${rag.no_answer_reason}).`
-            : 'Klaim faktual dalam brief belum ditemukan pada dokumen aktif.'];
-      remote = { answer: sanitizeRagAnswer(rag.answer || ''), citations, unsupportedClaims: unsupported, grounded: Boolean(rag.grounded), model: rag.model };
-      setRagModel(rag.model || null);
-      setUsedRemoteRag(true);
-    } catch (error) {
-      console.error('ragQuery failed:', error);
+    const retrievalQuery = [
+      campaign,
+      title,
+      keyMessage,
+      limitations
+    ].filter(Boolean).join('\n');
+
+    let remote: RemoteGrounding = {
+      answer: '',
+      citations: [],
+      unsupportedClaims: [],
+      grounded: false
+    };
+    if (ragService && (!ragService.configured || !ragService.ready)) {
+      const reason = ragService.error || 'Layanan RAG belum siap.';
+      remote.unsupportedClaims = [`${reason} Isi brief disimpan sebagai draf yang perlu diverifikasi.`];
       setUsedRemoteRag(false);
       setRagModel(null);
-      setIsGenerating(false);
-      alert('Content generation is unavailable because the RAG service could not be reached. Please try again later.');
-      return;
+      setGenerationError('Layanan RAG belum siap. Draf cadangan tetap dibuat dari brief dan ditandai untuk verifikasi.');
+    } else {
+      try {
+        const [rag, retrieval] = await Promise.all([
+          apiService.ragQuery(activeWorkspace.id, structuredQuery, 5),
+          apiService.ragSearch(activeWorkspace.id, retrievalQuery, 5)
+        ]);
+        const querySources = (rag.sources || [])
+          .filter(hit => typeof hit.content === 'string' && hit.content.trim())
+          .map(toCitation);
+        const searchSources = (retrieval.results || [])
+          .filter(hit => typeof hit.content === 'string' && hit.content.trim())
+          .map(toCitation);
+        const citations = querySources.length ? querySources : searchSources;
+        const unsupported = rag.grounded
+          ? []
+          : [rag.no_answer_reason
+              ? `Knowledge base belum dapat mem-grounding klaim ini (${rag.no_answer_reason}).`
+              : 'Klaim faktual dalam brief belum ditemukan pada dokumen aktif.'];
+        if (rag.grounded && !citations.length) {
+          unsupported.push('Layanan RAG menyatakan grounded, tetapi tidak mengembalikan sumber resmi dari query maupun pencarian. Periksa indexing dan sinkronisasi knowledge base.');
+        }
+        remote = { answer: rag.answer || '', citations, unsupportedClaims: unsupported, grounded: Boolean(rag.grounded), model: rag.model };
+        setRagModel(rag.model || null);
+        setUsedRemoteRag(true);
+        if (!rag.grounded || !citations.length) {
+          const reason = rag.no_answer_reason || (!citations.length
+            ? 'Pencarian tidak menemukan potongan sumber resmi yang dapat ditampilkan.'
+            : 'Jawaban tidak memperoleh dukungan yang cukup dari dokumen resmi.');
+          setGenerationError(`Copy belum dapat dianggap berbasis fakta resmi: ${reason} Draf akan disusun dari input Anda dan ditandai untuk verifikasi. Pastikan dokumen terkait berstatus aktif dan sudah tersinkron ke knowledge base workspace ini.`);
+        }
+      } catch (error) {
+        console.error('ragQuery failed:', error);
+        const reason = error instanceof Error ? error.message : 'Layanan RAG tidak dapat dihubungi.';
+        remote.unsupportedClaims = [`${reason} Isi brief disimpan sebagai draf yang perlu diverifikasi.`];
+        setUsedRemoteRag(false);
+        setRagModel(null);
+        setGenerationError('Layanan RAG gagal. Draf cadangan dibuat dari brief, tanpa mengarang fakta, dan perlu diverifikasi sebelum dipublikasikan.');
+      }
     }
 
     const output = generateContentFromBrief(brief, brandProfile, [], activeWorkspace.id, remote);
-    setIsGenerating(false);
-    streamText(output.content);
+    if (remote.grounded && output.qualityCheck.briefCompliance.details !== 'Pesan kunci dan CTA sesuai dengan brief.') {
+      setGenerationError(`Jawaban RAG tidak lolos pemeriksaan kualitas dan tidak digunakan. ${output.qualityCheck.briefCompliance.details} Draf pengganti berasal dari brief dan perlu diverifikasi.`);
+    }
 
-    // Persist the grounded draft so it lands in the Editor / Library.
     try {
       await onGenerateDraft(brief, output);
     } catch (error) {
       console.error('Failed to save generated draft', error);
+      setGenerationError(`Draf tidak berhasil disimpan: ${error instanceof Error ? error.message : 'kesalahan tidak diketahui'}. Salin teks dari editor sebelum meninggalkan halaman.`);
     }
+    setIsGenerating(false);
+    streamText(output.content);
   };
 
 
@@ -520,6 +522,11 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
 
         {/* ─── Right: Editor Canvas ─── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0', position: 'sticky', top: '92px' }}>
+          {generationError && (
+            <div role="alert" className="card-panel" style={{ marginBottom: '12px', padding: '12px 16px', color: 'var(--status-warning-text, #92400e)', borderColor: 'var(--status-warning-border, #f59e0b)' }}>
+              {generationError}
+            </div>
+          )}
           {/* ─── Rich Text Editor Canvas ─── */}
           <div className="brief-editor-canvas-wrapper">
             {/* Editor Toolbar */}
