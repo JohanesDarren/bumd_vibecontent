@@ -9,7 +9,6 @@ import {
   VisualAsset 
 } from '../types';
 import { 
-  Sparkles, 
   Download, 
   Copy, 
   ShieldCheck, 
@@ -193,61 +192,20 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
             </div>
           </div>
 
-          {/* Headline & Subheadline */}
-          <div className="form-group">
-            <label className="form-label">Headline Text <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span></label>
-            <input 
-              type="text" 
-              className="form-input" 
-              value={visual.headline}
-              onChange={e => updateVisual({ headline: e.target.value })}
-            />
-          </div>
 
-          <div className="form-group">
-            <label className="form-label">Sub-headline Text <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span></label>
-            <textarea 
-              className="form-textarea" 
-              rows={2}
-              value={visual.subheadline}
-              onChange={e => updateVisual({ subheadline: e.target.value })}
-            />
-          </div>
-
-          {/* Badge & CTA */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-            <div className="form-group">
-              <label className="form-label">Badge Text <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span></label>
-              <input 
-                type="text" 
-                className="form-input" 
-                value={visual.badgeText}
-                onChange={e => updateVisual({ badgeText: e.target.value })}
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">CTA Text <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span></label>
-              <input 
-                type="text" 
-                className="form-input" 
-                value={visual.ctaText}
-                onChange={e => updateVisual({ ctaText: e.target.value })}
-              />
-            </div>
-          </div>
 
           {/* Free-form creative direction */}
           <div className="form-group">
-            <label className="form-label">Creative Direction</label>
+            <label className="form-label">Arahan Kreatif</label>
             <textarea
               className="form-textarea"
               rows={5}
               value={visual.visualPrompt}
               onChange={e => updateVisual({ visualPrompt: e.target.value })}
-              placeholder="Describe the visual you want: mood, composition, subject, lighting, art direction, camera angle, materials, and colors…"
+              placeholder="Jelaskan visual yang Anda inginkan: suasana, komposisi, subjek, pencahayaan, arah seni, sudut kamera, dan warna…"
             />
             <div style={{ marginTop: '6px', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-              Cloudflare FLUX.1 schnell: 2048 characters total including copy and palette. Text accuracy is not guaranteed; review before publishing.
+              Cloudflare FLUX.1 schnell: Maksimal 2048 karakter. Akurasi teks pada gambar tidak dijamin; periksa kembali sebelum dipublikasikan.
             </div>
           </div>
 
@@ -258,9 +216,9 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
               <span>Brand Asset Compliance:</span>
             </div>
             <ul style={{ paddingLeft: '18px', display: 'flex', flexDirection: 'column', gap: '4px', color: 'var(--text-secondary)' }}>
-              <li>AI-generated raster image; no automatic official logo placement.</li>
-              <li>FLUX receives the requested palette ({activeWorkspace.primaryColor}).</li>
-              <li>Copy and disclaimer are requested in the image, not typeset. Verify spelling and brand compliance.</li>
+              <li>Gambar raster yang dihasilkan AI; tidak ada penempatan logo resmi otomatis.</li>
+              <li>Sistem menerima palet warna yang diminta ({activeWorkspace.primaryColor}).</li>
+              <li>Periksa kesesuaian merek dengan panduan visual BUMD sebelum digunakan.</li>
             </ul>
           </div>
         </div>
@@ -283,7 +241,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
               transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
             }}
           >
-            {generatedImageUrl ? <img src={generatedImageUrl} alt={visual.visualPrompt || 'Cloudflare FLUX generated image'} onLoad={() => setImageLoaded(true)} onError={() => {setMediaError('Image preview could not be loaded.');setImageLoaded(false);}} style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'contain'}} /> : <p style={{color:'#fff'}}>No generated artwork. Enter creative direction, then generate an image.</p>}
+            {generatedImageUrl ? <img src={generatedImageUrl} alt={visual.visualPrompt || 'Cloudflare FLUX generated image'} onLoad={() => setImageLoaded(true)} onError={() => {setMediaError('Gagal memuat pratinjau gambar.');setImageLoaded(false);}} style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'contain'}} /> : <p style={{color:'#fff', textAlign: 'center'}}>Belum ada artwork. Masukkan arahan kreatif, lalu buat gambar AI.</p>}
 
           </div>
 
@@ -293,17 +251,16 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
               <span>{copiedPrompt ? 'Prompt Tersalin!' : 'Salin Prompt AI'}</span>
             </button>
             <button className="btn btn-primary" onClick={handleGenerate} disabled={isGenerating}>
-              <Sparkles size={16} />
-              <span>{isGenerating ? 'FLUX membuat gambar…' : generatedImageUrl ? 'Desain Ulang' : 'Buat Gambar AI'}</span>
+              <span>{isGenerating ? 'Membuat gambar AI…' : generatedImageUrl ? 'Desain Ulang' : 'Buat Gambar AI'}</span>
             </button>
           </div>
           {generationError && <div style={{ color: '#fb7185', fontSize: '0.8rem' }}>{generationError}</div>}
           {mediaError && <div style={{ color: '#fb7185', fontSize: '0.8rem' }}>{mediaError}</div>}
           {generatedImageUrl && !imageLoaded && <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Loading preview…</div>}
           {generatedImageUrl && imageLoaded && <a className="btn btn-secondary" href={generatedImageUrl} download="flux-image.jpg"><Download size={16}/> Download Image JPEG</a>}
-          <p role="status">Video unavailable: FLUX.1 schnell generates still images only.</p>
+          <p role="status">Video tidak tersedia: FLUX.1 schnell hanya dapat menghasilkan gambar statis.</p>
           {metadata && <p style={{fontSize:12}}>{metadata}</p>}
-          <div style={{fontSize:'0.8rem',color:'var(--text-muted)'}}>Cloudflare Workers AI · FLUX.1 schnell. Free-tier quota applies; no automatic retry or plan upgrade. Aspect ratio requests guide composition; the downloaded JPEG retains the model’s native dimensions. Downloads unlock after preview loads. Outputs stay in this session; download to retain them.</div>
+          <div style={{fontSize:'0.8rem',color:'var(--text-muted)'}}>Cloudflare Workers AI · FLUX.1 schnell. Kuota gratis berlaku; tidak ada sistem retri otomatis. Proporsi gambar mengatur komposisi karya; JPEG yang diunduh mempertahankan dimensi asli dari model. Hasil hanya tersimpan dalam sesi ini; segera unduh untuk menyimpannya.</div>
 
         </div>
       </div>
