@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 
 
 import { apiService } from '../services/apiService';
+import { composeVisualImage, renderVisualVideo } from '../services/visualComposition';
 import { 
   ContentDraft, 
   BrandProfile, 
@@ -53,12 +54,17 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(draft?.visualAsset?.generatedImageUrl || null);
 
   const [metadata, setMetadata] = useState('');
+  const [imagePrompt, setImagePrompt] = useState('');
+  const [videoUrl, setVideoUrl] = useState('');
+  const [isRenderingVideo, setIsRenderingVideo] = useState(false);
 
 
 
   const version = useRef(0);
-  useEffect(() => () => { version.current++; }, []);
-  const clearOutput = () => { version.current++; setGeneratedImageUrl(null); setImageLoaded(false); setMetadata(''); };
+  const generatedBlobUrl = useRef<string | null>(null);
+  const videoBlobUrl = useRef<string | null>(null);
+  useEffect(() => () => { version.current++; if(generatedBlobUrl.current)URL.revokeObjectURL(generatedBlobUrl.current);if(videoBlobUrl.current)URL.revokeObjectURL(videoBlobUrl.current); }, []);
+  const clearOutput = () => { version.current++; if(generatedBlobUrl.current)URL.revokeObjectURL(generatedBlobUrl.current);if(videoBlobUrl.current)URL.revokeObjectURL(videoBlobUrl.current);generatedBlobUrl.current=null;videoBlobUrl.current=null;setGeneratedImageUrl(null);setVideoUrl('');setImageLoaded(false);setMetadata('');setImagePrompt(''); };
   const [imageLoaded, setImageLoaded] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState('');
@@ -101,10 +107,23 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
     try {
       const result=await apiService.generateVisual({workspaceId:activeWorkspace.id,prompt:visual.visualPrompt,aspectRatio:visual.aspectRatio,headline:visual.headline,subheadline:visual.subheadline,badgeText:visual.badgeText,ctaText:visual.ctaText,disclaimer:visual.disclaimer,primaryColor:visual.primaryColor,accentColor:visual.accentColor});
       if(requestVersion!==version.current)return;
-      setGeneratedImageUrl(result.imageUrl);
-      setMetadata(`${result.provider} · ${result.model} · JPEG`);
+      const composed = await composeVisualImage(result.imageUrl, visual);
+      if(requestVersion!==version.current)return;
+      const composedUrl=URL.createObjectURL(composed);
+      generatedBlobUrl.current=composedUrl;
+      setGeneratedImageUrl(composedUrl);
+      setMetadata(`${result.llmModel} → ${result.model} · ${visual.aspectRatio} PNG · ${result.steps} steps`);
+      setImagePrompt(result.imagePrompt);
     } catch(error) {if(requestVersion===version.current)setGenerationError(error instanceof Error?error.message:'Visual design failed');}
     finally {setIsGenerating(false);}
+  };
+
+  const handleRenderVideo=async()=>{
+    if(!generatedImageUrl)return;
+    setIsRenderingVideo(true);setMediaError('');
+    try{const blob=await renderVisualVideo(generatedImageUrl,visual);if(videoBlobUrl.current)URL.revokeObjectURL(videoBlobUrl.current);const url=URL.createObjectURL(blob);videoBlobUrl.current=url;setVideoUrl(url);}
+    catch(error){setMediaError(error instanceof Error?error.message:'Local video rendering failed.');}
+    finally{setIsRenderingVideo(false);}
   };
 
   // Dimension helpers for preview
@@ -209,6 +228,12 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
             </div>
           </div>
 
+          <div className="form-group"><label className="form-label">Headline (teks persis)</label><input className="form-input" maxLength={120} value={visual.headline} onChange={e=>updateVisual({headline:e.target.value})} placeholder="Teks utama" /></div>
+          <div className="form-group"><label className="form-label">Subheadline</label><textarea className="form-textarea" rows={2} maxLength={240} value={visual.subheadline} onChange={e=>updateVisual({subheadline:e.target.value})} placeholder="Teks pendukung" /></div>
+          <div className="form-group"><label className="form-label">Badge / label</label><input className="form-input" maxLength={48} value={visual.badgeText} onChange={e=>updateVisual({badgeText:e.target.value})} /></div>
+          <div className="form-group"><label className="form-label">CTA</label><input className="form-input" maxLength={64} value={visual.ctaText} onChange={e=>updateVisual({ctaText:e.target.value})} placeholder="Contoh: Daftar sekarang" /></div>
+          <div className="form-group"><label className="form-label">Disclaimer</label><textarea className="form-textarea" rows={2} maxLength={160} value={visual.disclaimer} onChange={e=>updateVisual({disclaimer:e.target.value})} /></div>
+
           {/* Brand Compliance Checklist */}
           <div style={{ padding: '14px', borderRadius: '12px', background: 'var(--bg-tertiary)', border: '1px solid var(--border-subtle)', fontSize: '0.78rem' }}>
             <div style={{ fontWeight: 700, color: 'var(--accent-emerald)', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
@@ -257,9 +282,10 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
           {generationError && <div style={{ color: '#fb7185', fontSize: '0.8rem' }}>{generationError}</div>}
           {mediaError && <div style={{ color: '#fb7185', fontSize: '0.8rem' }}>{mediaError}</div>}
           {generatedImageUrl && !imageLoaded && <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Loading preview…</div>}
-          {generatedImageUrl && imageLoaded && <a className="btn btn-secondary" href={generatedImageUrl} download="flux-image.jpg"><Download size={16}/> Download Image JPEG</a>}
-          <p role="status">Video tidak tersedia: FLUX.1 schnell hanya dapat menghasilkan gambar statis.</p>
-          {metadata && <p style={{fontSize:12}}>{metadata}</p>}
+          {generatedImageUrl && imageLoaded && <a className="btn btn-secondary" href={generatedImageUrl} download="visual-studio.png"><Download size={16}/> Download Composed PNG</a>}
+          {generatedImageUrl && imageLoaded && <button className="btn btn-secondary" onClick={handleRenderVideo} disabled={isRenderingVideo}>{isRenderingVideo?'Rendering local video…':'Render 6s video (local)'}</button>}
+          {videoUrl && <><video controls src={videoUrl} style={{maxWidth:'100%',maxHeight:360}}/><a className="btn btn-secondary" href={videoUrl} download="visual-studio.webm"><Download size={16}/> Download WebM</a><p>Locally rendered video from this still image; not AI-generated video.</p></>}
+          {metadata && <><p style={{fontSize:12}}>{metadata}</p><details style={{maxWidth:'100%',fontSize:12}}><summary>View prompt sent to image model</summary><pre style={{whiteSpace:'pre-wrap',maxWidth:'100%'}}>{imagePrompt}</pre></details></>}
           <div style={{fontSize:'0.8rem',color:'var(--text-muted)'}}>Cloudflare Workers AI · FLUX.1 schnell. Kuota gratis berlaku; tidak ada sistem retri otomatis. Proporsi gambar mengatur komposisi karya; JPEG yang diunduh mempertahankan dimensi asli dari model. Hasil hanya tersimpan dalam sesi ini; segera unduh untuk menyimpannya.</div>
 
         </div>

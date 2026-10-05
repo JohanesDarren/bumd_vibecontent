@@ -6,9 +6,9 @@ async function designPrompt(account:string,token:string,input:Awaited<ReturnType
   const response=await fetch(`https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(account)}/ai/run/${llmModel}`,{
     method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
     body:JSON.stringify({messages:[
-      {role:'system',content:'You are an expert art director. Return only one detailed image-generation prompt in English. Describe a distinctive editorial illustration with specific composition, characters or objects, lighting, palette, textures, and visual depth. Never request words, letters, logos, UI or watermarks; leave uncluttered negative space for later typeset text.'},
-      {role:'user',content:`Creative brief: ${input.prompt}\nAspect ratio: ${input.aspectRatio}\nPrimary color: ${input.primaryColor||'choose suitable'}\nAccent color: ${input.accentColor||'choose suitable'}`}
-    ],max_tokens:220,temperature:0.8}),signal:AbortSignal.timeout(45000)
+      {role:'system',content:'You are a faithful image-prompt translator/editor. Return only one concise prompt in English, at most 80 words, with no preamble, quotes, heading, or explanation. Preserve every subject, action, object, place, style, and constraint in the user brief. If already English, only reorder or clarify wording; do not invent or infer any concrete details, including clothing, age, ethnicity, pose, expression, props, or background. Never change documentary photography into an advertisement or illustration. No words, letters, logos, UI, or watermarks.'},
+      {role:'user',content:`User brief (preserve the described scene; do not embellish): ${input.prompt}\nRequested composition: ${input.aspectRatio}. Primary color: ${input.primaryColor||'not specified'}. Accent color: ${input.accentColor||'not specified'}.`}
+    ],max_tokens:400,temperature:0.2}),signal:AbortSignal.timeout(45000)
   });
   const data:any=await response.json().catch(()=>null);
   const text=data?.result?.response || data?.result?.choices?.[0]?.message?.content;
@@ -26,14 +26,14 @@ export async function generateVisual(value:unknown) {
   let prompt:string;
   try { prompt=await designPrompt(account,token,input); }
   catch(error) { if(error instanceof VisualError) throw error; throw new VisualError(502,'CLOUDFLARE_LLM_ERROR','Cloudflare LLM request failed or timed out.'); }
-  prompt=[prompt,`Portrait/square/landscape composition: ${input.aspectRatio}.`, 'Absolutely no text, lettering, logos, or watermark.'].join('\\n');
+  prompt=[`Authoritative scene brief; depict exactly and add no subjects, clothing, actions, or props: ${input.prompt}`,`LLM art direction: ${prompt}`,`Requested composition: ${input.aspectRatio}.`,'No text, lettering, logos, or watermarks.'].join('\n');
   if(prompt.length>2048) throw new VisualError(502,'CLOUDFLARE_LLM_PROMPT_TOO_LONG','LLM-designed prompt exceeded the image model limit.');
   let response:Response;
   try {
     // ponytail: one request, no retries/fallback; quota remains under the user's control.
     response=await fetch(`https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(account)}/ai/run/${imageModel}`,{
       method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
-      body:JSON.stringify({prompt,steps:4}),signal:AbortSignal.timeout(90000)
+      body:JSON.stringify({prompt,steps:8}),signal:AbortSignal.timeout(90000)
     });
   } catch { throw new VisualError(502,'CLOUDFLARE_UNAVAILABLE','Cloudflare request failed or timed out. No fallback image was generated.'); }
   let data:any;
@@ -47,5 +47,5 @@ export async function generateVisual(value:unknown) {
   if(typeof image!=='string' || !image || image.length>30_000_000 || image.length%4!==0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(image)) throw new VisualError(502,'INVALID_CLOUDFLARE_IMAGE','Cloudflare returned missing or malformed image data.');
   const bytes=Buffer.from(image,'base64');
   if(bytes.length<8 || bytes[0]!==255 || bytes[1]!==216 || bytes[2]!==255 || bytes[bytes.length-2]!==255 || bytes[bytes.length-1]!==217) throw new VisualError(502,'INVALID_CLOUDFLARE_IMAGE','Cloudflare did not return the documented JPEG image.');
-  return {imageUrl:`data:image/jpeg;base64,${image}`,provider:'Cloudflare Workers AI',model:imageModel,llmModel,fallback:false as const,format:'image/jpeg',prompt:input.prompt};
+  return {imageUrl:`data:image/jpeg;base64,${image}`,provider:'Cloudflare Workers AI',model:imageModel,llmModel,steps:8,fallback:false as const,format:'image/jpeg',prompt:input.prompt,imagePrompt:prompt,dimensions:'1024x1024'};
 }
