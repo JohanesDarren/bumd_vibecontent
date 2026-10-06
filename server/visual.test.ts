@@ -43,6 +43,8 @@ test('mock provider contract: errors, malformed results, success, no retries', a
     assert.equal(result.provider,'Cloudflare Workers AI');
     assert.equal(result.fallback,false);
     assert.equal('scene' in result,false);
+    const legacyPaletteResult=await generateVisual({...input,primaryColor:'',accentColor:'rgb(14, 165, 233)'});
+    assert.equal(legacyPaletteResult.imageUrl,`data:image/jpeg;base64,${image}`);
     const before=calls;
     await assert.rejects(generateVisual({...input,prompt:'x'.repeat(2049)}),{status:400,code:'INPUT_TOO_LONG'});
     assert.equal(calls,before);

@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 
 
 import { apiService } from '../services/apiService';
+import { normalizeHexColor } from '../services/visualScene';
 import { 
   ContentDraft, 
   BrandProfile, 
@@ -34,7 +35,9 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
   brandProfile,
   activeWorkspace
 }) => {
-  const defaultVisual: VisualAsset = draft?.visualAsset || {
+  const draftVisual = draft?.visualAsset;
+  const defaultVisual: VisualAsset = {
+    ...(draftVisual || {
     id: `vis-${draft?.id || 'new'}-${Date.now()}`,
     headline: draft?.title || '',
     subheadline: '',
@@ -46,6 +49,9 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
     disclaimer: brandProfile.officialDisclaimer || '',
     visualPrompt: `High quality corporate graphic design for ${activeWorkspace.name}, modern minimalist aesthetic, clean typography, official color accents`,
     templateStyle: 'corporate'
+    }),
+    primaryColor: normalizeHexColor(draftVisual?.primaryColor) || normalizeHexColor(activeWorkspace.primaryColor) || '#0284c7',
+    accentColor: normalizeHexColor(draftVisual?.accentColor) || normalizeHexColor(activeWorkspace.accentColor) || '#0ea5e9'
   };
 
   const [visual, setVisual] = useState<VisualAsset>(defaultVisual);

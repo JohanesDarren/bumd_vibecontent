@@ -241,9 +241,9 @@ export type ActiveTab =
   | 'brief_studio' 
   | 'editor'  | 'visual_studio' 
   | 'content_scheduling'
-
   | 'library' 
   | 'brand_profile' 
+  | 'knowledge_base'
   | 'user_management'
   | 'audit_log'
   | 'settings_help';

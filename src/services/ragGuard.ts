@@ -17,8 +17,9 @@ export function normalizeScore(score: unknown): number {
   return Math.min(1, Math.max(0, ratio));
 }
 
-/** Strip markdown/noise, drop meta prefixes, and cap length at a sentence boundary. */
-export function sanitizeAnswer(raw: string, maxSentences = 4, maxChars = 700): string {
+/** Strip markdown/noise, drop meta prefixes, and cap length at a sentence boundary
+ * while preserving the answer's line/paragraph structure (copy needs line breaks). */
+export function sanitizeAnswer(raw: string, maxSentences = 12, maxChars = 1800): string {
   if (!raw) return '';
   let text = raw
     .replace(/```[\s\S]*?```/g, ' ')            // fenced code blocks
@@ -30,7 +31,6 @@ export function sanitizeAnswer(raw: string, maxSentences = 4, maxChars = 700): s
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')     // markdown links
     .replace(/\r/g, '')
     .replace(/[ \t]+/g, ' ')
-    .replace(/\n{2,}/g, '\n')
     .trim();
 
   // Remove a leading meta label such as "Jawaban:" / "Answer:".
@@ -40,10 +40,19 @@ export function sanitizeAnswer(raw: string, maxSentences = 4, maxChars = 700): s
   // for sentence boundaries while splitting.
   const DOT = '\u0001';
   const protectedText = text.replace(/(\d)\.(?=\d)/g, `$1${DOT}`);
-  const sentences = (protectedText.match(/[^.!?\n]+[.!?]?/g) || [])
-    .map(part => part.trim())
-    .filter(Boolean);
-  let out = sentences.slice(0, maxSentences).join(' ').split(DOT).join('.');
+  const keptLines: string[] = [];
+  let used = 0;
+  for (const line of protectedText.split('\n')) {
+    if (used >= maxSentences) break;
+    const sentences = (line.match(/[^.!?\n]+[.!?]?/g) || [])
+      .map(part => part.trim())
+      .filter(Boolean);
+    if (!sentences.length) continue;
+    const kept = sentences.slice(0, maxSentences - used);
+    used += kept.length;
+    keptLines.push(kept.join(' '));
+  }
+  let out = keptLines.join('\n').split(DOT).join('.');
   if (!out) out = text;
   if (out.length > maxChars) {
     out = out.slice(0, maxChars).replace(/\s+\S*$/, '') + '…';
@@ -86,6 +95,12 @@ export interface RagGuardInput {
   threshold: number;
   maxSentences?: number;
   maxChars?: number;
+  /**
+   * Numeric claims already supplied by the brief itself. The model is allowed
+   * to reuse them, so they must not be flagged as unsupported merely because
+   * the retrieved excerpts happen not to contain them.
+   */
+  allowedNumericClaims?: string[];
 }
 
 export interface RagGuardResult {
@@ -108,7 +123,7 @@ export function guardRagResponse(input: RagGuardInput): RagGuardResult {
   const droppedSources = allSources.length - kept.length;
   const notes: string[] = [];
   if (droppedSources > 0) {
-    notes.push(`${droppedSources} sumber di bawah ambang relevansi ${(threshold * 100).toFixed(0)}% diabaikan.`);
+    notes.push(`${droppedSources} dokumen kurang cocok dengan isi dan tidak dipakai.`);
   }
 
   const sanitized = sanitizeAnswer(input.answer || '', input.maxSentences ?? 4, input.maxChars ?? 700);
@@ -117,9 +132,9 @@ export function guardRagResponse(input: RagGuardInput): RagGuardResult {
 
   if (!grounded) {
     const reason = input.grounded
-      ? 'Jawaban RAG tidak didukung sumber yang memenuhi ambang relevansi.'
-      : 'Klaim faktual tidak ditemukan pada dokumen aktif.';
-    notes.push('Tidak ada bukti yang cukup — draf memakai informasi fallback yang ditandai perlu verifikasi.');
+      ? 'Belum ada dokumen resmi yang cukup relevan untuk mendukung informasi ini.'
+      : 'Informasi ini belum ditemukan di dokumen resmi yang aktif.';
+    notes.push('Belum ada bukti yang cukup, jadi bagian ini ditandai perlu dicek dulu.');
     return {
       answer: FALLBACK_ANSWER,
       grounded: false,
@@ -132,11 +147,17 @@ export function guardRagResponse(input: RagGuardInput): RagGuardResult {
   }
 
   const excerpts = kept.map(hit => (typeof hit.content === 'string' ? hit.content : ''));
-  const unverified = extractNumericClaims(sanitized).filter(claim => !isClaimSupported(claim, excerpts));
+  const briefDigits = new Set(
+    (input.allowedNumericClaims || [])
+      .map(claim => digitsOnly(claim))
+      .filter(digits => digits.length >= 3)
+  );
+  const unverified = extractNumericClaims(sanitized)
+    .filter(claim => !briefDigits.has(digitsOnly(claim)) && !isClaimSupported(claim, excerpts));
   const unsupportedClaims: string[] = [];
   if (unverified.length > 0) {
-    unsupportedClaims.push(`Angka berikut pada jawaban tidak ditemukan pada sumber terpilih: ${unverified.join(', ')}.`);
-    notes.push(`${unverified.length} klaim angka tidak cocok dengan kutipan sumber dan ditandai perlu verifikasi.`);
+    unsupportedClaims.push(`Angka berikut belum ada di dokumen resmi, mohon dicek dulu: ${unverified.join(', ')}.`);
+    notes.push(`${unverified.length} angka belum cocok dengan dokumen sumber dan ditandai perlu dicek.`);
   }
 
   return {

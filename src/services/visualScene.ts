@@ -1,6 +1,13 @@
 export type VisualInput = { workspaceId: string; prompt: string; aspectRatio: '1:1'|'9:16'|'16:9'; headline?: string; subheadline?: string; badgeText?: string; ctaText?: string; disclaimer?: string; primaryColor?: string; accentColor?: string };
 export type Scene = { width:number; height:number; background:string; concept:string; shapes:{path:string;fill:string;motion:'none'|'float'|'sway'|'pulse'}[]; copy:string[] };
 const color = (v:unknown):string => { if(typeof v !== 'string' || !/^#[0-9a-f]{6}$/i.test(v)) throw new Error('Invalid scene color'); return v; };
+export function normalizeHexColor(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const hex = value.trim();
+  if (/^#[0-9a-f]{6}$/i.test(hex)) return hex;
+  if (/^#[0-9a-f]{3}$/i.test(hex)) return `#${[...hex.slice(1)].map(character => character + character).join('')}`;
+  return undefined;
+}
 export function validateVisualInput(value:unknown):VisualInput {
   if(!value || typeof value !== 'object') throw new Error('Visual input is required');
   const v=value as Record<string,unknown>;
@@ -12,7 +19,10 @@ export function validateVisualInput(value:unknown):VisualInput {
     if(v[key]!==undefined && (typeof v[key] !== 'string' || v[key].length>500)) throw new Error(`${key} must be at most 500 characters (not truncated)`);
     result[key]=(v[key] as string|undefined)||'';
   }
-  for(const key of ['primaryColor','accentColor'] as const) if(v[key]!==undefined) result[key]=color(v[key]);
+  for(const key of ['primaryColor','accentColor'] as const) {
+    const normalized = normalizeHexColor(v[key]);
+    if(normalized) result[key]=normalized;
+  }
   return result;
 }
 export function validateScene(value:unknown,input:VisualInput):Scene {

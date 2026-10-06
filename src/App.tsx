@@ -12,7 +12,7 @@ import {
   DraftVersionon, 
   ReviewComment
 } from './types';
-import { apiService } from './services/apiService';
+import { apiService, setAuthToken } from './services/apiService';
 import { generateContentFromBrief, GeneratedOutput } from './services/ragEngine';
 import { AppSettings, DEFAULT_SETTINGS, normalizeSettings } from './services/appSettings';
 
@@ -28,6 +28,7 @@ import { VisualStudioView } from './components/VisualStudioView';
 import { LibraryView } from './components/LibraryView';
 
 import { BrandProfileView } from './components/BrandProfileView';
+import { KnowledgeBaseView } from './components/KnowledgeBaseView';
 import { AuditLogView } from './components/AuditLogView';
 import { ExportModal } from './components/ExportModal';
 import { LoginAccessView } from './components/LoginAccessView';
@@ -95,6 +96,33 @@ export function App() {
   };
 
   useEffect(() => {
+    // Check for saved token and restore session
+    const token = localStorage.getItem('vibecontent_token');
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (payload.exp > Date.now()) {
+          const user = { id: payload.id, name: payload.name, email: payload.email, workspaces: payload.workspaces };
+          setAuthUser(user as any);
+          setAuthenticated(true);
+          const savedWsId = localStorage.getItem('vibecontent_active_ws');
+          const wsId = savedWsId && user.workspaces.some((w: any) => w.id === savedWsId) 
+            ? savedWsId 
+            : (user.workspaces[0]?.id || null);
+          
+          if (wsId) {
+            setActiveWorkspaceById(wsId, user).catch(error => { setToastMessage(`Failed to load workspace: ${error.message}`); setLoading(false); });
+            return;
+          }
+        } else {
+          localStorage.removeItem('vibecontent_token');
+        }
+      } catch (e) {
+        localStorage.removeItem('vibecontent_token');
+      }
+    }
+    
+    // Fallback loadData if no active workspace auto-load happened
     loadData().catch(error => { setToastMessage(`Failed to load database: ${error.message}`); setLoading(false); });
   }, []);
 
@@ -120,6 +148,7 @@ export function App() {
     setAuditLogs(data.auditLogs);
     setAppSettings(normalizeSettings(data.settings));
     if (data.drafts.length > 0) setSelectedDraftId(data.drafts[0].id);
+    localStorage.setItem('vibecontent_active_ws', wsId);
     setLoading(false);
   };
 
@@ -129,6 +158,8 @@ export function App() {
     setAuthUser(null);
     setActiveUser(null);
     setCurrentTab('dashboard');
+    setAuthToken('');
+    localStorage.removeItem('vibecontent_active_ws');
     showToast('Anda telah keluar.');
   };
 
@@ -281,11 +312,18 @@ export function App() {
 
     // 1. Auth gate — must come before workspace picker
     if (!authenticated || !authUser) {
+      // An empty database has no account that can sign in; initialize its first workspace.
       if (showFirstRun || workspaces.length === 0) {
-        return <FirstRunSetupView onSubmit={async input=>{const created=await apiService.onboard(input);await loadData(created.workspace.id);setShowFirstRun(false);setAuthenticated(true);}}/>;
+        return <FirstRunSetupView onBackToLogin={workspaces.length > 0 ? () => setShowFirstRun(false) : undefined} onSubmit={async input=>{
+          const created=await apiService.onboard(input);
+          const user={id:created.user.id,name:created.user.name,email:created.user.email,workspaces:[{id:created.workspace.id,name:created.workspace.name,code:created.workspace.code,role:created.user.role}]};
+          setAuthUser(user);
+          await setActiveWorkspaceById(created.workspace.id,user);
+          setShowFirstRun(false);
+          setAuthenticated(true);
+        }}/>;
       }
       return <AuthView
-        hasWorkspaces={workspaces.length > 0}
         onFirstRun={() => setShowFirstRun(true)}
         onAuthed={async (user) => {
           setAuthUser(user);
@@ -326,8 +364,28 @@ export function App() {
       </main>;
     }
 
-  const effectiveBrandProfile: BrandProfile = brandProfile || {workspaceId:activeWorkspace.id,organizationName:activeWorkspace.name,unitDepartment:'',defaultLanguage:'English',targetAudiences:[],toneOfVoice:[],terminology:[],bannedWords:[],officialCTAs:[],approvedChannels:[],brandGuidelinesSummary:'',officialDisclaimer:''};
+  const baseBrand = brandProfile || {
+    workspaceId: activeWorkspace.id,
+    organizationName: activeWorkspace.name,
+    unitDepartment: '',
+    defaultLanguage: 'Indonesian',
+    targetAudiences: [],
+    toneOfVoice: [],
+    terminology: [],
+    bannedWords: [],
+    officialCTAs: [],
+    approvedChannels: [],
+    brandGuidelinesSummary: '',
+    officialDisclaimer: ''
+  };
 
+  const effectiveBrandProfile: BrandProfile = {
+    ...baseBrand,
+    targetAudiences: baseBrand.targetAudiences?.length ? baseBrand.targetAudiences : ['Pelanggan / Masyarakat Umum', 'Instansi Pemerintah', 'Media / Pers', 'Karyawan Internal'],
+    toneOfVoice: baseBrand.toneOfVoice?.length ? baseBrand.toneOfVoice : ['Ramah & Solutif', 'Korporat Formal', 'Informatif & Edukatif', 'Tegas & Jelas'],
+    officialCTAs: baseBrand.officialCTAs?.length ? baseBrand.officialCTAs : [{ id: 'cta-default', channel: 'Call Center', label: 'Call Center', text: 'Info lebih lanjut hubungi Call Center 1500-xxx' }],
+    approvedChannels: baseBrand.approvedChannels?.length ? baseBrand.approvedChannels : ['Instagram Feed & Reels', 'X / Twitter', 'LinkedIn Page', 'Facebook Fanpage', 'Website Portal BUMD', 'Aplikasi Mobile (Push Notif)', 'WhatsApp Blast']
+  };
   const selectedDraft = drafts.find(d => d.id === selectedDraftId) || drafts[0];
 
 
@@ -470,6 +528,18 @@ export function App() {
               activeWorkspace={activeWorkspace}
               activeUser={activeUser}
               onSaveProfile={handleSaveBrandProfile}
+            />
+          )}
+
+          {currentTab === 'knowledge_base' && (
+            <KnowledgeBaseView 
+              documents={documents}
+              activeWorkspace={activeWorkspace}
+              activeUser={activeUser}
+              onNotify={showToast}
+              onReload={async () => {
+                if (activeWorkspace) await loadData(activeWorkspace.id);
+              }}
             />
           )}
 

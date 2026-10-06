@@ -71,7 +71,7 @@ test('guardRagResponse drops sources below the threshold', () => {
   const result = guardRagResponse({ answer: 'Biaya 1.250.000 rupiah.', grounded: true, sources: [strong, weak], threshold: 0.35 });
   assert.equal(result.sources.length, 1);
   assert.equal(result.droppedSources, 1);
-  assert.match(result.notes.join(' '), /1 sumber di bawah ambang/i);
+  assert.match(result.notes.join(' '), /1 dokumen kurang cocok/i);
 });
 
 test('guardRagResponse grounds when evidence passes the threshold', () => {
@@ -100,7 +100,7 @@ test('guardRagResponse flags numbers that are absent from the excerpts', () => {
   const result = guardRagResponse({ answer: 'Diskonnya 50 persen dan biaya 9.999.000 rupiah.', grounded: true, sources: [strong], threshold: 0.35 });
   assert.equal(result.grounded, true);
   assert.ok(result.unsupportedClaims.some(line => /9\.999\.000/.test(line)));
-  assert.match(result.notes.join(' '), /klaim angka tidak cocok/i);
+  assert.match(result.notes.join(' '), /angka belum cocok/i);
 });
 
 test('guardRagResponse accepts numbers that appear in the excerpt', () => {

@@ -6,20 +6,19 @@ import {
   FileEdit, 
   Image as ImageIcon, 
   CalendarDays,
-
   FolderArchive, 
   Building2, 
   ShieldAlert, 
   Users,
   CircleHelp,
-  LogOut
+  LogOut,
+  BookOpen
 } from 'lucide-react';
 import { canAccessTab } from '../services/policies';
 
 interface SidebarProps {
   currentTab: ActiveTab;
   onSelectTab: (tab: ActiveTab) => void;
-
   userRole: UserRole;
   activeWorkspace: Workspace;
   collapsed?: boolean;
@@ -29,7 +28,6 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({
   currentTab,
   onSelectTab,
-
   userRole,
   activeWorkspace,
   collapsed = false,
@@ -69,8 +67,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Knowledge & Administration Section */}
         {collapsed ? <div className="nav-divider" aria-hidden /> : <div className="nav-section-title">Pengetahuan & Pengaturan</div>}
         <div className="nav-group">
-
           {navButton('brand_profile', 'Profil & Merek', Building2)}
+          {navButton('knowledge_base', 'Knowledge Base', BookOpen)}
           {navButton('user_management', 'Pengguna & Peran', Users)}
           {navButton('audit_log', 'Jejak Audit', ShieldAlert)}
           {navButton('settings_help', 'Pengaturan & Bantuan', CircleHelp)}

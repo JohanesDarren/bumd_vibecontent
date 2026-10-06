@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { generateContentFromBrief, refineDraftContent, retrieveKnowledge, sanitizeRagAnswer, validateRagCopy } from './ragEngine.ts';
+import { generateContentFromBrief, refineDraftContent, retrieveKnowledge, reviewRagCopy, sanitizeRagAnswer, validateRagCopy } from './ragEngine.ts';
 import type { BrandProfile, ContentBrief, KnowledgeDocument } from '../types/index.ts';
 
 const base = { category: 'sop_layanan' as const, owner: 'Owner', version: '1', effectiveDate: '2026', uploadDate: '2026', fileSize: '1 KB', summary: '' };
@@ -113,8 +113,24 @@ test('RAG answer validation rejects mixed-language and brief-inconsistent copy',
 
 test('answer cleanup preserves paragraphs and valid brief-aligned Indonesian copy passes checks', () => {
   assert.equal(sanitizeRagAnswer('Paragraf pertama.\r\n\r\nParagraf kedua [1].'), 'Paragraf pertama.\n\nParagraf kedua.');
-  const valid = `${copyBrief.keyMessage.replace('3 kali', 'tiga kali')} Promo berlaku untuk rumah tangga R1 dan R2 dengan daya listrik 1300 VA.`;
+  const valid = 'Pasang sambungan air baru kini lebih hemat: biaya pemasangan turun 30% dari Rp1.250.000 menjadi Rp875.000, berlaku hingga 31 Desember 2026. Biaya pasang bisa dicicil hingga tiga kali, jadi tidak memberatkan. Promo berlaku untuk rumah tangga R1 dan R2 dengan daya listrik 1300 VA.';
   assert.deepEqual(validateRagCopy(valid, copyBrief, copyBrand, [copyCitation]), []);
+  const echoed = `${copyBrief.keyMessage} Promo berlaku untuk rumah tangga R1 dan R2.`;
+  assert.ok(validateRagCopy(echoed, copyBrief, copyBrand, [copyCitation]).some(issue => issue.includes('menyalin pesan kunci')));
+});
+
+test('a repaired Indonesian RAG answer can pass pre-flight without losing its citations', () => {
+  const repaired = 'Warga rumah tangga, kini tersedia promo pemasangan sambungan air dengan potongan 30%. Biaya turun dari Rp1.250.000 menjadi Rp875.000 dan berlaku sampai 31 Desember 2026. Pembayaran dapat dilakukan dalam 3 kali cicilan.';
+  const output = generateContentFromBrief(copyBrief, copyBrand, [], 'ws-a', {
+    answer: repaired,
+    citations: [copyCitation],
+    unsupportedClaims: [],
+    grounded: true
+  });
+  assert.deepEqual(validateRagCopy(repaired, copyBrief, copyBrand, [copyCitation]), []);
+  assert.equal(output.qualityCheck.overallStatus, 'siap_review');
+  assert.equal(output.citations[0].documentId, copyCitation.documentId);
+  assert.doesNotMatch(output.content, /DRAF PERLU VERIFIKASI/);
 });
 
 // ── Quick variation regressions: the main text must never be dropped ──
@@ -183,4 +199,44 @@ test('x_thread variation packs the whole draft into numbered tweets', () => {
     assert.ok(tweet.length <= 280 + 12, 'tweet exceeds 280 characters including its prefix');
   });
   assert.match(newContent, /2800 rupiah/);
+});
+
+test('copy with only warnings is still used and flagged for verification', () => {
+  const loose = 'Mau pasang air bersih tanpa pusing? Biaya pemasangan turun 30% jadi Rp875.000 sampai 31 Desember 2026, dan bisa dicicil tiga kali. Kuota terbatas untuk 500 rumah pertama.';
+  const review = reviewRagCopy(loose, copyBrief, copyBrand, [copyCitation]);
+  assert.deepEqual(review.blocking, []);
+  assert.ok(review.warnings.some(issue => issue.includes('500')));
+  assert.ok(review.warnings.some(issue => issue.includes('1250000')));
+
+  const generated = generateContentFromBrief(copyBrief, copyBrand, [], 'ws-a', {
+    answer: loose,
+    citations: [copyCitation],
+    unsupportedClaims: [],
+    grounded: true
+  });
+  assert.equal(generated.aiCopyUsed, true);
+  assert.ok(generated.content.includes('Mau pasang air bersih tanpa pusing?'));
+  assert.equal(generated.qualityCheck.overallStatus, 'perlu_verifikasi');
+});
+
+test('amounts written as "juta" satisfy key-message numbers', () => {
+  const brief = { ...copyBrief, keyMessage: 'Harga sewa kios mulai dari Rp 5.000.000 per tahun.' };
+  const review = reviewRagCopy('Cukup mulai Rp5 juta setahun, kios impian Anda siap ditempati.', brief, copyBrand, []);
+  assert.deepEqual(review.blocking, []);
+  assert.ok(!review.warnings.some(issue => issue.includes('angka penting')));
+});
+
+test('brief-only composed copy is used when no official document matches', () => {
+  const composed = 'Kabar gembira untuk warga! Pasang sambungan air baru kini hemat 30%: dari Rp1.250.000 cukup Rp875.000, berlaku sampai 31 Desember 2026 dan bisa dicicil hingga 3 kali.';
+  const generated = generateContentFromBrief(copyBrief, copyBrand, [], 'ws-a', {
+    answer: '',
+    citations: [],
+    unsupportedClaims: ['Sumber resmi belum ditemukan.'],
+    grounded: false,
+    composedCopy: composed
+  });
+  assert.equal(generated.aiCopyUsed, true);
+  assert.ok(generated.content.includes('Kabar gembira untuk warga!'));
+  assert.ok(!generated.content.includes(copyBrief.keyMessage));
+  assert.match(generated.content, /DRAF PERLU VERIFIKASI/);
 });

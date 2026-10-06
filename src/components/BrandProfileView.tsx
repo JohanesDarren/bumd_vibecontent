@@ -44,8 +44,11 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
   const [newReason, setNewReason] = useState('');
   const [newReplacement, setNewReplacement] = useState('');
 
-  // CTA add
+  // Audience + Tone of Voice add
   const [newAudience, setNewAudience] = useState('');
+  const [newTone, setNewTone] = useState('');
+
+  // CTA add
   const [newCtaLabel, setNewCtaLabel] = useState('');
   const [newCtaText, setNewCtaText] = useState('');
 
@@ -120,6 +123,20 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
     const list = [...(profile.targetAudiences ?? [])];
     list.splice(index, 1);
     setProfile({ ...profile, targetAudiences: list });
+  };
+
+  const handleAddTone = () => {
+    const v = newTone.trim();
+    const current = profile.toneOfVoice ?? [];
+    if (!v || current.includes(v)) return;
+    setProfile({ ...profile, toneOfVoice: [...current, v] });
+    setNewTone('');
+  };
+
+  const handleDeleteTone = (index: number) => {
+    const list = [...(profile.toneOfVoice ?? [])];
+    list.splice(index, 1);
+    setProfile({ ...profile, toneOfVoice: list });
   };
 
   const handleDeleteCta = (id: string) => {
@@ -275,8 +292,11 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
             <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '12px' }}>
               Pilar Tone of Voice
             </h3>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-              {profile.toneOfVoice.map((tone, idx) => (
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '12px' }}>
+              Shown as selectable tone options in Brief Studio and sent to RAG.
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '14px' }}>
+              {(profile.toneOfVoice ?? []).map((tone, idx) => (
                 <span 
                   key={idx}
                   style={{
@@ -286,13 +306,42 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
                     border: '1px solid var(--border-subtle)',
                     fontSize: '0.8rem',
                     fontWeight: 600,
-                    color: 'var(--text-primary)'
+                    color: 'var(--text-primary)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px'
                   }}
                 >
                   {tone}
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteTone(idx)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#f43f5e', display: 'flex' }}
+                      title="Hapus pilar tone of voice"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  )}
                 </span>
               ))}
             </div>
+            {isAdmin && (
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Cth.: Formal dan ramah"
+                  value={newTone}
+                  onChange={e => setNewTone(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddTone(); } }}
+                />
+                <button type="button" className="btn btn-secondary btn-sm" onClick={handleAddTone}>
+                  <Plus size={14} />
+                  <span>Tambah</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
 

@@ -1,10 +1,11 @@
 import './env.ts';
 import { generateVisual, VisualError } from './visual.ts';
 import { ragConfigured } from './env.ts';
-import { knowledgeBaseIdFor, ragDeleteDocument, ragIndexDocument, ragListDocuments, ragQuery, ragRefine, ragSearch, ragStatus } from './rag.ts';
+import { knowledgeBaseIdFor, ragDeleteDocument, ragIndexDocument, ragListDocuments, ragCompose, ragQuery, ragRefine, ragSearch, ragStatus } from './rag.ts';
 import express from 'express';
 import cors from 'cors';
-import { authenticateUser, claimLegacyPassword, clearAllData, createDraft, createOrganizationWithAdmin, createUserMembership, deleteBrand, deleteDraft, deleteKnowledgeSource, deleteUserMembership, getWorkspaceSettings, getUserWorkspaces, listBootstrap, listWorkspaceDrafts, organizationExists, pool, registerUser, replaceDraft, saveBrand, saveKnowledgeSource, saveWorkspaceSettings, updateOrganization } from './database.ts';
+import { authenticateUser, claimLegacyPassword, clearAllData, createDraft, createOrganizationWithAdmin, createUserMembership, deleteBrand, deleteDraft, deleteKnowledgeSource, deleteUserMembership, getWorkspaceSettings, getUserWorkspaces, listBootstrap, listWorkspaceDrafts, organizationExists, pool, registerUser, replaceDraft, runMigrations, saveBrand, saveKnowledgeSource, saveWorkspaceSettings, updateOrganization } from './database.ts';
+import { signJwt, verifyJwt } from './auth.ts';
 
 const app = express();
 app.use(cors({ origin: true }));
@@ -59,10 +60,27 @@ async function removeKnowledgeDocFromRag(workspaceId: string, documentId: string
 
 app.get('/api/health', async (_req,res,next) => { try { const result=await pool.query('SELECT current_database() database, now() time'); res.json({ok:true,...result.rows[0]}); } catch(error){next(error);} });
 app.delete('/api/data', async (_req,res,next) => { try { await clearAllData(); res.json({ok:true}); } catch(error){next(error);} });
-app.post('/api/onboarding', async (req,res,next) => { try { const {organizationName,code,sector,city,adminName,adminEmail,adminPassword}=req.body||{}; if(!organizationName||!code||!sector||!city||!adminName||!adminEmail)return res.status(400).json({error:'Organization name, code, sector, city, admin name, and admin email are required'});res.status(201).json(await createOrganizationWithAdmin({organizationName,code,sector,city,adminName,adminEmail,adminPassword:typeof adminPassword==='string'&&adminPassword.length>=8?adminPassword:undefined})); } catch(error){next(error);} });
+app.post('/api/onboarding', async (req,res,next) => { try { const {organizationName,code,sector,city,adminName,adminEmail,adminPassword}=req.body||{}; if(!organizationName||!code||!sector||!city||!adminName||!adminEmail)return res.status(400).json({error:'Organization name, code, sector, city, admin name, and admin email are required'});const result = await createOrganizationWithAdmin({organizationName,code,sector,city,adminName,adminEmail,adminPassword:typeof adminPassword==='string'&&adminPassword.length>=8?adminPassword:undefined});const token = signJwt({ id: result.user.id, name: result.user.name, email: result.user.email, workspaces: [{ id: result.workspace.id, role: 'admin' }] });res.status(201).json({ workspace: result.workspace, user: { ...result.user, token } }); } catch(error){next(error);} });
 const isEmail=(v:unknown):v is string=>typeof v==='string'&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 app.post('/api/auth/register',async(req,res,next)=>{try{const {name,email,password,workspaceCode}=req.body||{};if(!isNonEmptyString(name)||!isEmail(email))return res.status(400).json({error:'Valid name and email are required'});if(typeof password!=='string'||password.length<8)return res.status(400).json({error:'Password must be at least 8 characters'});if(!isNonEmptyString(workspaceCode))return res.status(400).json({error:'Workspace code is required'});const result=await registerUser({name,email,password,workspaceCode});res.status(201).json(result);}catch(error){if(error instanceof Error&&/already exists|not found/.test(error.message))return res.status(409).json({error:error.message});next(error);}});
-app.post('/api/auth/login',async(req,res,next)=>{try{const {email,password}=req.body||{};if(!isEmail(email)||typeof password!=='string')return res.status(400).json({error:'Valid email and password are required'});try{res.json(await authenticateUser(email,password));}catch(err){if(err instanceof Error&&err.message==='LEGACY_CLAIM'){res.json(await claimLegacyPassword(email,password));}else{throw err;}}}catch(error){next(error);}});
+app.post('/api/auth/login',async(req,res,next)=>{
+  try {
+    const {email,password}=req.body||{};
+    if(!isEmail(email)||typeof password!=='string')return res.status(400).json({error:'Valid email and password are required'});
+    let user;
+    try {
+      user=await authenticateUser(email,password);
+    } catch(err) {
+      if(!(err instanceof Error)||err.message!=='LEGACY_CLAIM')throw err;
+      user=await claimLegacyPassword(email,password);
+    }
+    const token = signJwt({ id: user.id, name: user.name, email: user.email, workspaces: user.workspaces });
+    res.json({ ...user, token });
+  } catch(error) {
+    if(error instanceof Error&&error.message==='Invalid email or password')return res.status(401).json({error:error.message});
+    next(error);
+  }
+});
 app.get('/api/users/:userId/workspaces',async(req,res,next)=>{try{res.json(await getUserWorkspaces(req.params.userId));}catch(error){next(error);}});
 app.get('/api/bootstrap', async (req,res,next) => { try { res.json(await listBootstrap(req.query.workspaceId ? String(req.query.workspaceId) : undefined)); } catch(error){next(error);} });
 app.get('/api/workspaces/:workspaceId/drafts', async (req,res,next) => { try { res.json(await listWorkspaceDrafts(req.params.workspaceId)); } catch(error){next(error);} });
@@ -71,11 +89,30 @@ app.put('/api/drafts/:id',async(req,res,next)=>{try{if(req.params.id!==req.body?
 app.put('/api/brand-profile',async(req,res,next)=>{try{if(!isNonEmptyString(req.body?.workspaceId))return res.status(400).json({error:'workspaceId is required'});res.json(await saveBrand(req.body));}catch(error){next(error);}});
 app.get('/api/workspaces/:workspaceId/settings',async(req,res,next)=>{try{if(!(await organizationExists(req.params.workspaceId)))return res.status(404).json({error:'Organization not found'});res.json(await getWorkspaceSettings(req.params.workspaceId));}catch(error){next(error);}});
 app.put('/api/workspaces/:workspaceId/settings',async(req,res,next)=>{try{if(!(await organizationExists(req.params.workspaceId)))return res.status(404).json({error:'Organization not found'});const data=req.body;if(!data||typeof data!=='object'||Array.isArray(data))return res.status(400).json({error:'A settings object is required'});res.json(await saveWorkspaceSettings(req.params.workspaceId,data));}catch(error){next(error);}});
-app.put('/api/knowledge-sources/:id',async(req,res,next)=>{try{if(req.params.id!==req.body?.id)return res.status(400).json({error:'Source ID mismatch'});if(!isNonEmptyString(req.body.workspaceId))return res.status(400).json({error:'workspaceId is required'});const saved=await saveKnowledgeSource(req.body);const ragSynced=await syncKnowledgeDocToRag(req.body.workspaceId,saved);res.json({...saved,ragSynced});}catch(error){next(error);}});
+const requireAdmin = (getWorkspaceId: (req: express.Request) => string | undefined) => {
+  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader?.startsWith('Bearer ')) return res.status(401).json({ error: 'Unauthorized' });
+      const token = authHeader.split(' ')[1];
+      const payload = verifyJwt(token);
+      const workspaceId = getWorkspaceId(req);
+      if (!workspaceId) return res.status(400).json({ error: 'Missing workspaceId' });
+      const workspace = payload.workspaces?.find((w: any) => w.id === workspaceId);
+      if (!workspace || workspace.role !== 'admin') return res.status(403).json({ error: 'Forbidden: Requires admin role' });
+      (req as any).user = payload;
+      next();
+    } catch (err) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+  };
+};
+
+app.put('/api/knowledge-sources/:id', requireAdmin(req => String(req.body?.workspaceId)), async(req,res,next)=>{try{if(req.params.id!==req.body?.id)return res.status(400).json({error:'Source ID mismatch'});if(!isNonEmptyString(req.body.workspaceId))return res.status(400).json({error:'workspaceId is required'});const saved=await saveKnowledgeSource(req.body);const ragSynced=await syncKnowledgeDocToRag(req.body.workspaceId,saved);res.json({...saved,ragSynced});}catch(error){next(error);}});
 app.put('/api/organizations/:id',async(req,res,next)=>{try{if(!(await organizationExists(req.params.id)))return res.status(404).json({error:'Organization not found'});const {name,code,sector,city}=req.body||{};if(!isNonEmptyString(name)||!isNonEmptyString(code)||!isNonEmptyString(sector)||!isNonEmptyString(city))return res.status(400).json({error:'name, code, sector, and city are required'});res.json(await updateOrganization(req.params.id,req.body));}catch(error){next(error);}});
 app.post('/api/organizations/:id/users',async(req,res,next)=>{try{if(!(await organizationExists(req.params.id)))return res.status(404).json({error:'Organization not found'});const {name,email,role}=req.body||{};if(!isNonEmptyString(name)||!isNonEmptyString(email))return res.status(400).json({error:'name and email are required'});if(!['creator','admin'].includes(role))return res.status(400).json({error:'role must be creator or admin'});res.status(201).json(await createUserMembership(req.params.id,req.body));}catch(error){next(error);}});
 app.delete('/api/organizations/:workspaceId/users/:userId',async(req,res,next)=>{try{await deleteUserMembership(req.params.workspaceId,req.params.userId);res.json({ok:true});}catch(error){next(error);}});
-app.delete('/api/organizations/:workspaceId/knowledge-sources/:id',async(req,res,next)=>{try{await deleteKnowledgeSource(req.params.workspaceId,req.params.id);const ragSynced=await removeKnowledgeDocFromRag(req.params.workspaceId,req.params.id);res.json({ok:true,ragSynced});}catch(error){next(error);}});
+app.delete('/api/organizations/:workspaceId/knowledge-sources/:id', requireAdmin(req => String(req.params.workspaceId)), async(req,res,next)=>{try{await deleteKnowledgeSource(String(req.params.workspaceId),String(req.params.id));const ragSynced=await removeKnowledgeDocFromRag(String(req.params.workspaceId),String(req.params.id));res.json({ok:true,ragSynced});}catch(error){next(error);}});
 app.delete('/api/organizations/:workspaceId/brand-profile',async(req,res,next)=>{try{await deleteBrand(req.params.workspaceId);res.json({ok:true});}catch(error){next(error);}});
 app.delete('/api/organizations/:workspaceId/drafts/:id',async(req,res,next)=>{try{await deleteDraft(req.params.workspaceId,req.params.id);res.json({ok:true});}catch(error){next(error);}});
 // ── RAG service proxy routes ──
@@ -83,12 +120,21 @@ app.get('/api/rag/status',async(_req,res,next)=>{try{if(!ragConfigured())return 
 app.post('/api/rag/search',async(req,res,next)=>{try{const{workspaceId,query,topK,options}=req.body||{};if(!isNonEmptyString(workspaceId))return res.status(400).json({error:'workspaceId is required'});if(!isNonEmptyString(query))return res.status(400).json({error:'query is required'});const opts=options??(Number(topK)>0?{top_k:Number(topK)}:undefined);res.json(await ragSearch(workspaceId,query,opts));}catch(error){next(error);}});
 app.post('/api/rag/query',async(req,res,next)=>{try{const{workspaceId,query,topK,options}=req.body||{};if(!isNonEmptyString(workspaceId))return res.status(400).json({error:'workspaceId is required'});if(!isNonEmptyString(query))return res.status(400).json({error:'query is required'});const opts=options??(Number(topK)>0?{top_k:Number(topK)}:undefined);res.json(await ragQuery(workspaceId,query,opts));}catch(error){next(error);}});
 app.post('/api/rag/refine',async(req,res,next)=>{try{const{workspaceId,draftContent,promptAction}=req.body||{};if(!isNonEmptyString(workspaceId))return res.status(400).json({error:'workspaceId is required'});if(!isNonEmptyString(draftContent))return res.status(400).json({error:'draftContent is required'});if(!isNonEmptyString(promptAction))return res.status(400).json({error:'promptAction is required'});const result=await ragRefine(workspaceId,draftContent,promptAction);res.json(result);}catch(error){next(error);}});
-app.post('/api/rag/sync',async(req,res,next)=>{try{const{workspaceId}=req.body||{};if(!isNonEmptyString(workspaceId))return res.status(400).json({error:'workspaceId is required'});const data=await listBootstrap(workspaceId);let indexed=0,failed=0;for(const doc of data.documents){const ok=doc.status==='aktif'?await syncKnowledgeDocToRag(workspaceId,doc):await removeKnowledgeDocFromRag(workspaceId,doc.id);if(ok)indexed++;else failed++;}res.json({knowledgeBaseId:knowledgeBaseIdFor(workspaceId),indexed,failed,total:data.documents.length});}catch(error){next(error);}});
+app.post('/api/rag/compose',async(req,res,next)=>{try{const{workspaceId,briefText}=req.body||{};if(!isNonEmptyString(workspaceId))return res.status(400).json({error:'workspaceId is required'});if(!isNonEmptyString(briefText))return res.status(400).json({error:'briefText is required'});res.json(await ragCompose(workspaceId,briefText));}catch(error){next(error);}});
+app.post('/api/rag/sync', requireAdmin(req => req.body?.workspaceId), async(req,res,next)=>{try{const{workspaceId}=req.body||{};if(!isNonEmptyString(workspaceId))return res.status(400).json({error:'workspaceId is required'});const data=await listBootstrap(workspaceId);let indexed=0,failed=0;for(const doc of data.documents){const ok=doc.status==='aktif'?await syncKnowledgeDocToRag(workspaceId,doc):await removeKnowledgeDocFromRag(workspaceId,doc.id);if(ok)indexed++;else failed++;}res.json({knowledgeBaseId:knowledgeBaseIdFor(workspaceId),indexed,failed,total:data.documents.length});}catch(error){next(error);}});
 // Remove remote-KB entries that no longer correspond to any DB document (e.g. after a demo reset).
-app.post('/api/rag/prune',async(req,res,next)=>{try{const{workspaceId}=req.body||{};if(!isNonEmptyString(workspaceId))return res.status(400).json({error:'workspaceId is required'});const data=await listBootstrap(workspaceId);const validIds=new Set(data.documents.map((d:any)=>d.id));const listed=await ragListDocuments(workspaceId);const docs=(listed as any)?.documents||[];let removed=0,failed=0;for(const entry of docs){const id=entry?.document_id||entry?.id;if(id&&!validIds.has(String(id))){const ok=await removeKnowledgeDocFromRag(workspaceId,String(id));if(ok)removed++;else failed++;}}res.json({knowledgeBaseId:knowledgeBaseIdFor(workspaceId),removed,failed,total:docs.length});}catch(error){next(error);}});
+app.post('/api/rag/prune', requireAdmin(req => req.body?.workspaceId), async(req,res,next)=>{try{const{workspaceId}=req.body||{};if(!isNonEmptyString(workspaceId))return res.status(400).json({error:'workspaceId is required'});const data=await listBootstrap(workspaceId);const validIds=new Set(data.documents.map((d:any)=>d.id));const listed=await ragListDocuments(workspaceId);const docs=(listed as any)?.documents||[];let removed=0,failed=0;for(const entry of docs){const id=entry?.document_id||entry?.id;if(id&&!validIds.has(String(id))){const ok=await removeKnowledgeDocFromRag(workspaceId,String(id));if(ok)removed++;else failed++;}}res.json({knowledgeBaseId:knowledgeBaseIdFor(workspaceId),removed,failed,total:docs.length});}catch(error){next(error);}});
 app.use('/api',(_req,res)=>{res.status(404).json({error:'Endpoint not found'});});
 app.use((error:unknown,_req:express.Request,res:express.Response,_next:express.NextFunction)=>{console.error(error);res.status(500).json({error:error instanceof Error?error.message:'Internal server error'});});
 
 const port=Number(process.env.API_PORT||3005);
-if(process.env.NODE_ENV!=='test') app.listen(port,()=>console.log(`VibeContent API http://127.0.0.1:${port}`));
+if(process.env.NODE_ENV!=='test') {
+  runMigrations()
+    .then(() => app.listen(port, () => console.log(`VibeContent API http://127.0.0.1:${port}`)))
+    .catch(async error => {
+      console.error('Database migrations failed; API server was not started.', error);
+      await pool.end();
+      process.exitCode = 1;
+    });
+}
 export default app;

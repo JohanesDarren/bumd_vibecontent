@@ -13,3 +13,25 @@ test('validated scene preserves exact copy, full prompt and requested dimensions
   assert.match(svg,/Air &amp; &lt;Bersih&gt;/);
   assert.match(svg,/M 10 10 L 80 50 L 10 90 Z/);
 });
+
+test('invalid optional brand colors do not block image generation input', () => {
+  const request = visual.validateVisualInput({
+    workspaceId: 'org-test',
+    prompt: 'Corporate water service campaign',
+    aspectRatio: '1:1',
+    primaryColor: '',
+    accentColor: 'rgb(14, 165, 233)'
+  });
+  assert.equal(request.primaryColor, undefined);
+  assert.equal(request.accentColor, undefined);
+});
+
+test('three-digit hex brand colors are normalized', () => {
+  const request = visual.validateVisualInput({
+    workspaceId: 'org-test',
+    prompt: 'Corporate water service campaign',
+    aspectRatio: '1:1',
+    primaryColor: '#abc'
+  });
+  assert.equal(request.primaryColor, '#aabbcc');
+});

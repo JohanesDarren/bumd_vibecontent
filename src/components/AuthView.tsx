@@ -7,10 +7,9 @@ interface AuthUser { id:string; name:string; email:string; workspaces:{id:string
 interface Props {
   onAuthed: (user:AuthUser) => void;
   onFirstRun: () => void;
-  hasWorkspaces: boolean;
 }
 
-export const AuthView: React.FC<Props> = ({ onAuthed, onFirstRun, hasWorkspaces }) => {
+export const AuthView: React.FC<Props> = ({ onAuthed, onFirstRun }) => {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -72,10 +71,10 @@ export const AuthView: React.FC<Props> = ({ onAuthed, onFirstRun, hasWorkspaces 
           <LockKeyhole size={17}/>{busy ? 'Mohon tunggu…' : mode === 'login' ? 'Masuk' : 'Buat Akun'}
         </button>
       </form>
-      {hasWorkspaces && (
+      {(
         <div className="login-workspace" style={{ marginTop: '14px' }}>
           <Building2 size={18}/>
-          <div><small>New organization?</small>
+          <div><small>Organisasi baru?</small>
             <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: '4px' }} onClick={onFirstRun}>Buat workspace baru</button>
           </div>
         </div>

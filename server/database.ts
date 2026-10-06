@@ -11,7 +11,10 @@ const defaultDatabaseUrl = process.env.NODE_ENV === 'test'
   ? 'postgresql://vibecontent:vibecontent_dev@127.0.0.1:5435/vibecontent_test'
   : 'postgresql://vibecontent:vibecontent_dev@127.0.0.1:5435/vibecontent';
 const connectionString = process.env.DATABASE_URL || defaultDatabaseUrl;
-if (process.env.NODE_ENV === 'test' && !new URL(connectionString).pathname.endsWith('_test')) {
+// NODE_TEST_CONTEXT is set by `node --test` / `tsx --test`, so a test file that
+// forgets NODE_ENV=test still cannot truncate the development database.
+const runningTests = process.env.NODE_ENV === 'test' || Boolean(process.env.NODE_TEST_CONTEXT);
+if (runningTests && !new URL(connectionString).pathname.endsWith('_test')) {
   throw new Error('Refusing to run tests against a non-test database');
 }
 export const pool = new Pool({ connectionString });
@@ -25,6 +28,7 @@ export async function runMigrations() {
   await pool.query(auth);
   const settings = await readFile(join(here, 'migrations', '003_workspace_settings.sql'), 'utf8');
   await pool.query(settings);
+  await pool.query(`INSERT INTO schema_migrations(name) VALUES ('003_workspace_settings') ON CONFLICT DO NOTHING`);
 }
 
 const scrypt = promisify(nodeCrypto.scrypt);
@@ -36,7 +40,7 @@ export async function hashPassword(password:string):Promise<string> {
 export async function verifyPassword(password:string, stored:string):Promise<boolean> {
   if (!stored) return false;
   const [salt, hash] = stored.split(':');
-  if (!salt || !hash) return false;
+  if (!salt || !hash || !/^[a-f0-9]{32}$/i.test(salt) || !/^[a-f0-9]{128}$/i.test(hash)) return false;
   const candidate = (await scrypt(password, salt, 64) as Buffer);
   return nodeCrypto.timingSafeEqual(Buffer.from(hash, 'hex'), candidate);
 }
@@ -54,8 +58,8 @@ export async function createOrganizationWithAdmin(input:{organizationName:string
     const workspaceId=`org-${nodeCrypto.randomUUID()}`;
     const userId=`usr-${crypto.randomUUID()}`;
     const passwordHash=input.adminPassword?await hashPassword(input.adminPassword):'';
-    const workspace={id:workspaceId,name:input.organizationName,code:input.code.toUpperCase(),sector:input.sector,city:input.city,tagline:'',primaryColor:'#0284c7',accentColor:'#0ea5e9',description:''};
-    const user={id:userId,name:input.adminName,email:input.adminEmail,avatar:'',title:'Administrator',department:'',workspaceId,role:'admin'};
+    const workspace={id:workspaceId,name:input.organizationName,code:input.code.trim().toUpperCase(),sector:input.sector,city:input.city,tagline:'',primaryColor:'#0284c7',accentColor:'#0ea5e9',description:''};
+    const user={id:userId,name:input.adminName,email:input.adminEmail.trim().toLowerCase(),avatar:'',title:'Administrator',department:'',workspaceId,role:'admin'};
     await client.query('INSERT INTO organizations(id,name,code,sector,city,tagline,primary_color,accent_color,description) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)',Object.values(workspace));
     await client.query('INSERT INTO users(id,name,email,avatar,title,department,password_hash) VALUES($1,$2,$3,$4,$5,$6,$7)',[user.id,user.name,user.email,user.avatar,user.title,user.department,passwordHash]);
     await client.query(`INSERT INTO memberships(organization_id,user_id,role) VALUES($1,$2,'admin')`,[workspaceId,userId]);
@@ -169,25 +173,27 @@ export async function registerUser(input:{name:string;email:string;password:stri
   const client=await pool.connect();
   try {
     await client.query('BEGIN');
-    const existing=await client.query('SELECT id FROM users WHERE email=$1',[input.email.toLowerCase()]);
+    const email=input.email.trim().toLowerCase();
+    const existing=await client.query('SELECT id FROM users WHERE email=$1',[email]);
     if(existing.rowCount) throw new Error('An account with this email already exists');
     let orgId:string|null=null;
     if(input.workspaceCode) {
-      const org=await client.query('SELECT id FROM organizations WHERE code=$1',[input.workspaceCode.toUpperCase()]);
+      const org=await client.query('SELECT id FROM organizations WHERE code=$1',[input.workspaceCode.trim().toUpperCase()]);
       if(!org.rowCount) throw new Error('Workspace code not found');
       orgId=org.rows[0].id;
     }
     const id=`usr-${nodeCrypto.randomUUID()}`;
     const passwordHash=await hashPassword(input.password);
-    await client.query('INSERT INTO users(id,name,email,avatar,title,department,password_hash) VALUES($1,$2,$3,$4,$5,$6,$7)',[id,input.name,input.email.toLowerCase(),'', '', '',passwordHash]);
-    if(orgId) await client.query('INSERT INTO memberships(organization_id,user_id,role) VALUES($1,$2,$3)',[orgId,id,input.workspaceCode && input.workspaceCode.toUpperCase()==='ADMIN'?'admin':'creator']);
+    await client.query('INSERT INTO users(id,name,email,avatar,title,department,password_hash) VALUES($1,$2,$3,$4,$5,$6,$7)',[id,input.name,email,'', '', '',passwordHash]);
+    if(orgId) await client.query('INSERT INTO memberships(organization_id,user_id,role) VALUES($1,$2,$3)',[orgId,id,input.workspaceCode && input.workspaceCode.trim().toUpperCase()==='ADMIN'?'admin':'creator']);
     await client.query('COMMIT');
-    return {id,name:input.name,email:input.email.toLowerCase(),hasWorkspace:Boolean(orgId)};
+    return {id,name:input.name,email,hasWorkspace:Boolean(orgId)};
   } catch(error){await client.query('ROLLBACK');throw error;} finally{client.release();}
 }
 
 export async function authenticateUser(email:string,password:string) {
-  const result=await pool.query('SELECT id,name,email,password_hash FROM users WHERE email=$1',[email.toLowerCase()]);
+  const normalizedEmail=email.trim().toLowerCase();
+  const result=await pool.query('SELECT id,name,email,password_hash FROM users WHERE email=$1',[normalizedEmail]);
   const user=result.rows[0];
   if(!user) throw new Error('Invalid email or password');
   if(!user.password_hash) throw new Error('LEGACY_CLAIM');
@@ -198,14 +204,15 @@ export async function authenticateUser(email:string,password:string) {
 }
 
 export async function claimLegacyPassword(email:string,password:string) {
-  const result=await pool.query('SELECT id,password_hash FROM users WHERE email=$1',[email.toLowerCase()]);
+  const normalizedEmail=email.trim().toLowerCase();
+  const result=await pool.query('SELECT id,name,password_hash FROM users WHERE email=$1',[normalizedEmail]);
   const user=result.rows[0];
   if(!user) throw new Error('Invalid email or password');
   if(user.password_hash) throw new Error('Account already has a password. Please sign in.');
   const passwordHash=await hashPassword(password);
   await pool.query('UPDATE users SET password_hash=$2 WHERE id=$1',[user.id,passwordHash]);
   const orgs=await pool.query('SELECT o.id,o.name,o.code,m.role FROM memberships m JOIN organizations o ON o.id=m.organization_id WHERE m.user_id=$1 AND m.active ORDER BY o.created_at',[user.id]);
-  return {id:user.id,name:user.name,email:email.toLowerCase(),workspaces:orgs.rows};
+  return {id:user.id,name:user.name,email:normalizedEmail,workspaces:orgs.rows};
 }
 
 export async function getUserWorkspaces(userId:string) {

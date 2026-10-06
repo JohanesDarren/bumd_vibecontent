@@ -31,6 +31,8 @@ export interface GeneratedOutput {
   citations: GroundedCitation[];
   unsupportedClaims: string[];
   qualityCheck: QualityCheck;
+  /** True when the body is AI-written copy rather than the raw brief text. */
+  aiCopyUsed?: boolean;
 }
 
 /**
@@ -44,6 +46,8 @@ export interface RemoteGrounding {
   unsupportedClaims: string[];
   grounded: boolean;
   model?: string;
+  /** Brief-only rewrite used when no grounded answer is usable; still flagged for verification. */
+  composedCopy?: string;
 }
 
 const englishArtifacts = new Set([
@@ -91,8 +95,18 @@ function numberWords(value: number): string | null {
   return `${small[tens]} puluh${remainder ? ` ${small[remainder]}` : ''}`;
 }
 
+const amountMultipliers: Record<string, number> = { ribu: 1e3, rb: 1e3, juta: 1e6, jt: 1e6, miliar: 1e9, milyar: 1e9, triliun: 1e12 };
+
+/** Rewrites amounts like "5 juta" / "1,25 juta" into plain digits so they match "5.000.000". */
+function expandAmountWords(text: string): string {
+  return text.replace(/(\d+(?:[.,]\d+)?)\s*(ribu|rb|juta|jt|miliar|milyar|triliun)\b/gi, (match, value: string, unit: string) => {
+    const amount = Number(value.replace(',', '.')) * amountMultipliers[unit.toLowerCase()];
+    return Number.isFinite(amount) ? `${match} ${Math.round(amount)}` : match;
+  });
+}
+
 function hasNumber(text: string, number: string): boolean {
-  if (extractNumbers(text).includes(number)) return true;
+  if (extractNumbers(expandAmountWords(text)).includes(number)) return true;
   const words = numberWords(Number(number));
   return Boolean(words && new RegExp(`\\b${words}\\b`, 'i').test(text.toLocaleLowerCase('id-ID')));
 }
@@ -102,54 +116,100 @@ function meaningfulWords(text: string): string[] {
     .filter(word => word.length > 2 && !briefStopWords.has(word) && !/^\d+$/.test(word));
 }
 
-export function validateRagCopy(
+function normalizeForCompare(text: string): string {
+  return text.toLocaleLowerCase('id-ID').replace(/^\s*\d+[.)]\s*/gm, '').replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/** True when most key-message sentences/lines reappear verbatim in the copy (an echo, not a rewrite). */
+export function isMostlyCopied(copy: string, keyMessage: string): boolean {
+  const normalizedCopy = normalizeForCompare(copy);
+  const parts = keyMessage.split(/\n|(?<=[.!?])\s+/).map(normalizeForCompare).filter(part => part.split(' ').length >= 4);
+  if (!parts.length) return false;
+  const copied = parts.filter(part => normalizedCopy.includes(part)).length;
+  return copied / parts.length >= 0.6;
+}
+
+export interface CopyReview {
+  /** Defects that make the copy unusable (empty, foreign script, leaked meta labels). */
+  blocking: string[];
+  /** Points an editor should check; the copy is still used and flagged for verification. */
+  warnings: string[];
+}
+
+/**
+ * Reviews AI copy. Only real defects block it; everything else is a warning so
+ * the brief still yields copywriting (flagged "perlu verifikasi") instead of
+ * silently falling back to the raw brief text.
+ */
+export function reviewRagCopy(
   answer: string,
   brief: ContentBrief,
   brandProfile: BrandProfile,
   citations: GroundedCitation[]
-): string[] {
-  const issues: string[] = [];
+): CopyReview {
+  const blocking: string[] = [];
+  const warnings: string[] = [];
   const text = answer.trim();
-  if (!text) return ['Layanan RAG tidak menghasilkan naskah.'];
-  if (!citations.length) issues.push('Jawaban RAG tidak menyertakan sumber resmi.');
-  if (/[^\p{Script=Latin}\p{N}\p{P}\p{Z}\p{S}\p{M}]/u.test(text)) {
-    issues.push('Naskah memuat karakter dari aksara non-Latin.');
+  if (!text) return { blocking: ['Layanan AI tidak menghasilkan naskah.'], warnings };
+  // Letters from another script (e.g. Chinese) mean the model derailed. Emoji,
+  // symbols and joiners are fine in social copy.
+  if (/(?!\p{Script=Latin})\p{L}/u.test(text)) {
+    blocking.push('Naskah memuat karakter dari aksara non-Latin.');
   }
   if (/^\s*(?:#{1,3}\s|(?:versi|draf|draft|catatan|analisis|berikut|final)\s*[:-])/im.test(text) || /^\s*-{3,}\s*$/m.test(text)) {
-    issues.push('Naskah memuat label, komentar, atau pemisah yang bukan bagian copywriting.');
+    blocking.push('Naskah memuat label, komentar, atau pemisah yang bukan bagian copywriting.');
   }
 
   const sourceText = citations.map(citation => citation.excerpt).join(' ');
   const suppliedText = [
     brief.title, brief.campaign, brief.keyMessage, brief.cta, brief.limitations,
-    brief.selectedProduct, brandProfile.organizationName, brandProfile.unitDepartment,
+    brief.selectedProduct, brief.channel, brief.tone, brief.targetAudience,
+    brandProfile.organizationName, brandProfile.unitDepartment,
     ...citations.map(citation => citation.documentTitle)
   ].filter(Boolean).join(' ').toLocaleLowerCase('id-ID');
   const allowedWords = new Set(suppliedText.match(/\p{Script=Latin}+/gu) || []);
-  const foreignWords = (text.toLocaleLowerCase('id-ID').match(/\p{Script=Latin}+/gu) || [])
-    .filter(word => englishArtifacts.has(word) && !allowedWords.has(word));
-  if (foreignWords.length) {
-    issues.push(`Naskah terindikasi mencampur bahasa atau memuat kata asing: ${[...new Set(foreignWords)].join(', ')}.`);
+  const foreignWords = [...new Set((text.toLocaleLowerCase('id-ID').match(/\p{Script=Latin}+/gu) || [])
+    .filter(word => englishArtifacts.has(word) && !allowedWords.has(word)))];
+  // A stray loanword is normal in Indonesian marketing copy; only flag a pattern.
+  if (foreignWords.length >= 3) {
+    warnings.push(`Naskah terindikasi mencampur bahasa atau memuat kata asing: ${foreignWords.join(', ')}.`);
   }
 
-  const supportedNumbers = new Set(extractNumbers(`${suppliedText} ${sourceText}`));
-  const answerNumbers = extractNumbers(text);
-  if (answerNumbers.some(number => !supportedNumbers.has(number))) {
-    issues.push('Naskah memuat angka yang tidak ada pada brief atau sumber rujukan.');
+  const supportedNumbers = new Set(extractNumbers(expandAmountWords(`${suppliedText} ${sourceText}`)));
+  const extraNumbers = [...new Set(extractNumbers(expandAmountWords(text)).filter(number => !supportedNumbers.has(number)))];
+  if (extraNumbers.length) {
+    warnings.push(`Naskah memuat angka yang tidak ada pada brief atau sumber rujukan (${extraNumbers.join(', ')}); mohon dicek.`);
   }
-  const requiredNumbers = extractNumbers(`${brief.keyMessage} ${brief.limitations || ''}`);
-  if (requiredNumbers.some(number => !hasNumber(text, number))) {
-    issues.push('Naskah tidak mempertahankan seluruh angka penting pada pesan kunci atau batasan brief.');
+  // Only the key message's numbers are expected in the body; limitation
+  // figures are appended by the generator as a separate terms section.
+  const missingNumbers = [...new Set(extractNumbers(brief.keyMessage).filter(number => !hasNumber(text, number)))];
+  if (missingNumbers.length) {
+    warnings.push(`Naskah tidak memuat seluruh angka penting pada pesan kunci brief (${missingNumbers.join(', ')}); mohon dicek.`);
+  }
+
+  if (isMostlyCopied(text, brief.keyMessage)) {
+    warnings.push('Naskah hanya menyalin pesan kunci brief, belum ditulis ulang.');
   }
 
   const keyWords = [...new Set(meaningfulWords(brief.keyMessage))];
   if (keyWords.length) {
     const answerWords = new Set(meaningfulWords(text));
     const overlap = keyWords.filter(word => answerWords.has(word)).length / keyWords.length;
-    if (overlap < 0.35) issues.push('Isi naskah tidak cukup sesuai dengan pesan kunci pada brief.');
+    if (overlap < 0.25) warnings.push('Isi naskah kurang mencerminkan pesan kunci pada brief; mohon dicek.');
   }
 
-  return issues;
+  return { blocking, warnings };
+}
+
+/** All review findings as one list (blocking first). */
+export function validateRagCopy(
+  answer: string,
+  brief: ContentBrief,
+  brandProfile: BrandProfile,
+  citations: GroundedCitation[]
+): string[] {
+  const { blocking, warnings } = reviewRagCopy(answer, brief, brandProfile, citations);
+  return [...blocking, ...warnings];
 }
 
 // Perform client-side semantic & keyword retrieval over approved active documents
@@ -232,7 +292,7 @@ export function retrieveKnowledge(
   let explanation = '';
   if (!isAdequate) {
     explanation = 'The active knowledge base does not contain adequate official references for this brief topic. Content is generated with a [Needs Verification] warning marker.';
-    unsupportedClaims.push('Specific factual claims in the brief were not found in the organization\'s active documents.');
+    unsupportedClaims.push('Beberapa fakta pada brief belum ditemukan di dokumen resmi yang aktif.');
   } else {
     explanation = `Found ${topMatches.length} verified official references from ${Array.from(new Set(topMatches.map(m => m.document.title))).length} active documents.`;
   }
@@ -336,25 +396,40 @@ export function generateContentFromBrief(
   let unsupported: string[];
   let groundedKeyMessage: string;
   let validationIssues: string[] = [];
+  let usedRagAnswer = false;
+  let aiCopyUsed = false;
 
   if (remote) {
     citations = remote.citations;
     unsupported = [...remote.unsupportedClaims];
     const sanitizedAnswer = sanitizeRagAnswer(remote.answer);
-    validationIssues = remote.grounded
-      ? validateRagCopy(sanitizedAnswer, brief, brandProfile, citations)
-      : [];
-    if (remote.grounded && sanitizedAnswer && validationIssues.length === 0) {
+    const groundedReview = remote.grounded && sanitizedAnswer
+      ? reviewRagCopy(sanitizedAnswer, brief, brandProfile, citations)
+      : null;
+    if (groundedReview && !groundedReview.blocking.length) {
       groundedKeyMessage = sanitizedAnswer;
+      usedRagAnswer = true;
+      aiCopyUsed = true;
+      validationIssues = groundedReview.warnings;
+      unsupported.push(...groundedReview.warnings);
     } else {
-      if (remote.grounded && validationIssues.length) {
-        if (!unsupported.length) {
-          unsupported.push('Jawaban RAG tidak digunakan; draf pengganti berasal dari brief dan belum dapat dianggap terverifikasi.');
-        }
-      } else if (remote.grounded) {
-        unsupported.push('Jawaban RAG kosong; isi brief perlu diverifikasi.');
-      }
       groundedKeyMessage = brief.keyMessage;
+      validationIssues = groundedReview ? [...groundedReview.blocking, ...groundedReview.warnings] : [];
+      // Brief-only rewrite: the draft stays flagged for verification either way.
+      const composed = sanitizeRagAnswer(remote.composedCopy || '');
+      const composedReview = composed ? reviewRagCopy(composed, brief, brandProfile, citations) : null;
+      if (composedReview && !composedReview.blocking.length) {
+        groundedKeyMessage = composed;
+        aiCopyUsed = true;
+        validationIssues = composedReview.warnings;
+      } else if (remote.grounded && !unsupported.length) {
+        unsupported.push(groundedReview
+          ? 'Jawaban dari dokumen resmi tidak dipakai; draf ini disusun dari brief dan masih perlu dicek dulu.'
+          : 'Tidak ada jawaban dari dokumen resmi; isi brief masih perlu dicek dulu.');
+      }
+      if (aiCopyUsed && !unsupported.length) {
+        unsupported.push('Naskah disusun AI dari brief tanpa dukungan dokumen resmi; mohon dicek dulu.');
+      }
     }
   } else {
     const query = `${brief.title} ${brief.keyMessage} ${brief.targetAudience} ${brief.selectedProduct || ''}`;
@@ -368,8 +443,22 @@ export function generateContentFromBrief(
   let scenes: VideoScriptScene[] | undefined = undefined;
   let visualAsset: VisualAsset | undefined = undefined;
 
+  // When the RAG answer itself is used, the generic "brief could not be
+  // matched" notice would be misleading — surface the precise residual issues
+  // (e.g. numbers the official documents do not contain) instead.
   const ungroundedNotice = unsupported.length > 0
-    ? '[DRAF PERLU VERIFIKASI: fakta dalam brief belum berhasil dicocokkan dengan dokumen resmi.]'
+    ? usedRagAnswer
+      ? `[DRAF PERLU VERIFIKASI: ${unsupported.join(' ')}]`
+      : '[DRAF PERLU VERIFIKASI: fakta dalam brief belum berhasil dicocokkan dengan dokumen resmi.]'
+    : '';
+
+  const toneLabel = (brief.tone || '').toLocaleLowerCase('id-ID');
+  const warmTone = /ramah|friendly|santai|hangat|akrab|bersahabat|caring/.test(toneLabel);
+  const salutation = warmTone
+    ? `Halo, Sahabat ${brandProfile.organizationName}!`
+    : `Salam, warga ${brandProfile.organizationName}!`;
+  const channelTag = brief.channel
+    ? `#${brief.channel.trim().split(/\s+/)[0].replace(/[^\p{L}\p{N}]/gu, '')}`
     : '';
 
   const keyMessageBlock = [
@@ -382,18 +471,25 @@ export function generateContentFromBrief(
 
   // Generate according to format
   if (brief.format === 'copy_caption') {
+    const hashtags = [
+      '#BUMDProfesional',
+      `#${brandProfile.organizationName.replace(/\s+/g, '')}`,
+      channelTag,
+      '#PelayananPublik',
+      '#InfoResmi'
+    ].filter(Boolean).join(' ');
     generatedText = `${ungroundedNotice ? `${ungroundedNotice}\n\n` : ''}[DRAF KORPORAT - BELUM DISETUJUI]
 
 ${brief.title.toUpperCase()}
 
-Salam, warga ${brandProfile.organizationName}!
+${salutation}
 
 ${keyMessageBlock}
 
 ${cta}
 
-${ungroundedNotice ? '' : `#BUMDProfesional #${brandProfile.organizationName.replace(/\s+/g, '')} #PelayananPublik #InfoResmi`}`;
-  } 
+${ungroundedNotice ? '' : hashtags}`;
+  }
   else if (brief.format === 'teks_promosi') {
     generatedText = `${ungroundedNotice ? `${ungroundedNotice}\n\n` : ''}[DRAF SIARAN PERS / PENGUMUMAN RESMI]
 
@@ -486,7 +582,8 @@ CTA: ${cta}`;
     visualAsset,
     citations,
     unsupportedClaims: unsupported,
-    qualityCheck
+    qualityCheck,
+    aiCopyUsed
   };
 }
 
