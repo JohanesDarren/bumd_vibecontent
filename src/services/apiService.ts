@@ -1,11 +1,14 @@
-import type { AuditLog, BrandProfile, ContentBrief, ContentDraft, KnowledgeDocument, User, Workspace } from '../types';
+import type { AuditLog, AuthUser, BrandProfile, ContentBrief, ContentDraft, KnowledgeDocument, User, Workspace } from '../types';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:3005';
+const configuredApiUrl = import.meta.env.VITE_API_URL;
+const API_URL = typeof window === 'undefined' ? configuredApiUrl || 'http://127.0.0.1:3005'
+  : configuredApiUrl && !/^http:\/\/(127\.0\.0\.1|localhost):3005$/.test(configuredApiUrl) ? configuredApiUrl
+  : `${window.location.protocol}//${window.location.hostname}:3005`;
 
 type Bootstrap = { workspaces: Workspace[]; users: User[]; brandProfile: BrandProfile; documents: KnowledgeDocument[]; drafts: ContentDraft[]; briefs: ContentBrief[]; auditLogs: AuditLog[] };
 
 async function request<T>(path:string, init?:RequestInit):Promise<T>{
-  const response=await fetch(`${API_URL}${path}`,{...init,headers:{'Content-Type':'application/json',...(init?.headers||{})}});
+  const response=await fetch(`${API_URL}${path}`,{...init,credentials:'include',headers:{'Content-Type':'application/json',...(init?.headers||{})}});
   if(!response.ok){const body=await response.json().catch(()=>({}));throw new Error(body.error||`API ${response.status}`);}
   return response.json();
 }
@@ -16,10 +19,17 @@ export type RagStatus={configured:boolean;ready:boolean;dependencies?:Record<str
 
 export const apiService={
   bootstrap:(workspaceId?:string)=>request<Bootstrap>(`/api/bootstrap${workspaceId?`?workspaceId=${encodeURIComponent(workspaceId)}`:''}`),
-  clearAll:()=>request<{ok:boolean}>('/api/data',{method:'DELETE'}),
-  onboard:(input:{organizationName:string;code:string;sector:string;city:string;adminName:string;adminEmail:string;adminPassword?:string})=>request<{workspace:Workspace;user:User}>('/api/onboarding',{method:'POST',body:JSON.stringify(input)}),
-  register:(input:{name:string;email:string;password:string;workspaceCode?:string})=>request<{id:string;name:string;email:string;hasWorkspace:boolean}>('/api/auth/register',{method:'POST',body:JSON.stringify(input)}),
-  login:(email:string,password:string)=>request<{id:string;name:string;email:string;workspaces:{id:string;name:string;code:string;role:string}[]}>('/api/auth/login',{method:'POST',body:JSON.stringify({email,password})}),
+  login:(email:string,password:string)=>request<AuthUser>('/api/auth/login',{method:'POST',body:JSON.stringify({email,password})}),
+  me:async()=>{const response=await fetch(`${API_URL}/api/auth/me`,{credentials:'include'});if(response.status===401)return null;if(!response.ok)throw new Error('Unable to restore session');return response.json() as Promise<AuthUser>;},
+  logout:()=>request<{ok:boolean}>('/api/auth/logout',{method:'POST'}),
+  corporateWorkspaces:()=>request<Workspace[]>('/api/corporate/workspaces'),
+  createCorporateWorkspace:(input:{name:string;code:string;sector:string;city:string})=>request<Workspace>('/api/corporate/workspaces',{method:'POST',body:JSON.stringify(input)}),
+  adminCompanies:()=>request<{id:string;name:string}[]>('/api/admin/companies'),
+  adminUsers:()=>request<{id:string;name:string;email:string;role:string;companyId:string|null}[]>('/api/admin/users'),
+  adminWorkspaces:()=>request<{id:string;name:string;code:string;companyId:string}[]>('/api/admin/workspaces'),
+  createCompany:(name:string)=>request<{id:string;name:string}>('/api/admin/companies',{method:'POST',body:JSON.stringify({name})}),
+  createAdminUser:(input:{name:string;email:string;password:string;role:'corporate'|'superadmin';companyId?:string})=>request<{id:string;name:string}>('/api/admin/users',{method:'POST',body:JSON.stringify(input)}),
+  createAdminWorkspace:(input:{companyId:string;name:string;code:string;sector:string;city:string})=>request<Workspace>('/api/admin/workspaces',{method:'POST',body:JSON.stringify(input)}),
   userWorkspaces:(userId:string)=>request<{id:string;name:string;code:string;role:string}[]>(`/api/users/${userId}/workspaces`),
   ragStatus:()=>request<RagStatus>('/api/rag/status'),
   ragSearch:(workspaceId:string,query:string,topK?:number)=>request<{results:RagHit[]}>(`/api/rag/search`,{method:'POST',body:JSON.stringify({workspaceId,query,topK})}),

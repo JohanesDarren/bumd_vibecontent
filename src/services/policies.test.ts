@@ -4,23 +4,29 @@ import { readFile } from 'node:fs/promises';
 import { canAccessTab, canTransitionDraft, filterUsersForWorkspace } from './policies.ts';
 
 const creator = { role: 'creator' as const, workspaceId: 'ws-a' };
-const admin = { role: 'admin' as const, workspaceId: 'ws-a' };
+const corporate = { role: 'corporate' as const, workspaceId: 'ws-a' };
+const superadmin = { role: 'superadmin' as const, workspaceId: 'ws-a' };
 
-test('role navigation follows PRD responsibilities', async () => {
+test('roles expose only their permitted menus', () => {
   assert.equal(canAccessTab(creator.role, 'brief_studio'), true);
-
-  assert.equal(canAccessTab(admin.role, 'user_management'), true);
-  assert.doesNotMatch(await readFile(new URL('./policies.ts', import.meta.url), 'utf8'), /reviewer/);
+  assert.equal(canAccessTab(creator.role, 'user_management'), false);
+  assert.equal(canAccessTab(corporate.role, 'user_management'), true);
+  assert.equal(canAccessTab(corporate.role, 'corporate_management'), true);
+  assert.equal(canAccessTab(creator.role, 'corporate_management'), false);
+  assert.equal(canAccessTab(corporate.role, 'admin_management'), false);
+  assert.equal(canAccessTab(superadmin.role, 'admin_management'), true);
 });
 
-test('only creator/admin roles remain; transitions can only approve', async () => {
-  const [types, labels] = await Promise.all([
-    readFile(new URL('../types/index.ts', import.meta.url), 'utf8'),
-    readFile(new URL('./labels.ts', import.meta.url), 'utf8')
-  ]);
-  assert.doesNotMatch(types, /reviewer/);
-  assert.doesNotMatch(labels, /reviewer/i);
-  assert.equal(canTransitionDraft(admin.role, 'draft', 'menunggu_review'), false);
+test('creator can approve their draft but cannot undo approval', () => {
+  assert.equal(canTransitionDraft(creator.role, 'draft', 'disetujui'), true);
+  assert.equal(canTransitionDraft(creator.role, 'revisi_diminta', 'disetujui'), true);
+  assert.equal(canTransitionDraft(creator.role, 'disetujui', 'draft'), false);
+  assert.equal(canTransitionDraft(corporate.role, 'draft', 'menunggu_review'), false);
+});
+
+test('workspace member lists are isolated', () => {
+  const users = [{ id: '1', ...creator }, { id: '2', ...corporate, workspaceId: 'ws-b' }];
+  assert.deepEqual(filterUsersForWorkspace(users, 'ws-a').map(user => user.id), ['1']);
 });
 
 test('user interface does not expose knowledge-base management', async () => {
@@ -45,13 +51,13 @@ test('generation workflow exposes saved drafts and approved-only visual selectio
   assert.match(visual, /status === 'disetujui'/);
 });
 
-test('user can self-approve an editable draft', () => {
-  assert.equal(canTransitionDraft(creator.role, 'draft', 'disetujui'), true);
-  assert.equal(canTransitionDraft(creator.role, 'revisi_diminta', 'disetujui'), true);
-  assert.equal(canTransitionDraft(creator.role, 'disetujui', 'draft'), false);
-});
-
-test('workspace members are isolated', () => {
-  const users = [{ id: '1', ...creator }, { id: '2', role: 'admin' as const, workspaceId: 'ws-b' }];
-  assert.deepEqual(filterUsersForWorkspace(users, 'ws-a').map(user => user.id), ['1']);
+test('only requested role model is declared', async () => {
+  const [types, labels] = await Promise.all([
+    readFile(new URL('../types/index.ts', import.meta.url), 'utf8'),
+    readFile(new URL('./labels.ts', import.meta.url), 'utf8')
+  ]);
+  assert.match(types, /'creator' \| 'corporate' \| 'superadmin'/);
+  assert.doesNotMatch(types, /reviewer/);
+  assert.doesNotMatch(labels, /reviewer/i);
+  assert.equal(superadmin.role, 'superadmin');
 });

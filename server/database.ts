@@ -24,7 +24,10 @@ export async function runMigrations() {
   const auth = await readFile(join(here, 'migrations', '002_auth.sql'), 'utf8');
   await pool.query(auth);
   const removeReviewer = await readFile(join(here, 'migrations', '003_remove_reviewer_role.sql'), 'utf8');
-  await pool.query(removeReviewer);
+  if (!(await pool.query("SELECT 1 FROM schema_migrations WHERE name='003_remove_reviewer_role'")).rowCount) await pool.query(removeReviewer);
+  if (!(await pool.query("SELECT 1 FROM schema_migrations WHERE name='004_roles_sessions'")).rowCount) {
+    await pool.query(await readFile(join(here, 'migrations', '004_roles_sessions.sql'), 'utf8'));
+  }
 }
 
 const scrypt = promisify(nodeCrypto.scrypt);
@@ -68,7 +71,7 @@ export async function createDraft(input: { workspaceId:string; title:string; for
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const member = await client.query('SELECT u.name FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.organization_id=$1 AND m.user_id=$2 AND m.active',[input.workspaceId,input.creatorId]);
+    const member = await client.query(`SELECT u.name FROM users u JOIN organizations o ON o.id=$1 WHERE u.id=$2 AND (u.global_role='superadmin' OR (u.global_role='corporate' AND u.company_id=o.company_id) OR EXISTS (SELECT 1 FROM memberships m WHERE m.organization_id=o.id AND m.user_id=u.id AND m.active))`,[input.workspaceId,input.creatorId]);
     if (!member.rowCount) throw new Error('Creator is not a member of this workspace');
     const id = `dft-${Date.now()}-${Math.floor(Math.random()*1000)}`;
     await client.query(`INSERT INTO content_drafts(id,organization_id,title,format,status,current_version,created_by,creator_name) VALUES($1,$2,$3,$4,'draft',1,$5,$6)`,[id,input.workspaceId,input.title,input.format,input.creatorId,member.rows[0].name]);
@@ -107,14 +110,15 @@ export async function replaceDraft(draft:any) {
   const client=await pool.connect();
   try {
     await client.query('BEGIN');
-    const member=await client.query('SELECT u.name,m.role FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.organization_id=$1 AND m.user_id=$2 AND m.active',[draft.workspaceId,draft.createdBy]);
+    const member=await client.query(`SELECT u.name,u.global_role AS role FROM users u JOIN organizations o ON o.id=$1 WHERE u.id=$2 AND (u.global_role='superadmin' OR (u.global_role='corporate' AND u.company_id=o.company_id) OR EXISTS (SELECT 1 FROM memberships m WHERE m.organization_id=o.id AND m.user_id=u.id AND m.active))`,[draft.workspaceId,draft.createdBy]);
     if(!member.rowCount) throw new Error('Creator is not a member of this workspace');
     if(draft.brief){
       if(draft.brief.id!==draft.briefId||draft.brief.workspaceId!==draft.workspaceId||draft.brief.createdBy!==draft.createdBy) throw new Error('Brief does not match the draft workspace, ID, or creator');
       const savedBrief=await client.query(`INSERT INTO content_briefs(id,organization_id,created_by,data) VALUES($1,$2,$3,$4::jsonb) ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data WHERE content_briefs.organization_id=EXCLUDED.organization_id RETURNING id`,[draft.brief.id,draft.workspaceId,draft.createdBy,JSON.stringify(draft.brief)]);
       if(!savedBrief.rowCount) throw new Error('Brief ID already belongs to another workspace');
     }
-    await client.query(`INSERT INTO content_drafts(id,organization_id,brief_id,title,format,status,current_version,created_by,creator_name,visual_asset,approval_info,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12,$13) ON CONFLICT(id) DO UPDATE SET title=EXCLUDED.title,status=EXCLUDED.status,current_version=EXCLUDED.current_version,visual_asset=EXCLUDED.visual_asset,approval_info=EXCLUDED.approval_info,updated_at=EXCLUDED.updated_at`,[draft.id,draft.workspaceId,draft.briefId||null,draft.title,draft.format,draft.status,draft.currentVersionon,draft.createdBy,draft.creatorName,JSON.stringify(draft.visualAsset||null),JSON.stringify(draft.approvalInfo||null),draft.createdAt,draft.updatedAt]);
+    const savedDraft=await client.query(`INSERT INTO content_drafts(id,organization_id,brief_id,title,format,status,current_version,created_by,creator_name,visual_asset,approval_info,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12,$13) ON CONFLICT(id) DO UPDATE SET title=EXCLUDED.title,status=EXCLUDED.status,current_version=EXCLUDED.current_version,visual_asset=EXCLUDED.visual_asset,approval_info=EXCLUDED.approval_info,updated_at=EXCLUDED.updated_at WHERE content_drafts.organization_id=EXCLUDED.organization_id RETURNING id`,[draft.id,draft.workspaceId,draft.briefId||null,draft.title,draft.format,draft.status,draft.currentVersionon,draft.createdBy,draft.creatorName,JSON.stringify(draft.visualAsset||null),JSON.stringify(draft.approvalInfo||null),draft.createdAt,draft.updatedAt]);
+    if(!savedDraft.rowCount) throw new Error('Draft ID already belongs to another workspace');
     await client.query('DELETE FROM draft_versions WHERE draft_id=$1',[draft.id]);
     for(const version of draft.versions){
       await client.query('INSERT INTO draft_versions(draft_id,version_number,content,scenes,unsupported_claims,quality_check,created_at,created_by,change_summary) VALUES($1,$2,$3,$4::jsonb,$5::jsonb,$6::jsonb,$7,$8,$9)',[draft.id,version.versionNumber,version.content,JSON.stringify(version.scenes||null),JSON.stringify(version.unsupportedClaims||[]),JSON.stringify(version.qualityCheck||{}),version.createdAt,version.createdBy,version.changeSummary||'']);
@@ -131,14 +135,15 @@ export async function replaceDraft(draft:any) {
 export async function saveBrand(profile:any){await pool.query('INSERT INTO brand_profiles(organization_id,data,updated_at) VALUES($1,$2::jsonb,now()) ON CONFLICT(organization_id) DO UPDATE SET data=EXCLUDED.data,updated_at=now()',[profile.workspaceId,JSON.stringify(profile)]);return profile;}
 
 export async function saveKnowledgeSource(source:any){
-  const client=await pool.connect();try{await client.query('BEGIN');await client.query(`INSERT INTO knowledge_sources(id,organization_id,title,category,owner,version,effective_date,status,upload_date,file_size,summary) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT(id) DO UPDATE SET title=EXCLUDED.title,category=EXCLUDED.category,owner=EXCLUDED.owner,version=EXCLUDED.version,effective_date=EXCLUDED.effective_date,status=EXCLUDED.status,file_size=EXCLUDED.file_size,summary=EXCLUDED.summary`,[source.id,source.workspaceId,source.title,source.category,source.owner,source.version,source.effectiveDate,source.status,source.uploadDate,source.fileSize,source.summary]);await client.query('DELETE FROM knowledge_chunks WHERE source_id=$1',[source.id]);for(const chunk of source.chunks||[]) await client.query('INSERT INTO knowledge_chunks(id,source_id,section,page,content,keywords) VALUES($1,$2,$3,$4,$5,$6)',[chunk.id,source.id,chunk.section,chunk.page||null,chunk.content,chunk.keywords||[]]);await client.query('COMMIT');return source;}catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
+  const client=await pool.connect();try{await client.query('BEGIN');const saved=await client.query(`INSERT INTO knowledge_sources(id,organization_id,title,category,owner,version,effective_date,status,upload_date,file_size,summary) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT(id) DO UPDATE SET title=EXCLUDED.title,category=EXCLUDED.category,owner=EXCLUDED.owner,version=EXCLUDED.version,effective_date=EXCLUDED.effective_date,status=EXCLUDED.status,file_size=EXCLUDED.file_size,summary=EXCLUDED.summary WHERE knowledge_sources.organization_id=EXCLUDED.organization_id RETURNING id`,[source.id,source.workspaceId,source.title,source.category,source.owner,source.version,source.effectiveDate,source.status,source.uploadDate,source.fileSize,source.summary]);if(!saved.rowCount)throw new Error('Source ID already belongs to another workspace');await client.query('DELETE FROM knowledge_chunks WHERE source_id=$1',[source.id]);for(const chunk of source.chunks||[]) await client.query('INSERT INTO knowledge_chunks(id,source_id,section,page,content,keywords) VALUES($1,$2,$3,$4,$5,$6)',[chunk.id,source.id,chunk.section,chunk.page||null,chunk.content,chunk.keywords||[]]);await client.query('COMMIT');return source;}catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
 }
 
 export async function updateOrganization(id:string,input:any){const result=await pool.query('UPDATE organizations SET name=$2,code=$3,sector=$4,city=$5,tagline=$6,primary_color=$7,accent_color=$8,description=$9 WHERE id=$1 RETURNING id,name,code,sector,city,tagline,primary_color AS "primaryColor",accent_color AS "accentColor",description',[id,input.name,input.code.toUpperCase(),input.sector,input.city,input.tagline||'',input.primaryColor||'#0284c7',input.accentColor||'#0ea5e9',input.description||'']);if(!result.rowCount)throw new Error('Organization not found');return result.rows[0];}
 
 export async function createUserMembership(workspaceId:string,input:any){const client=await pool.connect();try{await client.query('BEGIN');
-  // Re-use an existing account (e.g. registered via /api/auth/register but not yet a member) or create a fresh one.
-  const existing=await client.query('SELECT id FROM users WHERE email=$1',[String(input.email||'').toLowerCase().trim()]);
+  // Re-use an existing creator across workspaces or create a new account.
+  const existing=await client.query('SELECT id,global_role,company_id FROM users WHERE email=$1',[String(input.email||'').toLowerCase().trim()]);
+  if (existing.rowCount && existing.rows[0].global_role !== 'creator') throw new Error('Only creator accounts can join a workspace');
   let userId:string; let tempPassword:string|undefined;
   const adminPassword = typeof input.password === 'string' && input.password.length >= 8 ? input.password : undefined;
   if(existing.rowCount){ userId=existing.rows[0].id; }
@@ -153,10 +158,11 @@ export async function createUserMembership(workspaceId:string,input:any){const c
   await client.query('INSERT INTO memberships(organization_id,user_id,role) VALUES($1,$2,$3) ON CONFLICT (organization_id,user_id) DO UPDATE SET role=EXCLUDED.role, active=true',[workspaceId,userId,input.role]);
   await client.query('COMMIT');
   // Only surface auto-generated passwords; never echo one the admin chose.
-  return{id:userId,workspaceId,...input,avatar:input.avatar||'',tempPassword: adminPassword ? undefined : tempPassword};
+  const { password: _password, ...publicInput } = input;
+  return{id:userId,workspaceId,...publicInput,avatar:input.avatar||'',tempPassword: adminPassword ? undefined : tempPassword};
 }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}}
 
-export async function deleteUserMembership(workspaceId:string,userId:string){const client=await pool.connect();try{await client.query('BEGIN');await client.query('DELETE FROM memberships WHERE organization_id=$1 AND user_id=$2',[workspaceId,userId]);await client.query('DELETE FROM users u WHERE u.id=$1 AND NOT EXISTS(SELECT 1 FROM memberships m WHERE m.user_id=u.id)',[userId]);await client.query('COMMIT');}catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}}
+export async function deleteUserMembership(workspaceId:string,userId:string){const client=await pool.connect();try{await client.query('BEGIN');await client.query('DELETE FROM memberships WHERE organization_id=$1 AND user_id=$2',[workspaceId,userId]);await client.query('COMMIT');}catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}}
 export async function deleteKnowledgeSource(workspaceId:string,id:string){await pool.query('DELETE FROM knowledge_sources WHERE organization_id=$1 AND id=$2',[workspaceId,id]);}
 export async function deleteBrand(workspaceId:string){await pool.query('DELETE FROM brand_profiles WHERE organization_id=$1',[workspaceId]);}
 export async function deleteDraft(workspaceId:string,id:string){await pool.query('DELETE FROM content_drafts WHERE organization_id=$1 AND id=$2',[workspaceId,id]);}

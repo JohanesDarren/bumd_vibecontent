@@ -150,7 +150,8 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="user-role-tag">
               {activeUser.role === 'creator' && <span style={{display: 'flex', alignItems: 'center'}}><PenTool size={12} style={{ marginRight: '4px' }} /> Kreator</span>}
   
-              {activeUser.role === 'admin' && <span style={{display: 'flex', alignItems: 'center'}}><Crown size={12} style={{ marginRight: '4px' }} /> Admin Pengetahuan</span>}
+              {activeUser.role === 'corporate' && <span style={{display: 'flex', alignItems: 'center'}}><Crown size={12} style={{ marginRight: '4px' }} /> Korporat</span>}
+              {activeUser.role === 'superadmin' && <span style={{display: 'flex', alignItems: 'center'}}><Crown size={12} style={{ marginRight: '4px' }} /> Superadmin</span>}
             </span>
           </div>
         </div>

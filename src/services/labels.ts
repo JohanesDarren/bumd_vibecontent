@@ -19,7 +19,8 @@ export const FORMAT_LABELS: Record<ContentFormat, string> = {
 
 export const ROLE_LABELS: Record<UserRole, string> = {
   creator: 'Kreator',
-  admin: 'Admin'
+  corporate: 'Korporat',
+  superadmin: 'Superadmin'
 };
 
 export function statusLabel(status: DraftStatus): string {

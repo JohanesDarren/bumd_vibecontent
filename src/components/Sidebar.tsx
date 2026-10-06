@@ -72,6 +72,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           {navButton('brand_profile', 'Profil & Merek', Building2)}
           {navButton('user_management', 'Pengguna & Peran', Users)}
+          {navButton('corporate_management', 'Workspace Korporat', Building2)}
+          {navButton('admin_management', 'Administrasi Aplikasi', ShieldAlert)}
           {navButton('audit_log', 'Jejak Audit', ShieldAlert)}
           {navButton('settings_help', 'Pengaturan & Bantuan', CircleHelp)}
         </div>

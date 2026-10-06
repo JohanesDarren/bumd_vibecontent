@@ -52,10 +52,7 @@ export const UserManagementView: React.FC<Props> = ({ users, activeWorkspace, on
           onChange={e => setForm({ ...form, password: e.target.value })}
           minLength={form.password ? 8 : undefined}
         />
-        <select className="form-select" value={form.role} onChange={e => setForm({ ...form, role: e.target.value as UserRole })}>
-          <option value="creator">Kreator</option>
-          <option value="admin">Admin</option>
-        </select>
+        <span className="form-label">Peran: Kreator</span>
         {error && (
           <div style={{ gridColumn: '1 / -1', padding: '10px 12px', borderRadius: 8, background: 'rgba(244,63,94,0.12)', border: '1px solid rgba(244,63,94,0.35)', color: '#fb7185', fontSize: '0.82rem' }}>
             {error}

@@ -1,4 +1,5 @@
-export type UserRole = 'creator' | 'admin';
+export type UserRole = 'creator' | 'corporate' | 'superadmin';
+export interface AuthUser { id: string; name: string; email: string; role: UserRole; companyId?: string | null; workspaces: { id: string; name: string; code: string; role: UserRole }[] }
 
 export interface User {
   id: string;
@@ -245,5 +246,7 @@ export type ActiveTab =
   | 'library' 
   | 'brand_profile' 
   | 'user_management'
+  | 'corporate_management'
+  | 'admin_management'
   | 'audit_log'
   | 'settings_help';

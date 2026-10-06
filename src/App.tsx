@@ -4,6 +4,7 @@ import {
   Workspace, 
   User, 
   UserRole, 
+  AuthUser,
   BrandProfile, 
   KnowledgeDocument, 
   ContentDraft, 
@@ -29,20 +30,20 @@ import { LibraryView } from './components/LibraryView';
 import { BrandProfileView } from './components/BrandProfileView';
 import { AuditLogView } from './components/AuditLogView';
 import { ExportModal } from './components/ExportModal';
-import { LoginAccessView } from './components/LoginAccessView';
+
 import { UserManagementView } from './components/UserManagementView';
 import { SettingsHelpView } from './components/SettingsHelpView';
 import { ContentSchedulingView } from './components/ContentSchedulingView';
+import { CorporateManagementView } from './components/CorporateManagementView';
+import { SuperadminView } from './components/SuperadminView';
 import { Building2 } from 'lucide-react';
 
-import { FirstRunSetupView } from './components/FirstRunSetupView';
-import { canAccessTab, canTransitionDraft, filterUsersForWorkspace } from './services/policies';
+import { canTransitionDraft, filterUsersForWorkspace } from './services/policies';
 
 export function App() {
   const [authenticated, setAuthenticated] = useState(false);
-  const [authUser, setAuthUser] = useState<{id:string;name:string;email:string;workspaces:{id:string;name:string;code:string;role:string}[]} | null>(null);
-  const [showFirstRun, setShowFirstRun] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [loading, setLoading] = useState(false);
   // Theme state
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   // Icon-only sidebar rail; persisted so it survives reloads.
@@ -80,7 +81,7 @@ export function App() {
     setWorkspaces(data.workspaces);
     setActiveWorkspace(activeWs || null);
     setUsers(data.users);
-    setActiveUser(curUser || null);
+    setActiveUser(curUser ? { ...curUser, role: authUser?.role ?? curUser.role } : activeUser?.workspaceId === workspaceId ? activeUser : null);
     setBrandProfile(data.brandProfile);
     setDocuments(data.documents);
     setDrafts(data.drafts);
@@ -91,7 +92,7 @@ export function App() {
   };
 
   useEffect(() => {
-    loadData().catch(error => { setToastMessage(`Failed to load database: ${error.message}`); setLoading(false); });
+    apiService.me().then(user => { if (user) void handleAuthed(user).catch(() => { setAuthUser(null); setAuthenticated(false); }); }).catch(() => {});
   }, []);
 
   // Update theme on root DOM
@@ -101,7 +102,7 @@ export function App() {
 
   // After email login: activate workspace by id and set the authenticated user as active
   // `user` is passed explicitly because React state (authUser) is not yet updated in the same tick.
-  const setActiveWorkspaceById = async (wsId: string, user?: { id: string }) => {
+  const setActiveWorkspaceById = async (wsId: string, user?: AuthUser) => {
     const data = await apiService.bootstrap(wsId);
     const ws = data.workspaces.find(item => item.id === wsId);
     if (!ws) return;
@@ -109,7 +110,9 @@ export function App() {
     setActiveWorkspace(ws);
     setUsers(data.users);
     const me = data.users.find(u => u.id === (user?.id ?? authUser?.id));
-    setActiveUser(me ?? null);
+    const account = user ?? authUser;
+    const manager = account?.role === 'corporate' || account?.role === 'superadmin' ? account : null;
+    setActiveUser(me ? { ...me, role: account?.role ?? me.role } : manager ? {id:manager.id,name:manager.name,email:manager.email,role:manager.role,workspaceId:wsId,avatar:'',title:'',department:''} : null);
     setBrandProfile(data.brandProfile);
     setDocuments(data.documents);
     setDrafts(data.drafts);
@@ -118,10 +121,22 @@ export function App() {
     setLoading(false);
   };
 
+  const handleAuthed = async (user: AuthUser) => {
+    if (user.role === 'superadmin') {
+      setAuthUser(user); setAuthenticated(true); setCurrentTab('admin_management');
+      setActiveWorkspace(null); setActiveUser(null);
+      return;
+    }
+    if (user.workspaces.length === 1) await setActiveWorkspaceById(user.workspaces[0].id, user);
+    setAuthUser(user); setAuthenticated(true);
+  };
+
   // Logout
   const handleLogout = () => {
+    void apiService.logout().catch(() => {});
     setAuthenticated(false);
     setAuthUser(null);
+    setActiveWorkspace(null);
     setActiveUser(null);
     setCurrentTab('dashboard');
     showToast('Anda telah keluar.');
@@ -135,27 +150,18 @@ export function App() {
 
   // Workspace Switcher
   const handleSelectWorkspace = async (wsId: string) => {
-    if (!activeUser || activeUser.workspaceId !== wsId) {
+    const account = authUser?.workspaces.some(w => w.id === wsId) ? authUser : await apiService.me();
+    if (!account?.workspaces.some(w => w.id === wsId)) {
       showToast('Akses workspace ditolak. Akun ini bukan anggota tenant tersebut.');
       return;
     }
-    await loadData(wsId);
-    showToast(`Beralih ke workspace ${workspaces.find(w => w.id === wsId)?.name}`);
+    setAuthUser(account);
+    await setActiveWorkspaceById(wsId, account);
+    showToast(`Beralih ke workspace ${account.workspaces.find(w => w.id === wsId)?.name}`);
   };
 
 
 
-  // Reset Demo Data
-  const handleResetData = async () => {
-    await apiService.clearAll();
-    setAuthenticated(false);
-    setAuthUser(null);
-    setShowFirstRun(false);
-    setActiveUser(null);
-    setActiveWorkspace(null);
-    await loadData();
-    showToast('Semua data aplikasi telah dihapus.');
-  };
 
   // Content Generation from Brief
   // `output` is supplied by the Brief Studio (grounded live against the RAG service);
@@ -261,27 +267,10 @@ export function App() {
     showToast('Keanggotaan pengguna berhasil dihapus.');
   };
 
-  if (loading) return <div style={{display:'grid',placeItems:'center',height:'100vh'}}>Memuat PostgreSQL…</div>;
-
-    // 1. Auth gate — must come before workspace picker
-    if (!authenticated || !authUser) {
-      if (showFirstRun || workspaces.length === 0) {
-        return <FirstRunSetupView onSubmit={async input=>{const created=await apiService.onboard(input);await loadData(created.workspace.id);setShowFirstRun(false);setAuthenticated(true);}}/>;
-      }
-      return <AuthView
-        hasWorkspaces={workspaces.length > 0}
-        onFirstRun={() => setShowFirstRun(true)}
-        onAuthed={async (user) => {
-          setAuthUser(user);
-          const memberships = user.workspaces || [];
-          if (memberships.length === 1) {
-            const ws = memberships[0];
-            await setActiveWorkspaceById(ws.id, user);
-          }
-          setAuthenticated(true);
-        }}
-      />;
-    }
+  if (!authenticated || !authUser) return <AuthView onAuthed={handleAuthed} />;
+  if (loading) return <div style={{display:'grid',placeItems:'center',height:'100vh'}}>Memuat workspace…</div>;
+  if (authUser.role === 'superadmin' && !activeWorkspace) return <SuperadminView onLogout={handleLogout} onOpen={id => { void handleSelectWorkspace(id).then(() => setCurrentTab('dashboard')).catch(e => showToast(e.message)); }} />;
+  if (authUser.role === 'corporate' && authUser.workspaces.length === 0) return <main className="content-viewport" style={{maxWidth:1000,margin:'0 auto',padding:30}}><button className="btn btn-secondary" onClick={handleLogout}>Keluar</button><CorporateManagementView onOpen={id => { void handleSelectWorkspace(id).then(() => setCurrentTab('dashboard')).catch(e => showToast(e.message)); }} /></main>;
 
     // 2. Workspace picker — authenticated but no workspace selected yet
     if (!activeWorkspace || !activeUser) {
@@ -320,7 +309,7 @@ export function App() {
     <div className="app-container">
       {/* Top Header */}
       <Header 
-        workspaces={workspaces.filter(workspace => workspace.id === activeUser.workspaceId)}
+        workspaces={workspaces.filter(workspace => authUser.workspaces.some(member => member.id === workspace.id))}
         activeWorkspace={activeWorkspace}
         onSelectWorkspace={handleSelectWorkspace}
         users={filterUsersForWorkspace(users, activeWorkspace.id)}
@@ -467,6 +456,8 @@ export function App() {
             <UserManagementView users={filterUsersForWorkspace(users, activeWorkspace.id)} activeWorkspace={activeWorkspace} onCreate={handleCreateUser} onDelete={handleDeleteUser} />
           )}
 
+          {currentTab === 'corporate_management' && <CorporateManagementView onOpen={id => { void handleSelectWorkspace(id).then(() => setCurrentTab('dashboard')).catch(e => showToast(e.message)); }} />}
+          {currentTab === 'admin_management' && <SuperadminView onLogout={handleLogout} onOpen={id => { void handleSelectWorkspace(id).then(() => setCurrentTab('dashboard')).catch(e => showToast(e.message)); }} />}
           {currentTab === 'settings_help' && <SettingsHelpView />}
         </main>
       </div>
