@@ -247,6 +247,7 @@ export type ActiveTab =
   | 'brand_profile' 
   | 'user_management'
   | 'corporate_management'
+  | 'corporate_users'
   | 'admin_management'
   | 'audit_log'
   | 'settings_help';

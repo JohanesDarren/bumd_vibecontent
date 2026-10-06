@@ -18,7 +18,7 @@ export const CorporateManagementView: React.FC<{ onOpen: (id: string) => void }>
     finally { setBusy(false); }
   };
   return <div>
-    <div className="page-header-row"><div><h2 className="page-title">Workspace Korporat</h2><p className="page-subtitle">Kelola workspace di perusahaan Anda. Anggota workspace dikelola lewat Pengguna &amp; Peran.</p></div></div>
+    <div className="page-header-row"><div><h2 className="page-title">Workspace Korporat</h2><p className="page-subtitle">Kelola workspace di perusahaan Anda. Penempatan kreator dikelola lewat Kreator Perusahaan.</p></div></div>
     <section className="card-panel" style={{ padding: 20, marginBottom: 18 }}><h3>Workspace perusahaan</h3>
       {workspaces.length === 0 && <p>Belum ada workspace.</p>}
       {workspaces.map(ws => <div key={ws.id} style={{ padding: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}><span>{ws.name} ({ws.code})</span><button type="button" className="btn btn-secondary btn-sm" onClick={() => onOpen(ws.id)}>Buka</button></div>)}

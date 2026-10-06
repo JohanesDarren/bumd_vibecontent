@@ -11,8 +11,8 @@ async function api(method:string,path:string,body?:unknown,cookie?:string) {
   const response=await fetch(`${base}${path}`,{method,headers:{'Content-Type':'application/json',Origin:'http://localhost:5173',...(cookie?{Cookie:cookie}:{})},body:body===undefined?undefined:JSON.stringify(body)});
   return {status:response.status,data:await response.json(),cookie:response.headers.get('set-cookie')?.split(';')[0]||''};
 }
-test.before(async()=>{await runMigrations();await clearAllData();});
-test.after(async()=>{await clearAllData();server.close();await pool.end();});
+test.before(async()=>{await runMigrations();await clearAllData();await pool.query('DELETE FROM companies');});
+test.after(async()=>{await clearAllData();await pool.query('DELETE FROM companies');server.close();await pool.end();});
 
 test('three roles: login, company isolation, workspace memberships, global management',async()=>{
   const pass=`longpass-${randomUUID()}`;
@@ -39,6 +39,23 @@ test('three roles: login, company isolation, workspace memberships, global manag
   const created=await api('POST','/api/corporate/workspaces',{name:'Alpha Two',code:`C${randomUUID().slice(0,8)}`,sector:'Water',city:'Bandung'},manager.cookie);
   assert.equal(created.status,201);
   assert.equal((await api('GET',`/api/bootstrap?workspaceId=${created.data.id}`,undefined,manager.cookie)).status,200);
+  const plottedEmail=`plotted-${randomUUID()}@test.dev`;
+  const plotted=await api('POST','/api/corporate/users',{name:'Plotted',email:plottedEmail,password:pass,workspaceIds:[ws.data.id,created.data.id]},manager.cookie);
+  assert.equal(plotted.status,201);
+  assert.deepEqual(new Set(plotted.data.workspaceIds),new Set([ws.data.id,created.data.id]));
+  const companyUsers=await api('GET','/api/corporate/users',undefined,manager.cookie);
+  assert.equal(companyUsers.status,200);
+  assert.deepEqual(new Set(companyUsers.data.find((u:{id:string})=>u.id===plotted.data.id).workspaceIds),new Set([ws.data.id,created.data.id]));
+  const plottedLogin=await api('POST','/api/auth/login',{email:plottedEmail,password:pass});
+  assert.deepEqual(new Set(plottedLogin.data.workspaces.map((w:{id:string})=>w.id)),new Set([ws.data.id,created.data.id]));
+  assert.equal((await api('PUT',`/api/corporate/users/${plotted.data.id}/workspaces`,{workspaceIds:[created.data.id]},manager.cookie)).status,200);
+  assert.deepEqual((await api('GET','/api/auth/me',undefined,plottedLogin.cookie)).data.workspaces.map((w:{id:string})=>w.id),[created.data.id]);
+  assert.equal((await api('POST','/api/corporate/users',{name:'Outside',email:`outside-${randomUUID()}@test.dev`,password:pass,workspaceIds:[wsOther.data.id]},manager.cookie)).status,403);
+  assert.equal((await api('PUT',`/api/corporate/users/${plotted.data.id}/workspaces`,{workspaceIds:[wsOther.data.id]},manager.cookie)).status,403);
+  assert.equal((await api('PUT',`/api/corporate/users/${plotted.data.id}/workspaces`,{workspaceIds:[]},manager.cookie)).status,400,'creator must retain a workspace to remain manageable');
+  const foreignEmail=`foreign-${randomUUID()}@test.dev`;
+  assert.equal((await api('POST',`/api/corporate/workspaces/${wsOther.data.id}/members`,{name:'Foreign',email:foreignEmail,role:'creator',password:pass},root.cookie)).status,201);
+  assert.equal((await api('POST',`/api/corporate/workspaces/${ws.data.id}/members`,{name:'Foreign',email:foreignEmail,role:'creator'},manager.cookie)).status,409,'corporate cannot claim a creator from another company by email');
   const creatorEmail=`creator-${randomUUID()}@test.dev`;
   const member=await api('POST',`/api/corporate/workspaces/${ws.data.id}/members`,{name:'Writer',email:creatorEmail,role:'creator',password:pass},manager.cookie);
   assert.equal(member.status,201);
@@ -48,12 +65,13 @@ test('three roles: login, company isolation, workspace memberships, global manag
   assert.deepEqual(writer.data.workspaces.map((w:{id:string})=>w.id),[ws.data.id]);
   assert.equal((await api('POST',`/api/corporate/workspaces`,{name:'Forbidden'},writer.cookie)).status,403);
   assert.equal((await api('GET',`/api/bootstrap?workspaceId=${wsOther.data.id}`,undefined,writer.cookie)).status,403);
-  assert.equal((await api('POST',`/api/corporate/workspaces/${wsOther.data.id}/members`,{name:'Writer',email:creatorEmail,role:'creator'},root.cookie)).status,201);
+  assert.equal((await api('POST',`/api/corporate/workspaces/${created.data.id}/members`,{name:'Writer',email:creatorEmail,role:'creator'},manager.cookie)).status,201);
   const multi=await api('GET','/api/auth/me',undefined,writer.cookie);
-  assert.deepEqual(new Set(multi.data.workspaces.map((w:{id:string})=>w.id)),new Set([ws.data.id,wsOther.data.id]));
+  assert.deepEqual(new Set(multi.data.workspaces.map((w:{id:string})=>w.id)),new Set([ws.data.id,created.data.id]));
+  assert.equal((await api('POST',`/api/corporate/workspaces/${wsOther.data.id}/members`,{name:'Writer',email:creatorEmail,role:'creator'},root.cookie)).status,409);
   assert.equal((await api('POST',`/api/corporate/workspaces/${wsOther.data.id}/members`,{name:'X',email:'x@test.dev',role:'creator'},manager.cookie)).status,403);
   assert.equal((await api('GET','/api/auth/me',undefined,writer.cookie)).data.role,'creator');
-  assert.equal((await api('POST','/api/drafts',{workspaceId:wsOther.data.id,title:'Creator draft',format:'caption',content:'Original',creatorId:root.data.id},writer.cookie)).status,201,'draft author must be session identity');
+  assert.equal((await api('POST','/api/drafts',{workspaceId:created.data.id,title:'Creator draft',format:'caption',content:'Original',creatorId:root.data.id},writer.cookie)).status,201,'draft author must be session identity');
   assert.equal((await api('POST','/api/drafts',{workspaceId:wsOther.data.id,title:'Corporate draft',format:'caption',content:'Company data'},manager.cookie)).status,403);
   assert.equal((await api('POST','/api/drafts',{workspaceId:ws.data.id,title:'Corporate draft',format:'caption',content:'Company data'},manager.cookie)).status,201,'corporate may create content in company workspace without membership');
   assert.equal((await api('POST','/api/drafts',{workspaceId:wsOther.data.id,title:'Global draft',format:'caption',content:'App-wide data'},root.cookie)).status,201,'superadmin may create content globally');

@@ -35,6 +35,7 @@ import { UserManagementView } from './components/UserManagementView';
 import { SettingsHelpView } from './components/SettingsHelpView';
 import { ContentSchedulingView } from './components/ContentSchedulingView';
 import { CorporateManagementView } from './components/CorporateManagementView';
+import { CorporateUsersView } from './components/CorporateUsersView';
 import { SuperadminView } from './components/SuperadminView';
 import { Building2 } from 'lucide-react';
 
@@ -457,6 +458,7 @@ export function App() {
           )}
 
           {currentTab === 'corporate_management' && <CorporateManagementView onOpen={id => { void handleSelectWorkspace(id).then(() => setCurrentTab('dashboard')).catch(e => showToast(e.message)); }} />}
+          {currentTab === 'corporate_users' && <CorporateUsersView />}
           {currentTab === 'admin_management' && <SuperadminView onLogout={handleLogout} onOpen={id => { void handleSelectWorkspace(id).then(() => setCurrentTab('dashboard')).catch(e => showToast(e.message)); }} />}
           {currentTab === 'settings_help' && <SettingsHelpView />}
         </main>

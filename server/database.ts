@@ -142,8 +142,13 @@ export async function updateOrganization(id:string,input:any){const result=await
 
 export async function createUserMembership(workspaceId:string,input:any){const client=await pool.connect();try{await client.query('BEGIN');
   // Re-use an existing creator across workspaces or create a new account.
-  const existing=await client.query('SELECT id,global_role,company_id FROM users WHERE email=$1',[String(input.email||'').toLowerCase().trim()]);
+  const existing=await client.query('SELECT id,global_role,company_id FROM users WHERE email=$1 FOR UPDATE',[String(input.email||'').toLowerCase().trim()]);
   if (existing.rowCount && existing.rows[0].global_role !== 'creator') throw new Error('Only creator accounts can join a workspace');
+  if (existing.rowCount) {
+    const foreign=await client.query(`SELECT 1 FROM memberships m JOIN organizations o ON o.id=m.organization_id
+      WHERE m.user_id=$1 AND m.active AND o.company_id<>(SELECT company_id FROM organizations WHERE id=$2) LIMIT 1`,[existing.rows[0].id,workspaceId]);
+    if(foreign.rowCount) throw new Error('Creator belongs to another company');
+  }
   let userId:string; let tempPassword:string|undefined;
   const adminPassword = typeof input.password === 'string' && input.password.length >= 8 ? input.password : undefined;
   if(existing.rowCount){ userId=existing.rows[0].id; }
