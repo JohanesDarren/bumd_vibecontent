@@ -1,3 +1,6 @@
+@import "tailwindcss";
+@import "./tailwind-theme.css";
+
 /* ==========================================================================
    VibeContent - Modern Corporate Design System for Indonesian BUMD
    ========================================================================== */
@@ -60,11 +63,13 @@
   --transition-smooth: 350ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Base Styles */
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+/* Keep the legacy reset below Tailwind utilities in the base layer. */
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
 }
 
 body {
@@ -1919,6 +1924,33 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   }
 }
 
+/* Superadmin control plane */
+.admin-layout { display: grid; grid-template-columns: 238px minmax(0, 1fr); min-height: 100vh; background: var(--bg-primary); }
+.admin-sidebar { position: sticky; top: 0; height: 100vh; overflow-y: auto; padding: 26px 14px; background: var(--bg-secondary); border-right: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: 20px; }
+.admin-sidebar-brand { padding: 4px 12px; font-size: 1.15rem; font-weight: 800; color: var(--text-primary); }
+.admin-sidebar-brand span { display: block; font-size: .62rem; letter-spacing: .18em; color: var(--primary); }
+.admin-sidebar-caption { padding: 0 12px; font-size: .67rem; font-weight: 700; letter-spacing: .12em; color: var(--text-muted); }
+.admin-sidebar nav { display: grid; gap: 4px; }
+.admin-nav-item { width: 100%; border: 0; border-radius: 10px; background: transparent; color: var(--text-secondary); padding: 11px 12px; text-align: left; cursor: pointer; font: 600 .85rem var(--font-sans); display: flex; justify-content: space-between; gap: 10px; }
+.admin-nav-item:hover, .admin-nav-item:focus-visible { background: var(--bg-tertiary); color: var(--primary); }
+.admin-nav-item.active { background: var(--primary-light); color: var(--primary); }
+.admin-nav-item span { color: var(--text-muted); }
+.admin-logout { margin-top: auto; }
+.admin-main { min-width: 0; max-width: 1200px; width: 100%; margin: 0 auto; padding: 32px; }
+.admin-main .card-panel[hidden] { display: none; }
+.admin-main .card-panel h2 { margin-bottom: 16px; }
+.admin-main .card-panel ul { margin: 14px 0 28px; padding-left: 22px; }
+.admin-main .card-panel li { margin: 12px 0; line-height: 2.3; }
+.admin-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.admin-stat { background: var(--bg-tertiary); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 18px; text-align: left; color: var(--text-primary); cursor: pointer; }
+.admin-stat:hover { border-color: var(--primary); }
+.admin-stat strong { display: block; font-size: 1.9rem; }
+.admin-stat span { color: var(--text-secondary); }
+.admin-table-wrap { overflow-x: auto; margin-top: 16px; }
+.admin-table { width: 100%; border-collapse: collapse; text-align: left; }
+.admin-table th, .admin-table td { padding: 11px; border-bottom: 1px solid var(--border-subtle); }
+@media (max-width: 720px) { .admin-layout { display: block; } .admin-sidebar { position: static; height: auto; padding: 12px; } .admin-sidebar nav { display: flex; overflow-x: auto; } .admin-nav-item { width: auto; min-width: max-content; } .admin-main { padding: 18px; } .admin-logout { align-self: flex-start; } }
+
 /* ── Spinner animation for Quick Variations loading state ── */
 .spin-animation {
   animation: spin 1s linear infinite;
@@ -1927,4 +1959,204 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+/* ==========================================================================
+   Corporate & Admin Enterprise Design System (Matching ContentSchedulingView)
+   ========================================================================== */
+
+.corporate-view-container {
+  animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.corporate-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.corporate-kpi-card {
+  background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: all var(--transition-fast);
+}
+
+.corporate-kpi-card:hover {
+  border-color: var(--border-glass);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.corporate-kpi-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.corporate-kpi-label {
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.corporate-kpi-icon-wrap {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--primary-light);
+  color: var(--primary);
+}
+
+.corporate-kpi-value {
+  font-size: 1.85rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.corporate-kpi-hint {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin-top: 6px;
+}
+
+.corporate-table-card {
+  background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.corporate-table-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.corporate-table-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.corporate-table-subtitle {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.corporate-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.875rem;
+}
+
+.corporate-table thead th {
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.corporate-table tbody tr {
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background var(--transition-fast);
+}
+
+.corporate-table tbody tr:hover {
+  background: rgba(2, 132, 199, 0.04);
+}
+
+.corporate-table td {
+  padding: 14px 18px;
+  vertical-align: middle;
+}
+
+.corporate-table-footer {
+  padding: 12px 20px;
+  background: var(--bg-tertiary);
+  border-top: 1px solid var(--border-subtle);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.corporate-role-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border: 1px solid;
+}
+
+.corporate-role-pill.superadmin {
+  background: rgba(99, 102, 241, 0.12);
+  border-color: rgba(99, 102, 241, 0.35);
+  color: #818cf8;
+}
+
+.corporate-role-pill.corporate {
+  background: rgba(6, 182, 212, 0.12);
+  border-color: rgba(6, 182, 212, 0.35);
+  color: #06b6d4;
+}
+
+.corporate-role-pill.creator {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #10b981;
+}
+
+.corporate-avatar-box {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--primary-light);
+  color: var(--primary);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
 

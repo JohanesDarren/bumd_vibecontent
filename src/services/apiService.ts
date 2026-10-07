@@ -13,6 +13,23 @@ async function request<T>(path:string, init?:RequestInit):Promise<T>{
   return response.json();
 }
 
+export type AdminOverview={
+  companies:{id:string;name:string;workspaceCount:number;userCount:number}[];
+  workspaces:number;
+  users:{total:number;creators:number;corporate:number;superadmins:number};
+  drafts:number;
+  knowledgeSources:number;
+  auditEvents:number;
+};
+export type CompanyDashboard = {
+  company: {id:string;name:string};
+  workspaces: {id:string;name:string;code:string;sector:string;city:string;creatorCount:number;draftCount:number;approvedCount:number;reviewCount:number;sourceCount:number;briefCount:number;auditCount:number}[];
+  users: {id:string;name:string;role:string;workspaces:string[]}[];
+  userCount: number;
+  recentDrafts: {id:string;title:string;status:string;format:string;updatedAt:string;workspaceId:string;workspaceName:string}[];
+};
+export type AdminUser={id:string;name:string;email:string;role:string;companyId:string|null;workspaceIds:string[]};
+
 export type RagHit={document_id:string;chunk_id:string;content:string;score:number;page?:number|null;document_name?:string|null;section?:string|null;source_url?:string|null};
 export type RagAnswer={answer:string;grounded:boolean;sources:RagHit[];model?:string;no_answer_reason?:string|null};
 export type RagStatus={configured:boolean;ready:boolean;dependencies?:Record<string,string>;detail?:Record<string,unknown>;error?:string};
@@ -22,17 +39,35 @@ export const apiService={
   login:(email:string,password:string)=>request<AuthUser>('/api/auth/login',{method:'POST',body:JSON.stringify({email,password})}),
   me:async()=>{const response=await fetch(`${API_URL}/api/auth/me`,{credentials:'include'});if(response.status===401)return null;if(!response.ok)throw new Error('Unable to restore session');return response.json() as Promise<AuthUser>;},
   logout:()=>request<{ok:boolean}>('/api/auth/logout',{method:'POST'}),
+  corporateDashboard:()=>request<CompanyDashboard>('/api/corporate/dashboard'),
+  updateCorporateSettings:(name:string)=>request<{id:string;name:string}>('/api/corporate/settings',{method:'PUT',body:JSON.stringify({name})}),
+  changePassword:(currentPassword:string,newPassword:string)=>request<{ok:boolean}>('/api/auth/password',{method:'PUT',body:JSON.stringify({currentPassword,newPassword})}),
   corporateUsers:()=>request<{id:string;name:string;email:string;workspaceIds:string[]}[]>('/api/corporate/users'),
-  createCorporateUser:(input:{name:string;email:string;password:string;workspaceIds:string[]})=>request<{id:string;workspaceIds:string[]}>('/api/corporate/users',{method:'POST',body:JSON.stringify(input)}),
-  assignCorporateUser:(id:string,workspaceIds:string[])=>request<{workspaceIds:string[]}>(`/api/corporate/users/${encodeURIComponent(id)}/workspaces`,{method:'PUT',body:JSON.stringify({workspaceIds})}),
-  corporateWorkspaces:()=>request<Workspace[]>('/api/corporate/workspaces'),
-  createCorporateWorkspace:(input:{name:string;code:string;sector:string;city:string})=>request<Workspace>('/api/corporate/workspaces',{method:'POST',body:JSON.stringify(input)}),
+  createCorporateUser:(input:{name:string;email:string;password:string})=>request<{id:string;name:string;email:string;workspaceIds:string[]}>('/api/corporate/users',{method:'POST',body:JSON.stringify(input)}),
+    updateCorporateUser:(id:string,input:{name:string;email:string;password?:string})=>request<{id:string;name:string;email:string}>(`/api/corporate/users/${encodeURIComponent(id)}`,{method:'PUT',body:JSON.stringify(input)}),
+    deleteCorporateUser:(id:string)=>request<{ok:boolean}>(`/api/corporate/users/${encodeURIComponent(id)}`,{method:'DELETE'}),
+    assignCorporateUser:(id:string,workspaceIds:string[])=>request<{workspaceIds:string[]}>(`/api/corporate/users/${encodeURIComponent(id)}/workspaces`,{method:'PUT',body:JSON.stringify({workspaceIds})}),
+    corporateWorkspaces:()=>request<Workspace[]>('/api/corporate/workspaces'),
+    createCorporateWorkspace:(input:{name:string;code:string;sector:string;city:string})=>request<Workspace>('/api/corporate/workspaces',{method:'POST',body:JSON.stringify(input)}),
+    updateCorporateWorkspace:(id:string,input:{name:string;code:string;sector:string;city:string})=>request<Workspace>(`/api/corporate/workspaces/${encodeURIComponent(id)}`,{method:'PUT',body:JSON.stringify(input)}),
+    deleteCorporateWorkspace:(id:string)=>request<{ok:boolean}>(`/api/corporate/workspaces/${encodeURIComponent(id)}`,{method:'DELETE'}),
+  adminOverview:()=>request<AdminOverview>('/api/admin/overview'),
   adminCompanies:()=>request<{id:string;name:string}[]>('/api/admin/companies'),
-  adminUsers:()=>request<{id:string;name:string;email:string;role:string;companyId:string|null}[]>('/api/admin/users'),
-  adminWorkspaces:()=>request<{id:string;name:string;code:string;companyId:string}[]>('/api/admin/workspaces'),
+  adminUsers:()=>request<AdminUser[]>('/api/admin/users'),
+  adminWorkspaces:()=>request<{id:string;name:string;code:string;sector:string;city:string;companyId:string}[]>('/api/admin/workspaces'),
+  adminMemberships:()=>request<{workspaceId:string;userId:string;role:string;active:boolean;userName:string;workspaceName:string;companyId:string}[]>('/api/admin/memberships'),
+  assignAdminMembership:(userId:string,workspaceId:string)=>request<{ok:boolean}>('/api/admin/memberships',{method:'POST',body:JSON.stringify({userId,workspaceId})}),
+  removeAdminMembership:(workspaceId:string,userId:string)=>request<{ok:boolean}>(`/api/admin/memberships/${encodeURIComponent(workspaceId)}/${encodeURIComponent(userId)}`,{method:'DELETE'}),
+  adminAudit:()=>request<{id:string;createdAt:string;action:string;actorName:string;objectType:string;objectName:string;workspaceName:string}[]>('/api/admin/audit'),
   createCompany:(name:string)=>request<{id:string;name:string}>('/api/admin/companies',{method:'POST',body:JSON.stringify({name})}),
-  createAdminUser:(input:{name:string;email:string;password:string;role:'corporate'|'superadmin';companyId?:string})=>request<{id:string;name:string}>('/api/admin/users',{method:'POST',body:JSON.stringify(input)}),
+  createAdminUser:(input:{name:string;email:string;password:string;role:'creator'|'corporate'|'superadmin';companyId?:string;workspaceIds?:string[]})=>request<{id:string;name:string}>('/api/admin/users',{method:'POST',body:JSON.stringify(input)}),
   createAdminWorkspace:(input:{companyId:string;name:string;code:string;sector:string;city:string})=>request<Workspace>('/api/admin/workspaces',{method:'POST',body:JSON.stringify(input)}),
+  updateAdminCompany:(id:string,name:string)=>request<{id:string;name:string}>(`/api/admin/companies/${encodeURIComponent(id)}`,{method:'PUT',body:JSON.stringify({name})}),
+  deleteAdminCompany:(id:string)=>request<{ok:boolean}>(`/api/admin/companies/${encodeURIComponent(id)}`,{method:'DELETE'}),
+  updateAdminUser:(id:string,input:{name:string;email:string;role:'creator'|'corporate'|'superadmin';companyId?:string|null;password?:string})=>request<{id:string;name:string;email:string;role:string;companyId:string|null}>(`/api/admin/users/${encodeURIComponent(id)}`,{method:'PUT',body:JSON.stringify(input)}),
+  deleteAdminUser:(id:string)=>request<{ok:boolean}>(`/api/admin/users/${encodeURIComponent(id)}`,{method:'DELETE'}),
+  updateAdminWorkspace:(id:string,input:{companyId:string;name:string;code:string;sector:string;city:string})=>request<Workspace>(`/api/admin/workspaces/${encodeURIComponent(id)}`,{method:'PUT',body:JSON.stringify(input)}),
+  deleteAdminWorkspace:(id:string)=>request<{ok:boolean}>(`/api/admin/workspaces/${encodeURIComponent(id)}`,{method:'DELETE'}),
   userWorkspaces:(userId:string)=>request<{id:string;name:string;code:string;role:string}[]>(`/api/users/${userId}/workspaces`),
   ragStatus:()=>request<RagStatus>('/api/rag/status'),
   ragSearch:(workspaceId:string,query:string,topK?:number)=>request<{results:RagHit[]}>(`/api/rag/search`,{method:'POST',body:JSON.stringify({workspaceId,query,topK})}),

@@ -10,11 +10,29 @@ const superadmin = { role: 'superadmin' as const, workspaceId: 'ws-a' };
 test('roles expose only their permitted menus', () => {
   assert.equal(canAccessTab(creator.role, 'brief_studio'), true);
   assert.equal(canAccessTab(creator.role, 'user_management'), false);
-  assert.equal(canAccessTab(corporate.role, 'user_management'), true);
-  assert.equal(canAccessTab(corporate.role, 'corporate_management'), true);
+  for (const tab of ['dashboard', 'content_scheduling', 'user_management', 'corporate_management', 'corporate_users', 'settings_help'] as const) assert.equal(canAccessTab(corporate.role, tab), true, tab);
+  for (const tab of ['brief_studio', 'editor', 'visual_studio', 'library', 'brand_profile', 'audit_log', 'admin_management'] as const) assert.equal(canAccessTab(corporate.role, tab), false, tab);
   assert.equal(canAccessTab(creator.role, 'corporate_management'), false);
-  assert.equal(canAccessTab(corporate.role, 'admin_management'), false);
   assert.equal(canAccessTab(superadmin.role, 'admin_management'), true);
+});
+
+test('corporate management and creator assignment remain reachable outside the admin control plane', async () => {
+  const [app, sidebar] = await Promise.all([
+    readFile(new URL('../App.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../components/Sidebar.tsx', import.meta.url), 'utf8')
+  ]);
+  assert.match(app, /safeTab === 'corporate_management'/);
+  assert.match(app, /safeTab === 'corporate_users'/);
+  assert.match(sidebar, /navButton\('corporate_management'/);
+  assert.match(sidebar, /navButton\('corporate_users'/);
+});
+
+test('updated admin pages do not present fictional BUMD data', async () => {
+  const names = ['AdminDashboard.tsx', 'SuperadminView.tsx', 'CorporateManagementView.tsx', 'CorporateUsersView.tsx', 'UserManagementView.tsx'];
+  for (const name of names) {
+    const view = await readFile(new URL(`../components/${name}`, import.meta.url), 'utf8');
+    assert.doesNotMatch(view, /PAM Jaya Holding|PT Jakarta Propertindo|PT Tirta Metro Jakarta|56<|24\.8 GB/, name);
+  }
 });
 
 test('creator can approve their draft but cannot undo approval', () => {

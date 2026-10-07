@@ -35,11 +35,14 @@ import { UserManagementView } from './components/UserManagementView';
 import { SettingsHelpView } from './components/SettingsHelpView';
 import { ContentSchedulingView } from './components/ContentSchedulingView';
 import { CorporateManagementView } from './components/CorporateManagementView';
+import { CorporateDashboardView } from './components/CorporateDashboardView';
+import { WorkspaceMappingView } from './components/WorkspaceMappingView';
 import { CorporateUsersView } from './components/CorporateUsersView';
-import { SuperadminView } from './components/SuperadminView';
+
+import { AdminDashboard } from './components/AdminDashboard';
 import { Building2 } from 'lucide-react';
 
-import { canTransitionDraft, filterUsersForWorkspace } from './services/policies';
+import { canAccessTab, canTransitionDraft, filterUsersForWorkspace } from './services/policies';
 
 export function App() {
   const [authenticated, setAuthenticated] = useState(false);
@@ -128,7 +131,7 @@ export function App() {
       setActiveWorkspace(null); setActiveUser(null);
       return;
     }
-    if (user.workspaces.length === 1) await setActiveWorkspaceById(user.workspaces[0].id, user);
+    if (user.workspaces.length && (user.role === 'corporate' || user.workspaces.length === 1)) await setActiveWorkspaceById(user.workspaces[0].id, user);
     setAuthUser(user); setAuthenticated(true);
   };
 
@@ -270,8 +273,86 @@ export function App() {
 
   if (!authenticated || !authUser) return <AuthView onAuthed={handleAuthed} />;
   if (loading) return <div style={{display:'grid',placeItems:'center',height:'100vh'}}>Memuat workspace…</div>;
-  if (authUser.role === 'superadmin' && !activeWorkspace) return <SuperadminView onLogout={handleLogout} onOpen={id => { void handleSelectWorkspace(id).then(() => setCurrentTab('dashboard')).catch(e => showToast(e.message)); }} />;
-  if (authUser.role === 'corporate' && authUser.workspaces.length === 0) return <main className="content-viewport" style={{maxWidth:1000,margin:'0 auto',padding:30}}><button className="btn btn-secondary" onClick={handleLogout}>Keluar</button><CorporateManagementView onOpen={id => { void handleSelectWorkspace(id).then(() => setCurrentTab('dashboard')).catch(e => showToast(e.message)); }} /></main>;
+  if (authUser.role === 'superadmin' && !activeWorkspace) {
+    return (
+      <AdminDashboard
+        onOpen={(id: string) => { void handleSelectWorkspace(id).then(() => setCurrentTab('dashboard')).catch(e => showToast(e.message)); }}
+        onLogout={handleLogout}
+      />
+    );
+  }
+  if (authUser.role === 'corporate' && authUser.workspaces.length === 0) {
+    return (
+      <div className="app-container">
+        <header className="top-header">
+          <div className="header-left">
+            <div className="brand-logo-wrap">
+              <div className="brand-icon-gem">V</div>
+              <div className="brand-title-group">
+                <h1>VibeContent</h1>
+                <span className="brand-tagline">Holding Korporat BUMD</span>
+              </div>
+            </div>
+          </div>
+          <div className="header-right">
+            <div className="role-badge-selector">
+              <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--primary-light)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>
+                {authUser.name.charAt(0)}
+              </div>
+              <div className="user-meta-text">
+                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>{authUser.name}</span>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Admin Korporat</span>
+              </div>
+            </div>
+            <button className="btn btn-secondary btn-sm" onClick={handleLogout} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span>Keluar</span>
+            </button>
+          </div>
+        </header>
+
+        <div className="main-layout" style={{ maxWidth: 1400, margin: '0 auto', width: '100%', padding: '24px 32px' }}>
+          <main className="content-viewport" style={{ padding: 0 }}>
+            <nav aria-label="Menu perusahaan" className="scheduling-action-bar" style={{ marginBottom: 24 }}>
+              <button 
+                className={`btn ${currentTab === 'dashboard' ? 'btn-primary' : 'btn-secondary'}`} 
+                onClick={() => setCurrentTab('dashboard')}
+              >
+                Dasbor Eksekutif
+              </button>
+              <button 
+                className={`btn ${currentTab === 'corporate_management' ? 'btn-primary' : 'btn-secondary'}`} 
+                onClick={() => setCurrentTab('corporate_management')}
+              >
+                Workspace Perusahaan
+              </button>
+              <button 
+                className={`btn ${currentTab === 'corporate_users' ? 'btn-primary' : 'btn-secondary'}`} 
+                onClick={() => setCurrentTab('corporate_users')}
+              >
+                Kreator Perusahaan
+              </button>
+              <button 
+                className={`btn ${currentTab === 'settings_help' ? 'btn-primary' : 'btn-secondary'}`} 
+                onClick={() => setCurrentTab('settings_help')}
+              >
+                Pengaturan &amp; Bantuan
+              </button>
+            </nav>
+
+            {currentTab === 'settings_help' ? (
+              <SettingsHelpView corporate />
+            ) : currentTab === 'corporate_management' ? (
+              <CorporateManagementView onOpen={id => { void handleSelectWorkspace(id).then(() => setCurrentTab('dashboard')).catch(e => showToast(e.message)); }} />
+            ) : currentTab === 'corporate_users' ? (
+              <CorporateUsersView />
+            ) : (
+              <CorporateDashboardView onNavigate={setCurrentTab} onOpenWorkspace={id => { void handleSelectWorkspace(id).catch(e => showToast(e.message)); }} />
+            )}
+          </main>
+        </div>
+      </div>
+    );
+  }
 
     // 2. Workspace picker — authenticated but no workspace selected yet
     if (!activeWorkspace || !activeUser) {
@@ -306,8 +387,10 @@ export function App() {
 
 
 
-  return (
-    <div className="app-container">
+  const safeTab = canAccessTab(authUser.role, currentTab) ? currentTab : 'dashboard';
+
+    return (
+      <div className="app-container">
       {/* Top Header */}
       <Header 
         workspaces={workspaces.filter(workspace => authUser.workspaces.some(member => member.id === workspace.id))}
@@ -333,8 +416,9 @@ export function App() {
 
         {/* Dynamic Viewport */}
         <main className="content-viewport">
-          {currentTab === 'dashboard' && (
-            <DashboardView
+          {safeTab === 'dashboard' && authUser.role === 'corporate' && <CorporateDashboardView onNavigate={setCurrentTab} onOpenWorkspace={id => { void handleSelectWorkspace(id).then(() => setCurrentTab('user_management')).catch(e => showToast(e.message)); }} />}
+                    {safeTab === 'dashboard' && authUser.role !== 'corporate' && (
+                      <DashboardView
               drafts={drafts}
               brandProfile={effectiveBrandProfile}
               activeUser={activeUser}
@@ -344,7 +428,7 @@ export function App() {
             />
           )}
 
-          {currentTab === 'brief_studio' && (
+          {safeTab === 'brief_studio' && (
             <BriefStudioView 
               brandProfile={effectiveBrandProfile}
               activeWorkspace={activeWorkspace}
@@ -363,7 +447,7 @@ export function App() {
             />
           )}
 
-          {currentTab === 'editor' && (
+          {safeTab === 'editor' && (
             selectedDraft ? (
               <div>
                 <div className="card-panel" style={{ marginBottom: '18px', padding: '14px' }}>
@@ -395,7 +479,7 @@ export function App() {
             )
           )}
 
-          {currentTab === 'visual_studio' && (
+          {safeTab === 'visual_studio' && (
             <VisualStudioView 
               draft={selectedDraft?.status === 'disetujui' ? selectedDraft : undefined}
               drafts={drafts}
@@ -406,16 +490,17 @@ export function App() {
           )}
 
 
-          {currentTab === 'content_scheduling' && (
+          {safeTab === 'content_scheduling' && (
             <ContentSchedulingView 
-              drafts={drafts}
-              activeWorkspace={activeWorkspace}
-              onOpenEditorDraft={(id) => { setSelectedDraftId(id); setCurrentTab('editor'); }}
+                          drafts={drafts}
+                          activeWorkspace={activeWorkspace}
+                          readOnly={authUser.role === 'corporate'}
+                          onOpenEditorDraft={authUser.role === 'corporate' ? undefined : (id) => { setSelectedDraftId(id); setCurrentTab('editor'); }}
             />
           )}
 
 
-          {currentTab === 'library' && (
+          {safeTab === 'library' && (
             <LibraryView 
               drafts={drafts}
               activeWorkspace={activeWorkspace}
@@ -436,7 +521,7 @@ export function App() {
           )}
 
 
-          {currentTab === 'brand_profile' && (
+          {safeTab === 'brand_profile' && (
             <BrandProfileView 
               brandProfile={effectiveBrandProfile}
               activeWorkspace={activeWorkspace}
@@ -445,22 +530,12 @@ export function App() {
             />
           )}
 
-          {currentTab === 'audit_log' && (
-            <AuditLogView 
-              logs={auditLogs}
-              activeWorkspace={activeWorkspace}
-              activeUser={activeUser}
-            />
-          )}
-
-          {currentTab === 'user_management' && (
-            <UserManagementView users={filterUsersForWorkspace(users, activeWorkspace.id)} activeWorkspace={activeWorkspace} onCreate={handleCreateUser} onDelete={handleDeleteUser} />
-          )}
-
-          {currentTab === 'corporate_management' && <CorporateManagementView onOpen={id => { void handleSelectWorkspace(id).then(() => setCurrentTab('dashboard')).catch(e => showToast(e.message)); }} />}
-          {currentTab === 'corporate_users' && <CorporateUsersView />}
-          {currentTab === 'admin_management' && <SuperadminView onLogout={handleLogout} onOpen={id => { void handleSelectWorkspace(id).then(() => setCurrentTab('dashboard')).catch(e => showToast(e.message)); }} />}
-          {currentTab === 'settings_help' && <SettingsHelpView />}
+          {safeTab === 'corporate_management' && <CorporateManagementView onOpen={(id: string) => { void handleSelectWorkspace(id).then(() => setCurrentTab('dashboard')).catch(e => showToast(e.message)); }} />}
+          {safeTab === 'corporate_users' && <CorporateUsersView />}
+          {safeTab === 'user_management' && (authUser.role === 'corporate' ? <WorkspaceMappingView /> : <UserManagementView users={filterUsersForWorkspace(users, activeWorkspace.id)} activeWorkspace={activeWorkspace} onCreate={handleCreateUser} onDelete={handleDeleteUser} />)}
+          {safeTab === 'audit_log' && <AuditLogView logs={auditLogs} activeWorkspace={activeWorkspace} activeUser={activeUser} />}
+          {safeTab === 'admin_management' && <AdminDashboard embedded onOpen={(id: string) => { void handleSelectWorkspace(id).then(() => setCurrentTab('dashboard')).catch(e => showToast(e.message)); }} onLogout={handleLogout} />}
+          {safeTab === 'settings_help' && <SettingsHelpView corporate={authUser.role === 'corporate'} />}
         </main>
       </div>
 

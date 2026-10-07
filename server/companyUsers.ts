@@ -2,10 +2,9 @@ import { randomUUID } from 'node:crypto';
 import { pool, hashPassword } from './database.ts';
 
 export async function listCompanyUsers(companyId: string) {
-  const result = await pool.query(`SELECT u.id,u.name,u.email,array_agg(DISTINCT o.id ORDER BY o.id) AS "workspaceIds"
-    FROM users u JOIN memberships m ON m.user_id=u.id AND m.active
-    JOIN organizations o ON o.id=m.organization_id AND o.company_id=$1
-    WHERE u.global_role='creator' GROUP BY u.id,u.name,u.email ORDER BY u.name`, [companyId]);
+  const result = await pool.query(`SELECT u.id,u.name,u.email,
+    COALESCE((SELECT array_agg(m.organization_id ORDER BY m.organization_id) FROM memberships m JOIN organizations o ON o.id=m.organization_id WHERE m.user_id=u.id AND m.active AND o.company_id=$1),'{}') AS "workspaceIds"
+    FROM users u WHERE u.company_id=$1 AND u.global_role='creator' ORDER BY u.name`, [companyId]);
   return result.rows;
 }
 
@@ -16,8 +15,8 @@ export async function createCompanyUser(companyId: string, input: {name:string;e
     const ids = [...new Set(input.workspaceIds)];
     const allowed = await client.query('SELECT id FROM organizations WHERE company_id=$1 AND id=ANY($2::text[])', [companyId,ids]);
     if (allowed.rowCount !== ids.length) { await client.query('ROLLBACK'); return null; }
-    const created = await client.query(`INSERT INTO users(id,name,email,password_hash,global_role)
-      VALUES($1,$2,$3,$4,'creator') RETURNING id,name,email`, [`usr-${randomUUID()}`,input.name,input.email.toLowerCase().trim(),await hashPassword(input.password)]);
+    const created = await client.query(`INSERT INTO users(id,name,email,password_hash,global_role,company_id)
+      VALUES($1,$2,$3,$4,'creator',$5) RETURNING id,name,email`, [`usr-${randomUUID()}`,input.name,input.email.toLowerCase().trim(),await hashPassword(input.password),companyId]);
     for (const id of ids) await client.query("INSERT INTO memberships(organization_id,user_id,role) VALUES($1,$2,'creator')", [id,created.rows[0].id]);
     await client.query('COMMIT');
     return {...created.rows[0],workspaceIds:ids};
@@ -30,8 +29,7 @@ export async function assignCompanyUser(companyId: string, userId: string, works
   try {
     await client.query('BEGIN');
     const ids = [...new Set(workspaceIds)];
-    const user = await client.query(`SELECT u.id FROM users u WHERE u.id=$1 AND u.global_role='creator'
-      AND EXISTS(SELECT 1 FROM memberships m JOIN organizations o ON o.id=m.organization_id WHERE m.user_id=u.id AND m.active AND o.company_id=$2) FOR UPDATE`,[userId,companyId]);
+    const user = await client.query(`SELECT u.id FROM users u WHERE u.id=$1 AND u.global_role='creator' AND u.company_id=$2 FOR UPDATE`,[userId,companyId]);
     if (!user.rowCount) { await client.query('ROLLBACK'); return {status:404 as const}; }
     const allowed = await client.query('SELECT id FROM organizations WHERE company_id=$1 AND id=ANY($2::text[])',[companyId,ids]);
     if (allowed.rowCount !== ids.length) { await client.query('ROLLBACK'); return {status:403 as const}; }

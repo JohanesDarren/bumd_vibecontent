@@ -38,6 +38,7 @@ interface ContentSchedulingViewProps {
   drafts: ContentDraft[];
   activeWorkspace: Workspace;
   onOpenEditorDraft?: (draftId: string) => void;
+  readOnly?: boolean;
 }
 
 /* ─── Mini SVG Social Icons ─── */
@@ -137,7 +138,8 @@ function getCalendarDays(year: number, month: number) {
 export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
   activeWorkspace,
   drafts,
-  onOpenEditorDraft
+  onOpenEditorDraft,
+  readOnly = false
 }) => {
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
@@ -162,6 +164,7 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
   const [schedule, setSchedule] = useState<ScheduledContent[]>([]);
 
   const openAddModal = (dateStr?: string) => {
+    if (readOnly) return;
     setFormTitle('');
     setFormPlatform('instagram');
     setFormStatus('draft');
@@ -173,6 +176,7 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
   };
 
   const handleSaveSchedule = () => {
+    if (readOnly) return;
     if (!formTitle.trim() || !formDate) {
       alert('Judul konten dan tanggal publikasi wajib diisi.');
       return;
@@ -249,6 +253,7 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
   };
 
   const handleDrop = (e: React.DragEvent, targetDate: string) => {
+    if (readOnly) return;
     e.preventDefault();
     if (draggedCard) {
       setSchedule(prev => prev.map(item =>
@@ -279,18 +284,18 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
             Penjadwalan Konten
           </h2>
           <p className="page-subtitle">
-            Rencanakan publikasi konten secara visual. Geser kartu konten antar tanggal untuk menjadwalkan ulang, dan pantau estetika feed Instagram Anda secara real-time.
+            {readOnly ? 'Tampilan jadwal saja. Jadwal saat ini hanya berada di sesi browser pembuatnya, belum tersimpan di server atau tersinkronisasi lintas akun.' : 'Rencanakan publikasi konten secara visual. Geser kartu konten antar tanggal untuk menjadwalkan ulang, dan pantau estetika feed Instagram Anda secara real-time.'}
           </p>
         </div>
       </div>
 
       {/* ── Action Bar ── */}
       <div className="scheduling-action-bar">
-        <button className="btn btn-primary scheduling-add-btn" onClick={() => openAddModal()}>
+        {!readOnly && <button className="btn btn-primary scheduling-add-btn" onClick={() => openAddModal()}>
           <Plus size={18} />
           <span>Tambah Jadwal Baru</span>
 
-        </button>
+        </button>}
 
         <div className="scheduling-filters">
           <div className="filter-group">
@@ -405,15 +410,15 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
                     )}
                   </div>
                   <div className="cal-cell-content">
-                    {items.length === 0 && cell.isCurrentMonth && cell.dateStr === todayStr && schedule.length === 0 && (
+                    {!readOnly && items.length === 0 && cell.isCurrentMonth && cell.dateStr === todayStr && schedule.length === 0 && (
                       <button className="cal-cell-add-hint" onClick={() => openAddModal(cell.dateStr)} title="Add schedule on this date">+</button>
                     )}
                     {items.slice(0, 3).map(item => (
                       <div
                         key={item.id}
                         className={`content-card ${draggedCard === item.id ? 'content-card-dragging' : ''}`}
-                        draggable
-                        onDragStart={() => handleDragStart(item.id)}
+                        draggable={!readOnly}
+                        onDragStart={() => { if (!readOnly) handleDragStart(item.id); }}
                         onClick={() => setSelectedCard(item)}
                         title={`${item.title} — ${STATUS_COLORS[item.status].label}`}
                       >
@@ -556,7 +561,7 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
       </div>
 
       {/* ── Add Schedule Modal ── */}
-      {showAddModal && (
+      {!readOnly && showAddModal && (
         <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
           <div className="modal-card" style={{ maxWidth: '560px' }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">

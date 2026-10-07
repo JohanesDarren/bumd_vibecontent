@@ -47,7 +47,16 @@ export async function verifyPassword(password:string, stored:string):Promise<boo
 export async function organizationExists(id:string){const result=await pool.query('SELECT 1 FROM organizations WHERE id=$1',[id]);return (result.rowCount||0)>0;}
 
 export async function clearAllData() {
-  await pool.query('TRUNCATE audit_events, review_comments, draft_citations, draft_versions, content_drafts, content_briefs, knowledge_chunks, knowledge_sources, brand_profiles, memberships, users, organizations RESTART IDENTITY CASCADE');
+  await pool.query('TRUNCATE audit_events, review_comments, draft_citations, draft_versions, content_drafts, content_briefs, knowledge_chunks, knowledge_sources, brand_profiles, memberships, auth_sessions, users, organizations, companies RESTART IDENTITY CASCADE');
+}
+
+// Wipe every workspace, account and content record while preserving the
+// superadmin login(s) so the admin console stays reachable for testing.
+export async function resetKeepingSuperadmins() {
+  await pool.query('TRUNCATE audit_events, review_comments, draft_citations, draft_versions, content_drafts, content_briefs, knowledge_chunks, knowledge_sources, brand_profiles, memberships, auth_sessions, organizations RESTART IDENTITY CASCADE');
+  await pool.query('UPDATE users SET company_id = NULL');
+  await pool.query("DELETE FROM users WHERE global_role <> 'superadmin'");
+  await pool.query('DELETE FROM companies');
 }
 
 export async function createOrganizationWithAdmin(input:{organizationName:string;code:string;sector:string;city:string;adminName:string;adminEmail:string;adminPassword?:string}) {
@@ -151,13 +160,17 @@ export async function createUserMembership(workspaceId:string,input:any){const c
   }
   let userId:string; let tempPassword:string|undefined;
   const adminPassword = typeof input.password === 'string' && input.password.length >= 8 ? input.password : undefined;
-  if(existing.rowCount){ userId=existing.rows[0].id; }
+  if(existing.rowCount){
+    userId=existing.rows[0].id;
+    // Creators belong to the company that owns the workspace they join.
+    await client.query('UPDATE users SET company_id=(SELECT company_id FROM organizations WHERE id=$2) WHERE id=$1 AND company_id IS NULL',[userId,workspaceId]);
+  }
   else {
     // password_hash is NOT NULL (migration 002): use the admin-supplied password or generate a temporary one.
     tempPassword = adminPassword ?? nodeCrypto.randomBytes(4).toString('hex');
     const passwordHash = await hashPassword(tempPassword);
     const id=`usr-${nodeCrypto.randomUUID()}`;
-    await client.query('INSERT INTO users(id,name,email,avatar,title,department,password_hash) VALUES($1,$2,$3,$4,$5,$6,$7)',[id,input.name,String(input.email||'').toLowerCase().trim(),input.avatar||'',input.title||'',input.department||'',passwordHash]);
+    await client.query(`INSERT INTO users(id,name,email,avatar,title,department,password_hash,global_role,company_id) VALUES($1,$2,$3,$4,$5,$6,$7,'creator',(SELECT company_id FROM organizations WHERE id=$8))`,[id,input.name,String(input.email||'').toLowerCase().trim(),input.avatar||'',input.title||'',input.department||'',passwordHash,workspaceId]);
     userId=id;
   }
   await client.query('INSERT INTO memberships(organization_id,user_id,role) VALUES($1,$2,$3) ON CONFLICT (organization_id,user_id) DO UPDATE SET role=EXCLUDED.role, active=true',[workspaceId,userId,input.role]);
