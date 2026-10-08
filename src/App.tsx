@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   ActiveTab, 
   Workspace, 
@@ -13,7 +13,8 @@ import {
   DraftVersionon, 
   ReviewComment
 } from './types';
-import { apiService } from './services/apiService';
+import { apiService, onUnauthorized, sessionIdleMs } from './services/apiService';
+import { useRealtimeSignal } from './services/realtime';
 import { generateContentFromBrief, GeneratedOutput } from './services/ragEngine';
 
 // Components
@@ -99,10 +100,45 @@ export function App() {
     apiService.me().then(user => { if (user) void handleAuthed(user).catch(() => { setAuthUser(null); setAuthenticated(false); }); }).catch(() => {});
   }, []);
 
+  // Session guards. The server enforces the idle window; these keep the UI honest:
+  //  1. any 401 from the API drops us to the login screen immediately;
+  //  2. returning to a tab after the idle window re-checks the session at once;
+  //  3. an in-tab timer logs out at the same boundary even without any API call.
+  useEffect(() => {
+    if (!authenticated) return;
+    onUnauthorized(() => { setAuthenticated(false); setAuthUser(null); setActiveWorkspace(null); setActiveUser(null); showToast('Sesi berakhir karena tidak ada aktivitas. Silakan masuk kembali.'); });
+    return () => onUnauthorized(null);
+  }, [authenticated]);
+
+  useEffect(() => {
+    if (!authenticated) return;
+    let timer: ReturnType<typeof setTimeout>;
+    const expire = () => { void apiService.logout().catch(() => {}); setAuthenticated(false); setAuthUser(null); setActiveWorkspace(null); setActiveUser(null); setCurrentTab('dashboard'); showToast('Sesi berakhir karena tidak ada aktivitas. Silakan masuk kembali.'); };
+    const reset = () => { clearTimeout(timer); timer = setTimeout(expire, sessionIdleMs()); };
+    const onVisible = () => { if (document.visibilityState === 'visible') { void apiService.me().then(user => { if (!user) expire(); else reset(); }).catch(() => {}); } };
+    const events: (keyof WindowEventMap)[] = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
+    events.forEach(event => window.addEventListener(event, reset, { passive: true }));
+    document.addEventListener('visibilitychange', onVisible);
+    reset();
+    return () => { clearTimeout(timer); events.forEach(event => window.removeEventListener(event, reset)); document.removeEventListener('visibilitychange', onVisible); };
+  }, [authenticated]);
+
   // Update theme on root DOM
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
+
+  // Live cross-role propagation: when another role (or another of your own
+  // sessions) changes data, silently re-read the shared root so this screen
+  // never shows a stale copy. Coalesced so a burst of writes = one refetch.
+  const reloadRef = useRef<() => void>(() => {});
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => { reloadRef.current = () => { void loadData().catch(() => {}); }; });
+  useRealtimeSignal(() => {
+    if (!authenticated) return;
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    refreshTimer.current = setTimeout(() => reloadRef.current(), 250);
+  });
 
   // After email login: activate workspace by id and set the authenticated user as active
   // `user` is passed explicitly because React state (authUser) is not yet updated in the same tick.

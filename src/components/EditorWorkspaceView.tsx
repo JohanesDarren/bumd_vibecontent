@@ -612,7 +612,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
                         <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>
                            {c.documentTitle}
                         </span>
-                        <span style={{ fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', background: 'rgba(2, 132, 199, 0.2)', color: 'var(--accent-cyan)', fontWeight: 700 }}>
+                        <span style={{ fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', background: 'rgba(13, 12, 189, 0.2)', color: 'var(--accent-cyan)', fontWeight: 700 }}>
                           {c.relevanceScore}% Relevan
                         </span>
                       </div>

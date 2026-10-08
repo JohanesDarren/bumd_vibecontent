@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { apiService, type AdminOverview } from '../services/apiService';
+import { useRealtimeSignal } from '../services/realtime';
 import { 
   Building2, 
   Plus, 
@@ -37,6 +38,7 @@ export const SuperadminView: React.FC = () => {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+  useRealtimeSignal(load);
 
   const run = async (action: () => Promise<unknown>, done: string) => {
     setBusy(true); 
@@ -143,7 +145,7 @@ export const SuperadminView: React.FC = () => {
         <div className="scheduling-stats">
           <div className="stat-pill" style={{ background: 'rgba(56, 189, 248, 0.12)', borderColor: 'rgba(56, 189, 248, 0.35)' }}>
             <span className="stat-dot" style={{ background: '#38bdf8' }} />
-            <span style={{ color: '#0284c7' }}>{companies.length} Entitas</span>
+            <span style={{ color: '#0d0cbd' }}>{companies.length} Entitas</span>
           </div>
           <div className="stat-pill" style={{ background: 'rgba(99, 102, 241, 0.12)', borderColor: 'rgba(99, 102, 241, 0.35)' }}>
             <span className="stat-dot" style={{ background: '#818cf8' }} />

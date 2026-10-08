@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { apiService, type AdminUser } from '../services/apiService';
+import { useRealtimeSignal } from '../services/realtime';
 import { 
   Users, 
   UserPlus, 
@@ -63,6 +64,7 @@ export const AdminAccountsView: React.FC = () => {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+  useRealtimeSignal(load);
 
   const companyName = (id: string | null) => companies.find(c => c.id === id)?.name || '—';
   const workspaceName = (id: string) => workspaces.find(w => w.id === id)?.name || id;

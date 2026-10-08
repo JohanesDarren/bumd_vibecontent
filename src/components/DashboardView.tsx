@@ -50,8 +50,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         className="card-panel" 
         style={{ 
           marginBottom: '28px',
-          background: 'linear-gradient(135deg, rgba(2, 132, 199, 0.15), rgba(6, 182, 212, 0.08))',
-          border: '1px solid rgba(2, 132, 199, 0.3)',
+          background: 'linear-gradient(135deg, rgba(13, 12, 189, 0.15), rgba(6, 182, 212, 0.08))',
+          border: '1px solid rgba(13, 12, 189, 0.3)',
           position: 'relative',
           overflow: 'hidden'
         }}
@@ -90,7 +90,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* Metric Cards Row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '32px' }}>
         <div className="card-panel" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(2, 132, 199, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
+          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(13, 12, 189, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
             <FileText size={24} />
           </div>
           <div>
@@ -232,7 +232,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
             </div>
 
-            <div style={{ marginTop: '4px', padding: '10px 12px', borderRadius: '8px', background: 'rgba(2, 132, 199, 0.08)', border: '1px dashed rgba(2, 132, 199, 0.3)', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+            <div style={{ marginTop: '4px', padding: '10px 12px', borderRadius: '8px', background: 'rgba(13, 12, 189, 0.08)', border: '1px dashed rgba(13, 12, 189, 0.3)', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
               <strong>Prinsip Anti-Halusinasi BUMD:</strong> VibeContent menolak klaim publik tanpa referensi SK atau SOP resmi. Jika data tidak terdaftar, draf akan ditandai <code>[Perlu Verifikasi]</code>.
             </div>
           </div>

@@ -4,8 +4,12 @@ import { pool, authenticateUser, hashPassword } from './database.ts';
 
 const digest = (token:string) => createHash('sha256').update(token).digest('hex');
 const cookieName = 'vibe_session';
-const maxAge = 60 * 60 * 24 * 7;
-const cookie = (value:string, req:Request, age=maxAge) => `${cookieName}=${value}; HttpOnly; SameSite=Lax; Path=/api; Max-Age=${age}${req.secure || req.headers['x-forwarded-proto']==='https' ? '; Secure' : ''}`;
+// Absolute cap: a session can never outlive this, however active the user is.
+const absoluteDays = 7;
+// Idle timeout: a session with no activity for this long is invalidated.
+// Enforced server-side so closing the tab or sleeping the laptop still ends it.
+export const idleSeconds = Math.max(60, Number(process.env.SESSION_IDLE_MINUTES ?? 30) * 60);
+const cookie = (value:string, req:Request, age:number) => `${cookieName}=${value}; HttpOnly; SameSite=Lax; Path=/api; Max-Age=${age}${req.secure || req.headers['x-forwarded-proto']==='https' ? '; Secure' : ''}`;
 export const sessionToken = (req:Request) => /(?:^|;\s*)vibe_session=([^;]+)/.exec(req.headers.cookie||'')?.[1];
 export async function identity(id:string) {
   const user=(await pool.query('SELECT id,name,email,global_role AS role,company_id FROM users WHERE id=$1',[id])).rows[0];
@@ -16,8 +20,11 @@ export async function identity(id:string) {
 export async function login(email:string,password:string,req:Request,res:Response) {
   const user=await authenticateUser(email,password);
   const token=randomBytes(32).toString('base64url');
-  await pool.query("INSERT INTO auth_sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '7 days')",[digest(token),user.id]);
-  res.setHeader('Set-Cookie',cookie(token,req));
+  // Housekeeping: drop expired / long-idle sessions before issuing a new one.
+  await pool.query('DELETE FROM auth_sessions WHERE expires_at<=now() OR last_seen_at<=now()-make_interval(secs=>$1)',[idleSeconds]);
+  await pool.query("INSERT INTO auth_sessions(token_hash,user_id,expires_at,last_seen_at) VALUES($1,$2,now()+make_interval(days=>$3),now())",[digest(token),user.id,absoluteDays]);
+  res.setHeader('Set-Cookie',cookie(token,req,idleSeconds));
+  res.setHeader('X-Session-Idle-Seconds',String(idleSeconds));
   return identity(user.id);
 }
 export async function logout(req:Request,res:Response) {
@@ -29,10 +36,17 @@ export async function authenticate(req:Request,res:Response,next:NextFunction) {
   try {
     const token=sessionToken(req);
     if(!token) return res.status(401).json({error:'Authentication required'});
-    const result=await pool.query('SELECT user_id FROM auth_sessions WHERE token_hash=$1 AND expires_at>now()',[digest(token)]);
+    // Valid only while inside BOTH the absolute cap and the idle window.
+    const result=await pool.query(
+      'SELECT user_id FROM auth_sessions WHERE token_hash=$1 AND expires_at>now() AND last_seen_at>now()-make_interval(secs=>$2)',
+      [digest(token),idleSeconds]
+    );
     if(!result.rowCount) return res.status(401).json({error:'Authentication required'});
     const user=await identity(result.rows[0].user_id);
     if(!user) return res.status(401).json({error:'Authentication required'});
+    // Slide both the stored timestamp and the cookie so active users stay signed in.
+    await pool.query('UPDATE auth_sessions SET last_seen_at=now() WHERE token_hash=$1',[digest(token)]);
+    res.setHeader('Set-Cookie',cookie(token,req,idleSeconds));
     res.locals.user=user;
     next();
   } catch(error) {next(error);}

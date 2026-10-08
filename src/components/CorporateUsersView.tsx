@@ -1,5 +1,6 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { apiService } from '../services/apiService';
+import { useRealtimeSignal } from '../services/realtime';
 import { 
   Users, 
   Search, 
@@ -32,9 +33,12 @@ export const CorporateUsersView: React.FC = () => {
     setCreators(await apiService.corporateUsers());
   };
 
-  useEffect(() => { 
-    void refresh().catch(e => setError(e instanceof Error ? e.message : 'Gagal memuat kreator')); 
+  const reload = useCallback(() => {
+    void refresh().catch(e => setError(e instanceof Error ? e.message : 'Gagal memuat kreator'));
   }, []);
+
+  useEffect(() => { reload(); }, [reload]);
+  useRealtimeSignal(reload);
 
   const startEdit = (creator: Creator) => {
     setEditing(creator);

@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { apiService } from '../services/apiService';
+import { useRealtimeSignal } from '../services/realtime';
 
 export const SettingsHelpView: React.FC<{ corporate?: boolean }> = ({ corporate = false }) => {
   const [companyName, setCompanyName] = useState('');
@@ -11,14 +12,16 @@ export const SettingsHelpView: React.FC<{ corporate?: boolean }> = ({ corporate 
   const [loading, setLoading] = useState(corporate);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!corporate) return;
-    let active = true;
-    apiService.corporateDashboard().then(data => { if (active) setCompanyName(data.company.name); })
-      .catch(err => { if (active) setError(err instanceof Error ? err.message : 'Gagal memuat pengaturan'); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+    setError('');
+    try { setCompanyName((await apiService.corporateDashboard()).company.name); }
+    catch (err) { setError(err instanceof Error ? err.message : 'Gagal memuat pengaturan'); }
+    finally { setLoading(false); }
   }, [corporate]);
+
+  useEffect(() => { void load(); }, [load]);
+  useRealtimeSignal(() => { void load(); });
 
   const saveCompany = async (event: React.FormEvent) => {
     event.preventDefault(); setError(''); setNotice(''); setBusy(true);

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { apiService } from '../services/apiService';
+import { useRealtimeSignal } from '../services/realtime';
 import { 
   ShieldCheck, 
   Search, 
@@ -43,6 +44,7 @@ export const AdminAuditView: React.FC = () => {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+  useRealtimeSignal(load);
 
   const visible = useMemo(() => {
     return rows.filter(row => {

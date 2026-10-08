@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { apiService, type AdminUser } from '../services/apiService';
+import { useRealtimeSignal } from '../services/realtime';
 import { 
   UserCheck, 
   Plus, 
@@ -52,6 +53,7 @@ export const AdminCreatorsView: React.FC = () => {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+  useRealtimeSignal(load);
 
   const run = async (action: () => Promise<unknown>, done: string) => {
     setBusy(true); 

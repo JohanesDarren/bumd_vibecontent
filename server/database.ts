@@ -28,6 +28,12 @@ export async function runMigrations() {
   if (!(await pool.query("SELECT 1 FROM schema_migrations WHERE name='004_roles_sessions'")).rowCount) {
     await pool.query(await readFile(join(here, 'migrations', '004_roles_sessions.sql'), 'utf8'));
   }
+  if (!(await pool.query("SELECT 1 FROM schema_migrations WHERE name='005_session_idle'")).rowCount) {
+    await pool.query(await readFile(join(here, 'migrations', '005_session_idle.sql'), 'utf8'));
+  }
+  if (!(await pool.query("SELECT 1 FROM schema_migrations WHERE name='006_creator_company_link'")).rowCount) {
+    await pool.query(await readFile(join(here, 'migrations', '006_creator_company_link.sql'), 'utf8'));
+  }
 }
 
 const scrypt = promisify(nodeCrypto.scrypt);

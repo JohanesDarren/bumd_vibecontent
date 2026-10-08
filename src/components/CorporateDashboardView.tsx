@@ -1,5 +1,6 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { apiService, type CompanyDashboard } from '../services/apiService';
+import { useRealtimeSignal } from '../services/realtime';
 import type { ActiveTab } from '../types';
 import { 
   Building2, 
@@ -28,14 +29,15 @@ export const CorporateDashboardView: React.FC<Props> = ({ onNavigate, onOpenWork
   const [loading, setLoading] = useState(true);
   const [wsSearch, setWsSearch] = useState('');
 
-  useEffect(() => {
-    let active = true;
-    apiService.corporateDashboard()
-      .then(result => { if (active) setData(result); })
-      .catch(e => { if (active) setError(e instanceof Error ? e.message : 'Gagal memuat dasbor korporat'); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+  const load = useCallback(async () => {
+    setError('');
+    try { setData(await apiService.corporateDashboard()); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Gagal memuat dasbor korporat'); }
+    finally { setLoading(false); }
   }, []);
+
+  useEffect(() => { void load(); }, [load]);
+  useRealtimeSignal(load);
 
   const sum = (key: 'creatorCount' | 'draftCount' | 'approvedCount' | 'reviewCount' | 'sourceCount' | 'briefCount' | 'auditCount') => 
     data?.workspaces.reduce((total, ws) => total + ws[key], 0) ?? 0;
@@ -125,7 +127,7 @@ export const CorporateDashboardView: React.FC<Props> = ({ onNavigate, onOpenWork
         <div className="scheduling-stats">
           <div className="stat-pill" style={{ background: 'rgba(56, 189, 248, 0.12)', borderColor: 'rgba(56, 189, 248, 0.35)' }}>
             <span className="stat-dot" style={{ background: '#38bdf8' }} />
-            <span style={{ color: '#0284c7' }}>{data.workspaces.length} Workspace</span>
+            <span style={{ color: '#0d0cbd' }}>{data.workspaces.length} Workspace</span>
           </div>
           <div className="stat-pill" style={{ background: 'rgba(245, 158, 11, 0.12)', borderColor: 'rgba(245, 158, 11, 0.35)' }}>
             <span className="stat-dot" style={{ background: '#f59e0b' }} />
@@ -143,7 +145,7 @@ export const CorporateDashboardView: React.FC<Props> = ({ onNavigate, onOpenWork
         <div className="corporate-kpi-card">
           <div className="corporate-kpi-header">
             <span className="corporate-kpi-label">Total Workspace</span>
-            <div className="corporate-kpi-icon-wrap" style={{ background: 'rgba(2, 132, 199, 0.12)', color: 'var(--primary)' }}>
+            <div className="corporate-kpi-icon-wrap" style={{ background: 'rgba(13, 12, 189, 0.12)', color: 'var(--primary)' }}>
               <Layers size={20} />
             </div>
           </div>

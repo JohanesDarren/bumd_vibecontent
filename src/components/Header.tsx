@@ -62,7 +62,10 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Organization / Workspace Switcher */}
+        {/* Organization / Workspace Switcher — creator side only.
+            Corporate accounts are bound to their own company workspace, so the
+            tenant switcher is omitted for them (avoids cross-tenant confusion). */}
+        {activeUser.role !== 'corporate' && (
         <div style={{ position: 'relative' }}>
           <button 
             className="org-switcher-pill"
@@ -129,6 +132,7 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           )}
         </div>
+        )}
       </div>
 
       <div className="header-right">

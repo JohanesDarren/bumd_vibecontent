@@ -118,7 +118,7 @@ export const UserManagementView: React.FC<Props> = ({ users, activeWorkspace, on
         <div className="scheduling-stats">
           <div className="stat-pill" style={{ background: 'rgba(56, 189, 248, 0.12)', borderColor: 'rgba(56, 189, 248, 0.35)' }}>
             <span className="stat-dot" style={{ background: '#38bdf8' }} />
-            <span style={{ color: '#0284c7' }}>{users.length} Staf Terdaftar</span>
+            <span style={{ color: '#0d0cbd' }}>{users.length} Staf Terdaftar</span>
           </div>
         </div>
       </div>

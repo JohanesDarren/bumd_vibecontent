@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiService } from '../services/apiService';
+import { useRealtimeSignal } from '../services/realtime';
 import { Check, Save, Search, Users, Building2, AlertCircle, Network } from 'lucide-react';
 
 type Creator = { id: string; name: string; email: string; workspaceIds: string[] };
@@ -22,9 +23,12 @@ export const WorkspaceMappingView: React.FC = () => {
     setEdits(Object.fromEntries(people.map(p => [p.id, p.workspaceIds])));
   };
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     void refresh().catch(e => setError(e instanceof Error ? e.message : 'Gagal memuat data penugasan'));
   }, []);
+
+  useEffect(() => { reload(); }, [reload]);
+  useRealtimeSignal(reload);
 
   const toggle = (ids: string[], id: string) => ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id];
 

@@ -7,8 +7,24 @@ const API_URL = typeof window === 'undefined' ? configuredApiUrl || 'http://127.
 
 type Bootstrap = { workspaces: Workspace[]; users: User[]; brandProfile: BrandProfile; documents: KnowledgeDocument[]; drafts: ContentDraft[]; briefs: ContentBrief[]; auditLogs: AuditLog[] };
 
+// Fired whenever the API rejects a request as unauthenticated (expired/idle session),
+// so the app can drop straight back to the login screen instead of silently failing.
+let unauthorizedHandler: (() => void) | null = null;
+export const onUnauthorized = (handler: (() => void) | null) => { unauthorizedHandler = handler; };
+
+// The server is the source of truth for the idle window; it advertises it on every
+// authenticated response so the client timer can never drift from the real policy.
+let idleMs = 30 * 60 * 1000;
+const captureIdle = (response: Response) => {
+  const seconds = Number(response.headers.get('X-Session-Idle-Seconds'));
+  if (Number.isFinite(seconds) && seconds > 0) idleMs = seconds * 1000;
+};
+export const sessionIdleMs = () => idleMs;
+
 async function request<T>(path:string, init?:RequestInit):Promise<T>{
   const response=await fetch(`${API_URL}${path}`,{...init,credentials:'include',headers:{'Content-Type':'application/json',...(init?.headers||{})}});
+  captureIdle(response);
+  if(response.status===401 && path!=='/api/auth/login' && path!=='/api/auth/logout') unauthorizedHandler?.();
   if(!response.ok){const body=await response.json().catch(()=>({}));throw new Error(body.error||`API ${response.status}`);}
   return response.json();
 }
@@ -37,7 +53,7 @@ export type RagStatus={configured:boolean;ready:boolean;dependencies?:Record<str
 export const apiService={
   bootstrap:(workspaceId?:string)=>request<Bootstrap>(`/api/bootstrap${workspaceId?`?workspaceId=${encodeURIComponent(workspaceId)}`:''}`),
   login:(email:string,password:string)=>request<AuthUser>('/api/auth/login',{method:'POST',body:JSON.stringify({email,password})}),
-  me:async()=>{const response=await fetch(`${API_URL}/api/auth/me`,{credentials:'include'});if(response.status===401)return null;if(!response.ok)throw new Error('Unable to restore session');return response.json() as Promise<AuthUser>;},
+  me:async()=>{const response=await fetch(`${API_URL}/api/auth/me`,{credentials:'include'});captureIdle(response);if(response.status===401)return null;if(!response.ok)throw new Error('Unable to restore session');return response.json() as Promise<AuthUser>;},
   logout:()=>request<{ok:boolean}>('/api/auth/logout',{method:'POST'}),
   corporateDashboard:()=>request<CompanyDashboard>('/api/corporate/dashboard'),
   updateCorporateSettings:(name:string)=>request<{id:string;name:string}>('/api/corporate/settings',{method:'PUT',body:JSON.stringify({name})}),
@@ -81,4 +97,38 @@ export const apiService={
   createUser:(workspaceId:string,input:Omit<User,'id'|'workspaceId'|'avatar'> & { password?: string })=>request<User & { tempPassword?: string }>(`/api/organizations/${workspaceId}/users`,{method:'POST',body:JSON.stringify(input)}),
   deleteUser:(workspaceId:string,userId:string)=>request<{ok:boolean}>(`/api/organizations/${workspaceId}/users/${userId}`,{method:'DELETE'}),
   deleteDraft:(workspaceId:string,id:string)=>request<{ok:boolean}>(`/api/organizations/${workspaceId}/drafts/${id}`,{method:'DELETE'})
+};
+
+// ---------------------------------------------------------------------------
+// Live cross-role propagation.
+// The server publishes a payload-free "change" nudge after every successful
+// mutation. Screens subscribe here and simply re-read the same root, so a write
+// on the admin side appears immediately on an already-open corporate/creator
+// screen. Auto-reconnects with capped exponential backoff; safe to call twice.
+// ---------------------------------------------------------------------------
+export type ChangeSignal = { kind:'change'; at:string; actorId:string; actorRole:string; companyId:string|null; workspaceIds:string[]; userIds:string[]; method:string; path:string };
+export const eventsUrl = () => `${API_URL}/api/events`;
+export const subscribeToEvents = (onChange: (signal: ChangeSignal) => void): (() => void) => {
+  if (typeof window === 'undefined' || typeof EventSource === 'undefined') return () => {};
+  let source: EventSource | null = null;
+  let closed = false;
+  let backoff = 1000;
+  const connect = () => {
+    if (closed) return;
+    source = new EventSource(eventsUrl(), { withCredentials: true });
+    source.addEventListener('ready', () => { backoff = 1000; });
+    source.addEventListener('change', (event) => {
+      try { onChange(JSON.parse((event as MessageEvent).data) as ChangeSignal); } catch { /* ignore malformed frame */ }
+    });
+    source.onerror = () => {
+      source?.close();
+      if (closed) return;
+      // EventSource retries on its own, but a closed/failed stream needs a manual
+      // reconnect after a backoff so a downed API can't hammer the server.
+      setTimeout(connect, backoff);
+      backoff = Math.min(backoff * 2, 30000);
+    };
+  };
+  connect();
+  return () => { closed = true; source?.close(); };
 };

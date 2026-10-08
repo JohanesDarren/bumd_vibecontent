@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { apiService, type AdminOverview } from '../services/apiService';
+import { useRealtimeSignal } from '../services/realtime';
 import { SuperadminView } from './SuperadminView';
 import { AdminWorkspacesView } from './AdminWorkspacesView';
 import { AdminAccountsView } from './AdminAccountsView';
@@ -52,10 +53,11 @@ export const AdminDashboard: React.FC<{ onOpen: (id: string) => void; onLogout: 
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+  useRealtimeSignal(load);
 
   const stats = overview
     ? [
-        { label: 'Total Perusahaan', value: overview.companies.length, hint: 'Entitas induk terdaftar', icon: Building2, color: 'var(--primary)', bg: 'rgba(2, 132, 199, 0.12)' },
+        { label: 'Total Perusahaan', value: overview.companies.length, hint: 'Entitas induk terdaftar', icon: Building2, color: 'var(--primary)', bg: 'rgba(13, 12, 189, 0.12)' },
         { label: 'Total Workspace', value: overview.workspaces, hint: 'Unit kerja operasional aktif', icon: Layers, color: 'var(--accent-cyan)', bg: 'rgba(6, 182, 212, 0.12)' },
         { label: 'Total Pengguna', value: overview.users.total, hint: `${overview.users.superadmins} superadmin · ${overview.users.corporate} korporat · ${overview.users.creators} kreator`, icon: Users, color: 'var(--accent-indigo)', bg: 'rgba(99, 102, 241, 0.12)' },
         { label: 'Draf Konten & Aset', value: overview.drafts, hint: `${overview.knowledgeSources} dokumen knowledge base RAG`, icon: FileEdit, color: 'var(--accent-amber)', bg: 'rgba(245, 158, 11, 0.12)' },

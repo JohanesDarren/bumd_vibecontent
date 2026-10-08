@@ -9,8 +9,9 @@ test('unauthenticated first render is login, independent of workspace bootstrap'
   try {
     const { App } = await vite.ssrLoadModule('/src/App.tsx');
     const html = renderToString(React.createElement(App));
-    assert.match(html, /Masuk ke VibeContent/);
+    assert.match(html, /Masuk ke Akun Anda/);
     assert.match(html, /type="email"/);
+    assert.match(html, /type="password"/);
     assert.doesNotMatch(html, /Siapkan Workspace|Memuat PostgreSQL|Buat workspace baru/);
   } finally { await vite.close(); }
 });

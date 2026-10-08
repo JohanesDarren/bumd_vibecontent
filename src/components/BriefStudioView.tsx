@@ -16,6 +16,7 @@ import {
   GeneratedOutput 
 } from '../services/ragEngine';
 import { apiService, RagHit, RagStatus } from '../services/apiService';
+import { useRealtimeSignal } from '../services/realtime';
 import { 
   Sparkles, 
 
@@ -105,13 +106,14 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
   const [ragModel, setRagModel] = useState<string | null>(null);
   const [usedRemoteRag, setUsedRemoteRag] = useState(false);
 
-  useEffect(() => {
-    let active = true;
+  const loadRagStatus = useCallback(() => {
     apiService.ragStatus()
-      .then(s => { if (active) setRagService(s); })
-      .catch(error => { console.error('ragStatus failed:', error); if (active) setRagService({ configured: false, ready: false }); });
-    return () => { active = false; };
+      .then(s => setRagService(s))
+      .catch(error => { console.error('ragStatus failed:', error); setRagService({ configured: false, ready: false }); });
   }, []);
+
+  useEffect(() => { loadRagStatus(); }, [loadRagStatus]);
+  useRealtimeSignal(loadRagStatus);
 
 
 

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { apiService } from '../services/apiService';
+import { useRealtimeSignal } from '../services/realtime';
 import type { Workspace } from '../types';
 import { 
   Building2, 
@@ -41,6 +42,7 @@ export const CorporateManagementView: React.FC<{ onOpen: (id: string) => void }>
   };
 
   useEffect(() => { void load(); }, []);
+  useRealtimeSignal(load);
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -145,7 +147,7 @@ export const CorporateManagementView: React.FC<{ onOpen: (id: string) => void }>
         <div className="scheduling-stats">
           <div className="stat-pill" style={{ background: 'rgba(56, 189, 248, 0.12)', borderColor: 'rgba(56, 189, 248, 0.35)' }}>
             <span className="stat-dot" style={{ background: '#38bdf8' }} />
-            <span style={{ color: '#0284c7' }}>{workspaces.length} Terdaftar</span>
+            <span style={{ color: '#0d0cbd' }}>{workspaces.length} Terdaftar</span>
           </div>
         </div>
       </div>

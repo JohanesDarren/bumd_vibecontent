@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { apiService } from '../services/apiService';
+import { useRealtimeSignal } from '../services/realtime';
 import { 
   Layers, 
   Plus, 
@@ -50,6 +51,7 @@ export const AdminWorkspacesView: React.FC<{ onOpen: (id: string) => void }> = (
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+  useRealtimeSignal(load);
 
   const companyName = (id: string) => companies.find(c => c.id === id)?.name || '—';
 
@@ -190,7 +192,7 @@ export const AdminWorkspacesView: React.FC<{ onOpen: (id: string) => void }> = (
         <div className="scheduling-stats">
           <div className="stat-pill" style={{ background: 'rgba(56, 189, 248, 0.12)', borderColor: 'rgba(56, 189, 248, 0.35)' }}>
             <span className="stat-dot" style={{ background: '#38bdf8' }} />
-            <span style={{ color: '#0284c7' }}>{workspaces.length} Workspace</span>
+            <span style={{ color: '#0d0cbd' }}>{workspaces.length} Workspace</span>
           </div>
         </div>
       </div>
