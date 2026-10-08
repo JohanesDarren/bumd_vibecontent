@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "node server/dev.mjs",
     "dev:web": "vite",
-    "server": "tsx server/index.ts",
+    "server": "tsx watch server/index.ts",
     "db:migrate": "tsx server/migrate.ts",
     "db:seed": "tsx server/seed.ts",
     "db:clear": "tsx server/clear.ts",
@@ -24,7 +24,8 @@
     "lucide-react": "^1.49.0",
     "pg": "^8.23.1",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "react-spinners": "^0.17.1"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",

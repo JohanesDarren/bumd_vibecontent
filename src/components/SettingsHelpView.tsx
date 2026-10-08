@@ -13,7 +13,6 @@ import {
   RotateCcw,
   CheckCircle2,
   AlertTriangle,
-  Loader2,
   ChevronDown,
   ChevronRight,
   Gauge,
@@ -25,6 +24,7 @@ import {
   Layers,
   EyeOff
 } from 'lucide-react';
+import { ClipLoader } from 'react-spinners';
 import type { Workspace } from '../types';
 import { apiService, RagStatus } from '../services/apiService';
 import {
@@ -313,10 +313,10 @@ export const SettingsHelpView: React.FC<SettingsHelpViewProps> = ({ activeWorksp
             {ragStatus?.error && <p className="settings-hint" style={{ color: 'var(--accent-rose)' }}>{ragStatus.error}</p>}
             <div style={{ display: 'flex', gap: '8px', marginTop: '14px', flexWrap: 'wrap' }}>
               <button type="button" className="btn btn-secondary btn-sm" onClick={refreshStatus} disabled={statusLoading}>
-                {statusLoading ? <Loader2 size={13} className="brief-spin-icon" /> : <RefreshCw size={13} />} Uji Koneksi
+                {statusLoading ? <ClipLoader size={13} color="currentColor" speedMultiplier={0.8} /> : <RefreshCw size={13} />} Uji Koneksi
               </button>
               <button type="button" className="btn btn-secondary btn-sm" onClick={handleSync} disabled={syncing}>
-                {syncing ? <Loader2 size={13} className="brief-spin-icon" /> : <Database size={13} />} Sinkronkan KB
+                {syncing ? <ClipLoader size={13} color="currentColor" speedMultiplier={0.8} /> : <Database size={13} />} Sinkronkan KB
               </button>
             </div>
           </div>
@@ -451,7 +451,7 @@ export const SettingsHelpView: React.FC<SettingsHelpViewProps> = ({ activeWorksp
                 placeholder="Tulis kueri pengujian…"
               />
               <button type="button" className="btn btn-primary btn-sm" onClick={runTest} disabled={testing || !ragStatus?.ready}>
-                {testing ? <Loader2 size={14} className="brief-spin-icon" /> : <Sparkles size={14} />} Uji Grounding
+                {testing ? <ClipLoader size={14} color="currentColor" speedMultiplier={0.8} /> : <Sparkles size={14} />} Uji Grounding
               </button>
             </div>
             {!ragStatus?.ready && <p className="settings-hint" style={{ color: 'var(--accent-amber)' }}>Layanan RAG belum siap — uji dinonaktifkan sementara.</p>}

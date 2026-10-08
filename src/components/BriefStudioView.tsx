@@ -16,7 +16,8 @@ import {
   RemoteGrounding, 
   GeneratedOutput,
   reviewRagCopy,
-  sanitizeRagAnswer
+  sanitizeRagAnswer,
+  splitLimitations
 } from '../services/ragEngine';
 import { apiService, RagHit, RagStatus } from '../services/apiService';
 import {
@@ -41,7 +42,6 @@ import {
   Plus,
   MessageSquare,
   Wand2,
-  Loader2,
   CornerDownLeft,
   Zap,
   AlertTriangle,
@@ -51,6 +51,7 @@ import {
   SlidersHorizontal,
   Lock
 } from 'lucide-react';
+import { ClipLoader } from 'react-spinners';
 
 interface BriefStudioViewProps {
   brandProfile: BrandProfile;
@@ -224,6 +225,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
       naskah_singkat: 'Naskah Video Pendek 9:16 (Reels/TikTok/Shorts)',
       brief_visual: 'Brief Visual & Panduan Infografis'
     };
+    const limitationParts = splitLimitations(limitations);
     const structuredQuery = [
       `Judul: ${title}`,
       campaign ? `Kampanye/Program: ${campaign}` : '',
@@ -232,7 +234,8 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
       targetAudience ? `Target Audiens: ${targetAudience}` : '',
       tone ? `Nada Suara: ${tone}` : '',
       selectedCta ? `Call to Action (CTA): ${selectedCta}` : '',
-      limitations ? `Batasan/Syarat Penting: ${limitations}` : '',
+      limitationParts.terms ? `Batasan/Syarat Penting: ${limitationParts.terms}` : '',
+      limitationParts.guidance ? `Arahan Penulisan dari Tim (wajib dipatuhi): ${limitationParts.guidance}` : '',
       `Pesan Kunci & Fakta:\n${keyMessage}`
     ].filter(Boolean).join('\n');
     let output: GeneratedOutput;
@@ -272,7 +275,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
             // excerpts do not repeat them.
             maxSentences: 12,
             maxChars: 1800,
-            allowedNumericClaims: extractNumericClaims(`${title} ${keyMessage} ${limitations}`)
+            allowedNumericClaims: extractNumericClaims(`${title} ${keyMessage} ${limitations} ${selectedCta}`)
           });
           let citationHits = guarded.sources.filter(hit => typeof hit.content === 'string' && hit.content.trim());
           if (!citationHits.length) {
@@ -347,7 +350,15 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
         // No usable grounded answer: have the model analyse and rewrite the brief
         // instead of echoing it. The draft stays flagged as needing verification.
         try {
-          const composed = await apiService.ragCompose(activeWorkspace.id, structuredQuery);
+          let composed = await apiService.ragCompose(activeWorkspace.id, structuredQuery);
+          const composedIssues = reviewRagCopy(sanitizeRagAnswer(composed.answer || ''), brief, brandProfile, remote.citations).blocking;
+          if (composedIssues.length) {
+            try {
+              composed = await apiService.ragCompose(activeWorkspace.id, structuredQuery, composedIssues.join(' '));
+            } catch (error) {
+              console.warn('ragCompose retry failed:', error);
+            }
+          }
           remote = { ...remote, composedCopy: composed.answer, model: remote.model || composed.model };
         } catch (error) {
           console.warn('ragCompose failed, falling back to brief text:', error);
@@ -659,7 +670,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
             >
               {isGenerating ? (
                 <>
-                  <Loader2 size={18} className="brief-spin-icon" />
+                  <ClipLoader size={18} color="currentColor" speedMultiplier={0.8} />
                   <span>Memproses RAG & Membuat Draf...</span>
                 </>
               ) : (
@@ -690,7 +701,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                 {isStreaming && (
                   <span className="brief-streaming-indicator">
-                    <Loader2 size={12} className="brief-spin-icon" />
+                    <ClipLoader size={12} color="currentColor" speedMultiplier={0.8} />
                     <span>AI sedang menulis...</span>
                   </span>
                 )}

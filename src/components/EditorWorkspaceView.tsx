@@ -33,9 +33,9 @@ import {
   Scissors,
   Building,
   Lightbulb,
-  Loader2,
   MoreHorizontal
 } from 'lucide-react';
+import { ClipLoader } from 'react-spinners';
 
 interface EditorWorkspaceViewProps {
   draft: ContentDraft;
@@ -358,7 +358,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
               </div>
               {refiningId && (
                 <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.72rem', color: 'var(--accent-cyan)', fontWeight: 600 }}>
-                  <Loader2 size={12} className="spin-animation" />
+                  <ClipLoader size={12} color="currentColor" speedMultiplier={0.8} />
                   Memproses variasi...
                 </span>
               )}
@@ -381,7 +381,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
                 >
                   {refiningId === v.id ? (
                     <>
-                      <Loader2 size={13} className="spin-animation" />
+                      <ClipLoader size={13} color="currentColor" speedMultiplier={0.8} />
                       <span>Memproses...</span>
                     </>
                   ) : (
@@ -458,7 +458,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
                           >
                             {refiningId === v.id ? (
                               <>
-                                <Loader2 size={13} className="spin-animation" />
+                                <ClipLoader size={13} color="currentColor" speedMultiplier={0.8} />
                                 <span>Memproses...</span>
                               </>
                             ) : (
@@ -596,7 +596,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
                   Tidak ada dokumen sumber yang ditemukan untuk draf ini.
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '400px', overflowY: 'auto', paddingRight: '4px' }}>
                   {currentVer.citations.map((c, idx) => (
                     <div 
                       key={c.id || idx}

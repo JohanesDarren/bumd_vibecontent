@@ -59,7 +59,11 @@ const englishArtifacts = new Set([
   'should', 'since', 'some', 'such', 'than', 'that', 'the', 'their', 'them', 'then', 'there',
   'these', 'they', 'this', 'those', 'through', 'too', 'under', 'until', 'very', 'was', 'were',
   'what', 'when', 'where', 'which', 'while', 'who', 'why', 'will', 'with', 'would', 'you',
-  'surrounded', 'goodbye', 'city', 'residents', 'friendly', 'formal', 'feed', 'reels', 'caption'
+  'surrounded', 'goodbye', 'city', 'residents', 'friendly', 'formal', 'feed', 'reels', 'caption',
+  'let', 'me', 'output', 'properly', 'okay', 'sure', 'here', 'adjustment', 'vegetable', 'please', 'note',
+  'closer', 'close', 'immediate', 'immediately', 'check', 'checking', 'easy', 'easily', 'now', 'new', 'get',
+  'free', 'best', 'update', 'updates', 'service', 'services', 'feature', 'features', 'your', 'yours', 'we',
+  'us', 'can', 'will', 'need', 'help', 'just', 'anytime', 'anywhere', 'without', 'within', 'all', 'one'
 ]);
 
 const briefStopWords = new Set([
@@ -68,6 +72,29 @@ const briefStopWords = new Set([
   'sebagai', 'sampai', 'secara', 'sehingga', 'tentang', 'untuk', 'yang'
 ]);
 
+const instructionStart = /^(?:tulis(?:kan)?|gunakan|jangan|dilarang|hindari|pertahankan|tekankan|tonjolkan|utamakan|sertakan|cantumkan|sebutkan|buat(?:lah)?|pastikan|fokus|wajib|harus|mohon)\b/i;
+
+/**
+ * The "Batasan, Syarat & Peringatan" field mixes two things: terms readers must
+ * see ("Kuota terbatas.") and instructions for the writer ("Tulis dalam bahasa
+ * formal."). Terms are appended to the copy; guidance is sent to the model and
+ * must never be published.
+ */
+export function splitLimitations(limitations?: string): { terms: string; guidance: string } {
+  const sentences = (limitations || '')
+    .split(/\n+|(?<=[.!?])\s+(?=[A-Z0-9"'(])/)
+    .map(sentence => sentence.trim())
+    .filter(Boolean);
+  const terms: string[] = [];
+  const guidance: string[] = [];
+  for (const sentence of sentences) (instructionStart.test(sentence) ? guidance : terms).push(sentence);
+  return { terms: terms.join(' '), guidance: guidance.join(' ') };
+}
+
+// Chain-of-thought / assistant chatter the model sometimes leaks into copy.
+const chatterLine = /^\s*(?:let me|let's|i will|i'll|i am|i'm|here is|here's|okay|ok[,.]|sure[,.!]|note:|output:|as an ai)\b/i;
+const chatterSentence = /(?:^|\s)(?:let me|i will|i'll|here is|here's|output (?:it )?properly|as an ai)\b[^.!?\n]*[.!?]*/gi;
+
 export function sanitizeRagAnswer(raw: string): string {
   return raw
     .replace(/\r\n?/g, '\n')
@@ -75,6 +102,8 @@ export function sanitizeRagAnswer(raw: string): string {
     .replace(/\n?\s*```\s*$/, '')
     .replace(/\[\d+\]/g, '')
     .split('\n')
+    .filter(line => !chatterLine.test(line))
+    .map(line => line.replace(chatterSentence, ''))
     .map(line => line.replace(/[ \t]+$/g, '').replace(/[ \t]+([,.;:!?])/g, '$1'))
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
@@ -170,9 +199,16 @@ export function reviewRagCopy(
   const allowedWords = new Set(suppliedText.match(/\p{Script=Latin}+/gu) || []);
   const foreignWords = [...new Set((text.toLocaleLowerCase('id-ID').match(/\p{Script=Latin}+/gu) || [])
     .filter(word => englishArtifacts.has(word) && !allowedWords.has(word)))];
-  // A stray loanword is normal in Indonesian marketing copy; only flag a pattern.
-  if (foreignWords.length >= 3) {
-    warnings.push(`Naskah terindikasi mencampur bahasa atau memuat kata asing: ${foreignWords.join(', ')}.`);
+  const englishShaped = [...new Set((text.toLocaleLowerCase('id-ID').match(/\p{Script=Latin}+/gu) || [])
+    .filter(word => word.length > 5 && /(?:ment|tion|tions|ness|able|ible|ful|ally|ately)$/.test(word) && !allowedWords.has(word)))];
+  // Any English word not supplied by the brief blocks the copy; the pipeline then
+  // repairs or rewrites it instead of publishing mixed-language text.
+  if (englishShaped.length || foreignWords.length) {
+    blocking.push(`Naskah mencampur bahasa Inggris: ${[...new Set([...englishShaped, ...foreignWords])].join(', ')}.`);
+  }
+  // Garbled model output: stray tildes, ",/checking" fragments.
+  if (/~|,\/|\s\/\p{L}/u.test(text)) {
+    blocking.push('Naskah memuat potongan teks rusak (mis. "~" atau "/kata").');
   }
 
   const supportedNumbers = new Set(extractNumbers(expandAmountWords(`${suppliedText} ${sourceText}`)));
@@ -182,7 +218,9 @@ export function reviewRagCopy(
   }
   // Only the key message's numbers are expected in the body; limitation
   // figures are appended by the generator as a separate terms section.
-  const missingNumbers = [...new Set(extractNumbers(brief.keyMessage).filter(number => !hasNumber(text, number)))];
+  // List markers such as "(1)" or "2." are structure, not facts.
+  const keyFacts = brief.keyMessage.replace(/\(\d{1,2}\)|(?:^|\s)\d{1,2}[.)](?=\s)/gm, ' ');
+  const missingNumbers = [...new Set(extractNumbers(keyFacts).filter(number => !hasNumber(text, number)))];
   if (missingNumbers.length) {
     warnings.push(`Naskah tidak memuat seluruh angka penting pada pesan kunci brief (${missingNumbers.join(', ')}); mohon dicek.`);
   }
@@ -461,10 +499,12 @@ export function generateContentFromBrief(
     ? `#${brief.channel.trim().split(/\s+/)[0].replace(/[^\p{L}\p{N}]/gu, '')}`
     : '';
 
+  // Writing guidance in "Batasan" steers the model and is never published.
+  const { terms } = splitLimitations(brief.limitations);
   const keyMessageBlock = [
     groundedKeyMessage,
-    brief.limitations && !groundedKeyMessage.toLocaleLowerCase('id-ID').includes(brief.limitations.toLocaleLowerCase('id-ID'))
-      ? `Syarat dan ketentuan: ${brief.limitations}`
+    terms && !groundedKeyMessage.toLocaleLowerCase('id-ID').includes(terms.toLocaleLowerCase('id-ID'))
+      ? `Syarat dan ketentuan: ${terms}`
       : ''
   ].filter(Boolean).join('\n\n');
   const cta = brief.cta || brandProfile.officialCTAs[0]?.text || 'Hubungi kanal resmi kami untuk informasi selengkapnya.';
@@ -525,7 +565,7 @@ CTA: ${cta}`;
       {
         sceneNumber: 3,
         visualDirection: 'Talent memperagakan langkah praktis (misalnya: mengakses portal/aplikasi atau menunjukkan bukti layanan).',
-        audioNarration: `Talent: "${brief.limitations || groundedKeyMessage}"`,
+        audioNarration: `Talent: "${terms || groundedKeyMessage}"`,
         textOnScreen: 'PROSES MUDAH & TRANSPARAN',
         citationId: citations[1]?.id,
         citationNote: citations[1]?.documentTitle

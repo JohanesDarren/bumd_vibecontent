@@ -1,5 +1,8 @@
-import type { AuditLog, BrandProfile, ContentBrief, ContentDraft, KnowledgeDocument, User, Workspace } from '../types';
+import type { AuditLog, BrandProfile, ContentBrief, ContentDraft, KnowledgeDocument, ScheduledContent, SchedulePillar, SchedulePlatform, User, Workspace } from '../types';
 import type { AppSettings, RagOptionsPayload } from './appSettings';
+
+export type PlanSlot={date:string;time:string;platform:SchedulePlatform;pillar:SchedulePillar|null;title:string;angle:string;source:string};
+export type PlanRequestBody={workspaceId:string;mode:'plan'|'gap';monthLabel:string;theme:string;count:number;dates:string[];platforms:SchedulePlatform[];pillars:SchedulePillar[];moments:string[];existingTitles:string[]};
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:3005';
 
@@ -17,7 +20,13 @@ async function request<T>(path:string, init?:RequestInit):Promise<T>{
   const headers: Record<string, string> = { 'Content-Type':'application/json', ...(init?.headers as any || {}) };
   if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
   const response=await fetch(`${API_URL}${path}`,{...init,headers});
-  if(!response.ok){const body=await response.json().catch(()=>({}));throw new Error(body.error||`API ${response.status}`);}
+  if(!response.ok) {
+    if (response.status === 401) {
+      window.dispatchEvent(new Event('vibecontent_logout'));
+    }
+    const body=await response.json().catch(()=>({}));
+    throw new Error(body.error||`API ${response.status}`);
+  }
   return response.json();
 }
 
@@ -47,7 +56,10 @@ export const apiService={
   ragQuery:(workspaceId:string,query:string,options?:RagOptionsPayload|number)=>request<RagAnswer>(`/api/rag/query`,{method:'POST',body:JSON.stringify({workspaceId,query,...(typeof options === 'number' ? {topK:options} : {options})})}),
   ragRefine:(workspaceId:string,draftContent:string,promptAction:string)=>request<{answer:string;model?:string}>(`/api/rag/refine`,{method:'POST',body:JSON.stringify({workspaceId,draftContent,promptAction})}),
   saveDraft:(draft:ContentDraft,brief?:ContentBrief)=>request<ContentDraft>(`/api/drafts/${draft.id}`,{method:'PUT',body:JSON.stringify({...draft,brief})}),
-  ragCompose:(workspaceId:string,briefText:string)=>request<{answer:string;model?:string}>(`/api/rag/compose`,{method:'POST',body:JSON.stringify({workspaceId,briefText})}),
+  fetchPostImage:(workspaceId:string,id:string)=>request<ScheduledContent>(`/api/organizations/${workspaceId}/schedules/${id}/post-image`,{method:'POST'}),
+  setScheduleImage:(workspaceId:string,id:string,image:string|null,source?:'upload'|'ai')=>request<ScheduledContent>(`/api/organizations/${workspaceId}/schedules/${id}/custom-image`,{method:'PUT',body:JSON.stringify({image,source})}),
+  ragPlan:(body:PlanRequestBody)=>request<{slots:PlanSlot[];sources:string[];model?:string}>('/api/rag/plan',{method:'POST',body:JSON.stringify(body)}),
+  ragCompose:(workspaceId:string,briefText:string,feedback?:string)=>request<{answer:string;model?:string}>(`/api/rag/compose`,{method:'POST',body:JSON.stringify({workspaceId,briefText,feedback})}),
   ragSync:(workspaceId:string)=>request<{knowledgeBaseId:string;indexed:number;failed:number;total:number}>(`/api/rag/sync`,{method:'POST',body:JSON.stringify({workspaceId})}),
   ragPrune:(workspaceId:string)=>request<{knowledgeBaseId:string;removed:number;failed:number;total:number}>(`/api/rag/prune`,{method:'POST',body:JSON.stringify({workspaceId})}),
   generateVisual:(input:import('./visualScene').VisualInput)=>request<{imageUrl:string;provider:string;model:string;fallback:false;format:string}>('/api/visual/generate',{method:'POST',body:JSON.stringify(input)}),
@@ -58,6 +70,9 @@ export const apiService={
 
   createUser:(workspaceId:string,input:Omit<User,'id'|'workspaceId'|'avatar'> & { password?: string })=>request<User & { tempPassword?: string }>(`/api/organizations/${workspaceId}/users`,{method:'POST',body:JSON.stringify(input)}),
   deleteUser:(workspaceId:string,userId:string)=>request<{ok:boolean}>(`/api/organizations/${workspaceId}/users/${userId}`,{method:'DELETE'}),
+  listSchedules:(workspaceId:string)=>request<ScheduledContent[]>(`/api/workspaces/${workspaceId}/schedules`),
+  saveSchedule:(item:ScheduledContent)=>request<ScheduledContent>(`/api/schedules/${item.id}`,{method:'PUT',body:JSON.stringify(item)}),
+  deleteSchedule:(workspaceId:string,id:string)=>request<{ok:boolean}>(`/api/organizations/${workspaceId}/schedules/${id}`,{method:'DELETE'}),
   deleteDraft:(workspaceId:string,id:string)=>request<{ok:boolean}>(`/api/organizations/${workspaceId}/drafts/${id}`,{method:'DELETE'}),
 
   saveKnowledgeSource: (source: KnowledgeDocument) => request<KnowledgeDocument & {ragSynced?: boolean}>(`/api/knowledge-sources/${source.id}`, { method: 'PUT', body: JSON.stringify(source) }),

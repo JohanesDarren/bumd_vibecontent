@@ -6,7 +6,7 @@ function base64url(str: string | Buffer): string {
   return b.toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 }
 
-export function signJwt(payload: any, secret: string = env.jwtSecret, expiresInMs: number = 30 * 60 * 1000) {
+export function signJwt(payload: any, secret: string = env.jwtSecret, expiresInMs: number = 24 * 60 * 60 * 1000) {
   const header = base64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
   const exp = Date.now() + expiresInMs;
   const p = base64url(JSON.stringify({ ...payload, exp }));

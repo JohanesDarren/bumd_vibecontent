@@ -10,7 +10,8 @@ import {
   AuditLog, 
   ContentBrief, 
   DraftVersionon, 
-  ReviewComment
+  ReviewComment,
+  VisualAsset
 } from './types';
 import { apiService, setAuthToken } from './services/apiService';
 import { generateContentFromBrief, GeneratedOutput } from './services/ragEngine';
@@ -153,15 +154,64 @@ export function App() {
   };
 
   // Logout
-  const handleLogout = () => {
+  const handleLogout = (msg?: string | React.MouseEvent | React.FormEvent) => {
     setAuthenticated(false);
     setAuthUser(null);
     setActiveUser(null);
     setCurrentTab('dashboard');
     setAuthToken('');
     localStorage.removeItem('vibecontent_active_ws');
-    showToast('Anda telah keluar.');
+    showToast(typeof msg === 'string' ? msg : 'Anda telah keluar.');
   };
+
+  // Idle Timeout (30 minutes of inactivity)
+  useEffect(() => {
+    if (!authenticated) return;
+    
+    let activityInterval: ReturnType<typeof setInterval>;
+    let throttleTimer: ReturnType<typeof setTimeout> | null = null;
+    const events = ['mousemove', 'keydown', 'scroll', 'click'];
+    
+    const updateActivity = () => {
+      localStorage.setItem('vc_last_activity', Date.now().toString());
+    };
+
+    const handleActivity = () => {
+      if (!throttleTimer) {
+        throttleTimer = setTimeout(() => {
+          updateActivity();
+          throttleTimer = null;
+        }, 2000); // Throttle writes to localStorage
+      }
+    };
+
+    const checkInactivity = () => {
+      const lastActivityStr = localStorage.getItem('vc_last_activity');
+      if (!lastActivityStr) return;
+      
+      const lastActivity = parseInt(lastActivityStr, 10);
+      // 30 minutes idle timeout
+      if (Date.now() - lastActivity > 30 * 60 * 1000) {
+        handleLogout('Sesi berakhir otomatis karena 30 menit tidak ada aktivitas.');
+      }
+    };
+
+    updateActivity();
+    events.forEach(event => window.addEventListener(event, handleActivity));
+    activityInterval = setInterval(checkInactivity, 60000); // Check every minute
+
+    const handleForceLogout = () => {
+      handleLogout('Sesi berakhir atau token kedaluwarsa. Silakan masuk kembali.');
+    };
+    window.addEventListener('vibecontent_logout', handleForceLogout);
+
+    return () => {
+      events.forEach(event => window.removeEventListener(event, handleActivity));
+      window.removeEventListener('vibecontent_logout', handleForceLogout);
+      clearInterval(activityInterval);
+      if (throttleTimer) clearTimeout(throttleTimer);
+    };
+  }, [authenticated]);
 
   // Toast helper
   const showToast = (msg: string) => {
@@ -245,6 +295,14 @@ export function App() {
     await apiService.saveDraft({ ...draft, versions: [version, ...draft.versions], currentVersionon: version.versionNumber, updatedAt: new Date().toISOString() });
     await loadData(activeWorkspace.id);
     showToast(`Versi ${version.versionNumber} disimpan ke riwayat audit.`);
+  };
+
+  const handleSaveVisual = async (draftId: string, visual: VisualAsset) => {
+    const draft = drafts.find(item => item.id === draftId);
+    if (!draft || !activeWorkspace) return;
+    await apiService.saveDraft({ ...draft, visualAsset: visual, updatedAt: new Date().toISOString() });
+    await loadData(activeWorkspace.id);
+    showToast('Gambar disimpan ke draf dan tampil di Penjadwalan Konten.');
   };
 
   // User confirms the brief is final; Visual Studio unlocks immediately.
@@ -488,6 +546,7 @@ export function App() {
               onSelectDraft={setSelectedDraftId}
               brandProfile={effectiveBrandProfile}
               activeWorkspace={activeWorkspace}
+              onSaveVisual={handleSaveVisual}
             />
           )}
 
@@ -495,6 +554,7 @@ export function App() {
           {currentTab === 'content_scheduling' && (
             <ContentSchedulingView 
               drafts={drafts}
+              documents={documents}
               activeWorkspace={activeWorkspace}
               onOpenEditorDraft={(id) => { setSelectedDraftId(id); setCurrentTab('editor'); }}
             />

@@ -29,6 +29,18 @@ export async function runMigrations() {
   const settings = await readFile(join(here, 'migrations', '003_workspace_settings.sql'), 'utf8');
   await pool.query(settings);
   await pool.query(`INSERT INTO schema_migrations(name) VALUES ('003_workspace_settings') ON CONFLICT DO NOTHING`);
+  const schedules = await readFile(join(here, 'migrations', '004_content_schedules.sql'), 'utf8');
+  await pool.query(schedules);
+  await pool.query(`INSERT INTO schema_migrations(name) VALUES ('004_content_schedules') ON CONFLICT DO NOTHING`);
+  const scheduleDetails = await readFile(join(here, 'migrations', '005_schedule_details.sql'), 'utf8');
+  await pool.query(scheduleDetails);
+  await pool.query(`INSERT INTO schema_migrations(name) VALUES ('005_schedule_details') ON CONFLICT DO NOTHING`);
+  const postImage = await readFile(join(here, 'migrations', '006_schedule_post_image.sql'), 'utf8');
+  await pool.query(postImage);
+  await pool.query(`INSERT INTO schema_migrations(name) VALUES ('006_schedule_post_image') ON CONFLICT DO NOTHING`);
+  const customImage = await readFile(join(here, 'migrations', '007_schedule_custom_image.sql'), 'utf8');
+  await pool.query(customImage);
+  await pool.query(`INSERT INTO schema_migrations(name) VALUES ('007_schedule_custom_image') ON CONFLICT DO NOTHING`);
 }
 
 const scrypt = promisify(nodeCrypto.scrypt);
@@ -48,7 +60,7 @@ export async function verifyPassword(password:string, stored:string):Promise<boo
 export async function organizationExists(id:string){const result=await pool.query('SELECT 1 FROM organizations WHERE id=$1',[id]);return (result.rowCount||0)>0;}
 
 export async function clearAllData() {
-  await pool.query('TRUNCATE audit_events, review_comments, draft_citations, draft_versions, content_drafts, content_briefs, knowledge_chunks, knowledge_sources, brand_profiles, workspace_settings, memberships, users, organizations RESTART IDENTITY CASCADE');
+  await pool.query('TRUNCATE content_schedules, audit_events, review_comments, draft_citations, draft_versions, content_drafts, content_briefs, knowledge_chunks, knowledge_sources, brand_profiles, workspace_settings, memberships, users, organizations RESTART IDENTITY CASCADE');
 }
 
 export async function createOrganizationWithAdmin(input:{organizationName:string;code:string;sector:string;city:string;adminName:string;adminEmail:string;adminPassword?:string}) {
@@ -218,4 +230,74 @@ export async function claimLegacyPassword(email:string,password:string) {
 export async function getUserWorkspaces(userId:string) {
   const orgs=await pool.query('SELECT o.id,o.name,o.code,o.sector,o.city,o.tagline,o.primary_color AS "primaryColor",o.accent_color AS "accentColor",o.description,m.role FROM memberships m JOIN organizations o ON o.id=m.organization_id WHERE m.user_id=$1 AND m.active ORDER BY o.created_at',[userId]);
   return orgs.rows;
+}
+
+const scheduleColumns=`id,organization_id AS "workspaceId",draft_id AS "draftId",title,platform,status,to_char(publish_date,'YYYY-MM-DD') AS date,to_char(publish_time,'HH24:MI') AS time,notes,caption,campaign,pillar,post_url AS "postUrl",post_image AS "postImage",custom_image AS "customImage",custom_image_source AS "customImageSource"`;
+export async function listSchedules(workspaceId:string){const result=await pool.query(`SELECT ${scheduleColumns} FROM content_schedules WHERE organization_id=$1 ORDER BY publish_date,publish_time`,[workspaceId]);return result.rows;}
+/** A scheduling rule the user can fix (mapped to HTTP 400, message shown as-is). */
+export class ScheduleRuleError extends Error {}
+
+const SCHEDULE_STATUS_LABELS:Record<string,string>={draft:'Draf',scheduled:'Terjadwal',published:'Terbit'};
+
+async function scheduleActor(client:pg.PoolClient,workspaceId:string,actorId:string){
+  const actor=await client.query('SELECT u.name,m.role FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.organization_id=$1 AND m.user_id=$2 AND m.active',[workspaceId,actorId]);
+  if(!actor.rowCount) throw new ScheduleRuleError('Pengguna bukan anggota aktif workspace ini.');
+  return actor.rows[0] as {name:string;role:string};
+}
+
+export async function saveSchedule(item:any,actorId:string){
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    const actor=await scheduleActor(client,item.workspaceId,actorId);
+    const existing=await client.query(`SELECT to_char(publish_date,'YYYY-MM-DD') AS date,status,draft_id AS "draftId" FROM content_schedules WHERE id=$1 AND organization_id=$2`,[item.id,item.workspaceId]);
+    const previous=existing.rows[0] as {date:string;status:string;draftId:string|null}|undefined;
+    // New or moved entries cannot land in the past; editing an old entry in place
+    // (e.g. marking it published after the fact) stays allowed.
+    if(!previous||previous.date!==item.date){
+      const past=await client.query('SELECT $1::date < current_date AS past',[item.date]);
+      if(past.rows[0].past) throw new ScheduleRuleError('Tanggal publikasi tidak boleh di masa lalu.');
+    }
+    // Governance: only an approved draft may be scheduled or published. Checked
+    // when status or linked draft changes, so later draft revisions don't lock old entries.
+    const statusOrDraftChanged=!previous||previous.status!==item.status||(previous.draftId||null)!==(item.draftId||null);
+    if(item.status!=='draft'&&statusOrDraftChanged){
+      const draft=item.draftId?await client.query('SELECT status FROM content_drafts WHERE id=$1 AND organization_id=$2',[item.draftId,item.workspaceId]):null;
+      if(!draft?.rowCount||draft.rows[0].status!=='disetujui') throw new ScheduleRuleError('Status Terjadwal/Terbit hanya untuk jadwal yang ditautkan ke draf berstatus Disetujui.');
+    }
+    // Upsert scoped to the workspace: an id owned by another organization is never overwritten.
+    const result=await client.query(`INSERT INTO content_schedules(id,organization_id,draft_id,title,platform,status,publish_date,publish_time,notes,caption,campaign,pillar,post_url) VALUES($1,$2,(SELECT id FROM content_drafts WHERE id=$3 AND organization_id=$2),$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) ON CONFLICT(id) DO UPDATE SET draft_id=EXCLUDED.draft_id,title=EXCLUDED.title,platform=EXCLUDED.platform,status=EXCLUDED.status,publish_date=EXCLUDED.publish_date,publish_time=EXCLUDED.publish_time,notes=EXCLUDED.notes,caption=EXCLUDED.caption,campaign=EXCLUDED.campaign,pillar=EXCLUDED.pillar,post_url=EXCLUDED.post_url,post_image=CASE WHEN content_schedules.post_url IS DISTINCT FROM EXCLUDED.post_url THEN NULL ELSE content_schedules.post_image END,updated_at=now() WHERE content_schedules.organization_id=EXCLUDED.organization_id RETURNING ${scheduleColumns}`,[item.id,item.workspaceId,item.draftId||null,item.title,item.platform,item.status,item.date,item.time||'09:00',item.notes||null,item.caption||null,item.campaign?.trim()||null,item.pillar||null,item.postUrl?.trim()||null]);
+    if(!result.rowCount) throw new Error('Schedule ID already belongs to another workspace');
+    const saved=result.rows[0];
+    const action=!previous?'Jadwal Dibuat':previous.status!==saved.status?`Status Jadwal: ${SCHEDULE_STATUS_LABELS[saved.status]}`:previous.date!==saved.date?'Jadwal Dipindah':'Jadwal Diperbarui';
+    await client.query(`INSERT INTO audit_events(organization_id,actor_id,actor_name,actor_role,action,object_type,object_id,object_name,details) VALUES($1,$2,$3,$4,$5,'schedule',$6,$7,$8)`,
+      [item.workspaceId,actorId,actor.name,actor.role,action,saved.id,saved.title,`${saved.date} ${saved.time} · ${saved.platform} · ${SCHEDULE_STATUS_LABELS[saved.status]}`]);
+    await client.query('COMMIT');
+    return saved;
+  }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
+}
+/** Stores the image fetched from a schedule's post link; returns the updated row. */
+export async function setSchedulePostImage(workspaceId:string,id:string,postImage:string){
+  const result=await pool.query(`UPDATE content_schedules SET post_image=$3,updated_at=now() WHERE organization_id=$1 AND id=$2 RETURNING ${scheduleColumns}`,[workspaceId,id,postImage]);
+  return result.rows[0] ?? null;
+}
+/** Sets (or clears with null) the team's replacement cover image. */
+export async function setScheduleCustomImage(workspaceId:string,id:string,image:string|null,source:'upload'|'ai'|null){
+  const result=await pool.query(`UPDATE content_schedules SET custom_image=$3,custom_image_source=$4,updated_at=now() WHERE organization_id=$1 AND id=$2 RETURNING ${scheduleColumns}`,[workspaceId,id,image,image?source:null]);
+  return result.rows[0] ?? null;
+}
+export async function getSchedulePostLink(workspaceId:string,id:string){
+  const result=await pool.query('SELECT platform,post_url AS "postUrl" FROM content_schedules WHERE organization_id=$1 AND id=$2',[workspaceId,id]);
+  return result.rows[0] as {platform:string;postUrl:string|null}|undefined;
+}
+export async function deleteSchedule(workspaceId:string,id:string,actorId:string){
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    const actor=await scheduleActor(client,workspaceId,actorId);
+    const removed=await client.query(`DELETE FROM content_schedules WHERE organization_id=$1 AND id=$2 RETURNING title,to_char(publish_date,'YYYY-MM-DD') AS date`,[workspaceId,id]);
+    if(removed.rowCount) await client.query(`INSERT INTO audit_events(organization_id,actor_id,actor_name,actor_role,action,object_type,object_id,object_name,details) VALUES($1,$2,$3,$4,'Jadwal Dihapus','schedule',$5,$6,$7)`,
+      [workspaceId,actorId,actor.name,actor.role,id,removed.rows[0].title,`Jadwal ${removed.rows[0].date}`]);
+    await client.query('COMMIT');
+  }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
 }

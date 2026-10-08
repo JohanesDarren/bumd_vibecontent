@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { generateContentFromBrief, refineDraftContent, retrieveKnowledge, reviewRagCopy, sanitizeRagAnswer, validateRagCopy } from './ragEngine.ts';
+import { generateContentFromBrief, refineDraftContent, retrieveKnowledge, reviewRagCopy, sanitizeRagAnswer, splitLimitations, validateRagCopy } from './ragEngine.ts';
 import type { BrandProfile, ContentBrief, KnowledgeDocument } from '../types/index.ts';
 
 const base = { category: 'sop_layanan' as const, owner: 'Owner', version: '1', effectiveDate: '2026', uploadDate: '2026', fileSize: '1 KB', summary: '' };
@@ -239,4 +239,58 @@ test('brief-only composed copy is used when no official document matches', () =>
   assert.ok(generated.content.includes('Kabar gembira untuk warga!'));
   assert.ok(!generated.content.includes(copyBrief.keyMessage));
   assert.match(generated.content, /DRAF PERLU VERIFIKASI/);
+});
+
+// Regression from a real draft: writing instructions typed into "Batasan" were
+// published as "Syarat dan ketentuan", and English chatter leaked into the copy.
+const tariffBrief = {
+  ...copyBrief,
+  title: 'Pengumuman Penyesuaian Tarif Air Triwulan IV 2026',
+  format: 'teks_promosi',
+  tone: 'Formal',
+  keyMessage: 'Mulai 1 Oktober 2026, tarif pemakaian 10 meter kubik pertama untuk pelanggan rumah tangga menjadi Rp 2.800 per meter kubik sesuai SK Direksi No. 55/2026.',
+  cta: 'Hubungi pusat panggilan HaloTirta di 1500-123 untuk informasi lebih lanjut.',
+  limitations: 'Tulis sepenuhnya dalam Bahasa Indonesia formal. Dilarang keras menggunakan emoji, simbol non-Latin, dan kosakata bahasa Inggris. Pertahankan penulisan seluruh angka (1, 10, 55, 2026, 2.800, 1500-123, dan 24) dalam bentuk digit angka. Tekankan komitmen pelayanan 24 jam.'
+} satisfies ContentBrief;
+
+test('writing instructions in Batasan are guidance, not published terms', () => {
+  assert.deepEqual(splitLimitations('Kuota terbatas. Tulis dengan bahasa formal.'), { terms: 'Kuota terbatas.', guidance: 'Tulis dengan bahasa formal.' });
+  const { terms, guidance } = splitLimitations(tariffBrief.limitations);
+  assert.equal(terms, '');
+  assert.match(guidance, /Tekankan komitmen pelayanan 24 jam/);
+
+  const generated = generateContentFromBrief(tariffBrief, copyBrand, [], 'ws-a', {
+    answer: '', citations: [], unsupportedClaims: ['Sumber resmi belum ditemukan.'], grounded: false,
+    composedCopy: 'Mulai 1 Oktober 2026, pelanggan rumah tangga Perumda Tirta Demo membayar Rp 2.800 per meter kubik untuk pemakaian 10 meter kubik pertama, sesuai SK Direksi No. 55/2026. Layanan kami tetap siaga 24 jam.'
+  });
+  assert.equal(generated.aiCopyUsed, true);
+  assert.doesNotMatch(generated.content, /Syarat dan ketentuan|Tulis sepenuhnya|Dilarang keras/);
+});
+
+test('leaked English chatter is stripped and English fragments block the copy', () => {
+  const leaked = 'Mulai 1 Oktober 2026, tarif Rp 2.800 per meter kubik berlaku untuk 10 meter kubik pertama sesuai SK Direksi No. 55/2026, adjustment yang diambil direksi. Vegetable..\n\nLet me output properly.';
+  const cleaned = sanitizeRagAnswer(leaked);
+  assert.doesNotMatch(cleaned, /Let me/);
+  const review = reviewRagCopy(cleaned, tariffBrief, copyBrand, []);
+  assert.ok(review.blocking.some(issue => /adjustment/.test(issue) && /vegetable/.test(issue)));
+});
+
+// Regression from a real grounded draft that was accepted with only warnings.
+test('garbled mixed-language grounded copy is blocked; list markers are not required numbers', () => {
+  const appBrief = {
+    ...copyBrief,
+    title: 'Kampanye Peluncuran Aplikasi Mobile Perumda Tirta',
+    keyMessage: 'Soroti tiga fitur utama: (1) Pengecekan dan pembayaran tagihan air bulanan secara real-time, (2) Notifikasi otomatis jika ada jadwal pemeliharaan jaringan pipa di area pelanggan, (3) Fitur pelaporan mandiri untuk kebocoran air.',
+    cta: 'Hubungi pusat panggilan HaloTirta di 1500-123 untuk informasi lebih lanjut.',
+    limitations: ''
+  } satisfies ContentBrief;
+  const garbled = 'Perumda Tirta kini membuka layanan closer through aplikasi resminya,/checking tagihan. Tiga fitur utama yang bisa Immediate pelanggan~-cek tagihan. More informasi~-hubungi pusat panggilan.';
+  const review = reviewRagCopy(garbled, appBrief, copyBrand, [copyCitation]);
+  assert.ok(review.blocking.some(issue => /through/.test(issue) && /immediate/.test(issue)));
+  assert.ok(review.blocking.some(issue => /teks rusak/.test(issue)));
+
+  const clean = 'Kini cek dan bayar tagihan air bulanan secara real-time, dapatkan notifikasi otomatis saat ada pemeliharaan jaringan pipa di area Anda, dan laporkan kebocoran air secara mandiri lewat aplikasi Perumda Tirta.';
+  const cleanReview = reviewRagCopy(clean, appBrief, copyBrand, [copyCitation]);
+  assert.deepEqual(cleanReview.blocking, []);
+  assert.ok(!cleanReview.warnings.some(issue => /angka penting/.test(issue)));
 });

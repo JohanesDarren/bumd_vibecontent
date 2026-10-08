@@ -26,6 +26,8 @@ interface VisualStudioViewProps {
   onSelectDraft: (draftId: string) => void;
   brandProfile: BrandProfile;
   activeWorkspace: Workspace;
+  /** Persists the visual (with the generated JPEG) on the draft so Scheduling can show it. */
+  onSaveVisual?: (draftId: string, visual: VisualAsset) => Promise<void>;
 }
 
 export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
@@ -33,8 +35,10 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
   drafts,
   onSelectDraft,
   brandProfile,
-  activeWorkspace
+  activeWorkspace,
+  onSaveVisual
 }) => {
+  const [savingVisual, setSavingVisual] = useState(false);
   const draftVisual = draft?.visualAsset;
   const defaultVisual: VisualAsset = {
     ...(draftVisual || {
@@ -264,6 +268,16 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
           {mediaError && <div style={{ color: '#fb7185', fontSize: '0.8rem' }}>{mediaError}</div>}
           {generatedImageUrl && !imageLoaded && <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Loading preview…</div>}
           {generatedImageUrl && imageLoaded && <a className="btn btn-secondary" href={generatedImageUrl} download="flux-image.jpg"><Download size={16}/> Download Image JPEG</a>}
+          {generatedImageUrl && imageLoaded && draft && onSaveVisual && (
+            <button className="btn btn-primary" disabled={savingVisual || draft.visualAsset?.generatedImageUrl === generatedImageUrl} onClick={async () => {
+              setSavingVisual(true);
+              try { await onSaveVisual(draft.id, { ...visual, generatedImageUrl }); }
+              catch (error) { setMediaError(`Gagal menyimpan gambar ke draf: ${error instanceof Error ? error.message : error}`); }
+              finally { setSavingVisual(false); }
+            }}>
+              {draft.visualAsset?.generatedImageUrl === generatedImageUrl ? 'Tersimpan di Draf' : savingVisual ? 'Menyimpan…' : 'Simpan ke Draf (dipakai di Penjadwalan)'}
+            </button>
+          )}
           <p role="status">Video tidak tersedia: FLUX.1 schnell hanya dapat menghasilkan gambar statis.</p>
           {metadata && <p style={{fontSize:12}}>{metadata}</p>}
           <div style={{fontSize:'0.8rem',color:'var(--text-muted)'}}>Cloudflare Workers AI · FLUX.1 schnell. Kuota gratis berlaku; tidak ada sistem retri otomatis. Proporsi gambar mengatur komposisi karya; JPEG yang diunduh mempertahankan dimensi asli dari model. Hasil hanya tersimpan dalam sesi ini; segera unduh untuk menyimpannya.</div>
