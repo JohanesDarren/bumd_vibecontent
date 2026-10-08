@@ -11,11 +11,13 @@ import {
   AuditLog, 
   ContentBrief, 
   DraftVersionon, 
-  ReviewComment
+  ReviewComment,
+  VisualAsset
 } from './types';
-import { apiService, onUnauthorized, sessionIdleMs } from './services/apiService';
+import { apiService, onUnauthorized, sessionIdleMs, setAuthToken } from './services/apiService';
 import { useRealtimeSignal } from './services/realtime';
 import { generateContentFromBrief, GeneratedOutput } from './services/ragEngine';
+import { AppSettings, DEFAULT_SETTINGS, normalizeSettings } from './services/appSettings';
 
 // Components
 import { Header } from './components/Header';
@@ -29,6 +31,7 @@ import { VisualStudioView } from './components/VisualStudioView';
 import { LibraryView } from './components/LibraryView';
 
 import { BrandProfileView } from './components/BrandProfileView';
+import { KnowledgeBaseView } from './components/KnowledgeBaseView';
 import { AuditLogView } from './components/AuditLogView';
 import { ExportModal } from './components/ExportModal';
 
@@ -71,6 +74,8 @@ export function App() {
   const [documents, setDocuments] = useState<KnowledgeDocument[]>([]);
   const [drafts, setDrafts] = useState<ContentDraft[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  // Per-workspace settings are owned by the server (workspace_settings table).
+  const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
 
   // Selection & Modal States
   const [selectedDraftId, setSelectedDraftId] = useState<string | undefined>(undefined);
@@ -91,13 +96,48 @@ export function App() {
     setDocuments(data.documents);
     setDrafts(data.drafts);
     setAuditLogs(data.auditLogs);
+    setAppSettings(normalizeSettings(data.settings));
 
     if (data.drafts.length > 0 && !selectedDraftId) setSelectedDraftId(data.drafts[0].id);
     setLoading(false);
   };
 
   useEffect(() => {
-    apiService.me().then(user => { if (user) void handleAuthed(user).catch(() => { setAuthUser(null); setAuthenticated(false); }); }).catch(() => {});
+    // Check for saved token and restore session
+    const token = localStorage.getItem('vibecontent_token');
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (payload.exp > Date.now()) {
+          const user: AuthUser = {
+            id: payload.id,
+            name: payload.name,
+            email: payload.email,
+            role: payload.role || payload.workspaces?.[0]?.role || 'creator',
+            companyId: payload.companyId ?? null,
+            workspaces: payload.workspaces || []
+          };
+          setAuthUser(user);
+          setAuthenticated(true);
+          const savedWsId = localStorage.getItem('vibecontent_active_ws');
+          const wsId = savedWsId && user.workspaces.some((w: any) => w.id === savedWsId) 
+            ? savedWsId 
+            : (user.workspaces[0]?.id || null);
+          
+          if (wsId) {
+            setActiveWorkspaceById(wsId, user).catch(error => { setToastMessage(`Failed to load workspace: ${error.message}`); setLoading(false); });
+            return;
+          }
+        } else {
+          localStorage.removeItem('vibecontent_token');
+        }
+      } catch (e) {
+        localStorage.removeItem('vibecontent_token');
+      }
+    }
+    
+    // Fallback loadData if no active workspace auto-load happened
+    loadData().catch(error => { setToastMessage(`Failed to load database: ${error.message}`); setLoading(false); });
   }, []);
 
   // Session guards. The server enforces the idle window; these keep the UI honest:
@@ -157,7 +197,9 @@ export function App() {
     setDocuments(data.documents);
     setDrafts(data.drafts);
     setAuditLogs(data.auditLogs);
+    setAppSettings(normalizeSettings(data.settings));
     if (data.drafts.length > 0) setSelectedDraftId(data.drafts[0].id);
+    localStorage.setItem('vibecontent_active_ws', wsId);
     setLoading(false);
   };
 
@@ -172,15 +214,65 @@ export function App() {
   };
 
   // Logout
-  const handleLogout = () => {
-    void apiService.logout().catch(() => {});
+  const handleLogout = (msg?: string | React.MouseEvent | React.FormEvent) => {
     setAuthenticated(false);
     setAuthUser(null);
     setActiveWorkspace(null);
     setActiveUser(null);
     setCurrentTab('dashboard');
-    showToast('Anda telah keluar.');
+    setAuthToken('');
+    localStorage.removeItem('vibecontent_active_ws');
+    showToast(typeof msg === 'string' ? msg : 'Anda telah keluar.');
   };
+
+  // Idle Timeout (30 minutes of inactivity)
+  useEffect(() => {
+    if (!authenticated) return;
+    
+    let activityInterval: ReturnType<typeof setInterval>;
+    let throttleTimer: ReturnType<typeof setTimeout> | null = null;
+    const events = ['mousemove', 'keydown', 'scroll', 'click'];
+    
+    const updateActivity = () => {
+      localStorage.setItem('vc_last_activity', Date.now().toString());
+    };
+
+    const handleActivity = () => {
+      if (!throttleTimer) {
+        throttleTimer = setTimeout(() => {
+          updateActivity();
+          throttleTimer = null;
+        }, 2000); // Throttle writes to localStorage
+      }
+    };
+
+    const checkInactivity = () => {
+      const lastActivityStr = localStorage.getItem('vc_last_activity');
+      if (!lastActivityStr) return;
+      
+      const lastActivity = parseInt(lastActivityStr, 10);
+      // 30 minutes idle timeout
+      if (Date.now() - lastActivity > 30 * 60 * 1000) {
+        handleLogout('Sesi berakhir otomatis karena 30 menit tidak ada aktivitas.');
+      }
+    };
+
+    updateActivity();
+    events.forEach(event => window.addEventListener(event, handleActivity));
+    activityInterval = setInterval(checkInactivity, 60000); // Check every minute
+
+    const handleForceLogout = () => {
+      handleLogout('Sesi berakhir atau token kedaluwarsa. Silakan masuk kembali.');
+    };
+    window.addEventListener('vibecontent_logout', handleForceLogout);
+
+    return () => {
+      events.forEach(event => window.removeEventListener(event, handleActivity));
+      window.removeEventListener('vibecontent_logout', handleForceLogout);
+      clearInterval(activityInterval);
+      if (throttleTimer) clearTimeout(throttleTimer);
+    };
+  }, [authenticated]);
 
   // Toast helper
   const showToast = (msg: string) => {
@@ -257,6 +349,14 @@ export function App() {
     showToast(`Versi ${version.versionNumber} disimpan ke riwayat audit.`);
   };
 
+  const handleSaveVisual = async (draftId: string, visual: VisualAsset) => {
+    const draft = drafts.find(item => item.id === draftId);
+    if (!draft || !activeWorkspace) return;
+    await apiService.saveDraft({ ...draft, visualAsset: visual, updatedAt: new Date().toISOString() });
+    await loadData(activeWorkspace.id);
+    showToast('Gambar disimpan ke draf dan tampil di Penjadwalan Konten.');
+  };
+
   // User confirms the brief is final; Visual Studio unlocks immediately.
   const handleSelfApprove = async (draftId: string) => {
     const draft = drafts.find(item => item.id === draftId);
@@ -285,6 +385,17 @@ export function App() {
     await apiService.saveBrand(newProfile);
     setBrandProfile(newProfile);
     showToast('Panduan merek dan profil BUMD berhasil diperbarui.');
+  };
+
+  // Persist per-workspace grounding/privacy settings to PostgreSQL.
+  const handleSaveSettings = async (next: AppSettings) => {
+    if (!activeWorkspace) return;
+    try {
+      const saved = await apiService.saveSettings(activeWorkspace.id, next);
+      setAppSettings(normalizeSettings(saved));
+    } catch (error) {
+      showToast(`Gagal menyimpan pengaturan: ${error instanceof Error ? error.message : String(error)}`);
+    }
   };
 
   const handleOpenExport = (draft: ContentDraft) => setExportModalDraft(draft);
@@ -346,14 +457,14 @@ export function App() {
           </div>
         </header>
 
-        <div className="main-layout" style={{ maxWidth: 1400, margin: '0 auto', width: '100%', padding: '24px 32px' }}>
+        <div className="main-layout" style={{ maxWidth: 1200, margin: '24px auto', padding: '0 24px', width: '100%' }}>
           <main className="content-viewport" style={{ padding: 0 }}>
-            <nav aria-label="Menu perusahaan" className="scheduling-action-bar" style={{ marginBottom: 24 }}>
+            <nav style={{ display: 'flex', gap: '8px', marginBottom: '24px', flexWrap: 'wrap' }}>
               <button 
                 className={`btn ${currentTab === 'dashboard' ? 'btn-primary' : 'btn-secondary'}`} 
                 onClick={() => setCurrentTab('dashboard')}
               >
-                Dasbor Eksekutif
+                Ringkasan Korporat
               </button>
               <button 
                 className={`btn ${currentTab === 'corporate_management' ? 'btn-primary' : 'btn-secondary'}`} 
@@ -367,17 +478,9 @@ export function App() {
               >
                 Kreator Perusahaan
               </button>
-              <button 
-                className={`btn ${currentTab === 'settings_help' ? 'btn-primary' : 'btn-secondary'}`} 
-                onClick={() => setCurrentTab('settings_help')}
-              >
-                Pengaturan &amp; Bantuan
-              </button>
             </nav>
 
-            {currentTab === 'settings_help' ? (
-              <SettingsHelpView corporate />
-            ) : currentTab === 'corporate_management' ? (
+            {currentTab === 'corporate_management' ? (
               <CorporateManagementView onOpen={id => { void handleSelectWorkspace(id).then(() => setCurrentTab('dashboard')).catch(e => showToast(e.message)); }} />
             ) : currentTab === 'corporate_users' ? (
               <CorporateUsersView />
@@ -390,35 +493,55 @@ export function App() {
     );
   }
 
-    // 2. Workspace picker — authenticated but no workspace selected yet
-    if (!activeWorkspace || !activeUser) {
-      const memberships = authUser?.workspaces || [];
-      return <main className="login-shell">
-        <section className="login-card card-panel" style={{ maxWidth: '480px', margin: '0 auto' }}>
-          <span className="login-kicker">Pilih Workspace</span>
-          <h2>Selamat datang, {authUser?.name}</h2>
-          <p>Pilih workspace yang akan dibuka.</p>
-          {memberships.length === 0 ? (
-            <div>
-              <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)' }}>Anda belum menjadi anggota workspace mana pun.</p>
-              <button className="btn btn-secondary" onClick={handleLogout}>Kembali ke halaman masuk</button>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {memberships.map(ws => (
-                <button key={ws.id} className="btn btn-secondary" style={{ justifyContent: 'flex-start', display: 'flex', alignItems: 'center', gap: '10px' }}
-                  onClick={async () => { await setActiveWorkspaceById(ws.id); }}>
-                  <Building2 size={16}/><span>{ws.name} ({ws.code}) — {ws.role}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
-      </main>;
-    }
+  // Workspace picker — authenticated but no workspace selected yet
+  if (!activeWorkspace || !activeUser) {
+    const memberships = authUser?.workspaces || [];
+    return <main className="login-shell">
+      <section className="login-card card-panel" style={{ maxWidth: '480px', margin: '0 auto' }}>
+        <span className="login-kicker">Pilih Workspace</span>
+        <h2>Selamat datang, {authUser?.name}</h2>
+        <p>Pilih workspace yang akan dibuka.</p>
+        {memberships.length === 0 ? (
+          <div>
+            <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)' }}>Anda belum menjadi anggota workspace mana pun.</p>
+            <button className="btn btn-secondary" onClick={handleLogout}>Kembali ke halaman masuk</button>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {memberships.map(ws => (
+              <button key={ws.id} className="btn btn-secondary" style={{ justifyContent: 'flex-start', display: 'flex', alignItems: 'center', gap: '10px' }}
+                onClick={async () => { await setActiveWorkspaceById(ws.id); }}>
+                <Building2 size={16}/><span>{ws.name} ({ws.code}) — {ws.role}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+    </main>;
+  }
 
-  const effectiveBrandProfile: BrandProfile = brandProfile || {workspaceId:activeWorkspace.id,organizationName:activeWorkspace.name,unitDepartment:'',defaultLanguage:'English',targetAudiences:[],toneOfVoice:[],terminology:[],bannedWords:[],officialCTAs:[],approvedChannels:[],brandGuidelinesSummary:'',officialDisclaimer:''};
+  const baseBrand = brandProfile || {
+    workspaceId: activeWorkspace.id,
+    organizationName: activeWorkspace.name,
+    unitDepartment: '',
+    defaultLanguage: 'Indonesian',
+    targetAudiences: [],
+    toneOfVoice: [],
+    terminology: [],
+    bannedWords: [],
+    officialCTAs: [],
+    approvedChannels: [],
+    brandGuidelinesSummary: '',
+    officialDisclaimer: ''
+  };
 
+  const effectiveBrandProfile: BrandProfile = {
+    ...baseBrand,
+    targetAudiences: baseBrand.targetAudiences?.length ? baseBrand.targetAudiences : ['Pelanggan / Masyarakat Umum', 'Instansi Pemerintah', 'Media / Pers', 'Karyawan Internal'],
+    toneOfVoice: baseBrand.toneOfVoice?.length ? baseBrand.toneOfVoice : ['Ramah & Solutif', 'Korporat Formal', 'Informatif & Edukatif', 'Tegas & Jelas'],
+    officialCTAs: baseBrand.officialCTAs?.length ? baseBrand.officialCTAs : [{ id: 'cta-default', channel: 'Call Center', label: 'Call Center', text: 'Info lebih lanjut hubungi Call Center 1500-xxx' }],
+    approvedChannels: baseBrand.approvedChannels?.length ? baseBrand.approvedChannels : ['Instagram Feed & Reels', 'X / Twitter', 'LinkedIn Page', 'Facebook Fanpage', 'Website Portal BUMD', 'Aplikasi Mobile (Push Notif)', 'WhatsApp Blast']
+  };
   const selectedDraft = drafts.find(d => d.id === selectedDraftId) || drafts[0];
 
 
@@ -470,6 +593,8 @@ export function App() {
               activeWorkspace={activeWorkspace}
               activeUser={activeUser}
               drafts={drafts}
+              documents={documents}
+              settings={appSettings}
               onOpenEditor={(id) => { setSelectedDraftId(id); setCurrentTab('editor'); }}
               onGenerateDraft={handleGenerateDraft}
               onNavigate={setCurrentTab}
@@ -522,16 +647,17 @@ export function App() {
               onSelectDraft={setSelectedDraftId}
               brandProfile={effectiveBrandProfile}
               activeWorkspace={activeWorkspace}
+              onSaveVisual={handleSaveVisual}
             />
           )}
 
 
           {safeTab === 'content_scheduling' && (
             <ContentSchedulingView 
-                          drafts={drafts}
-                          activeWorkspace={activeWorkspace}
-                          readOnly={authUser.role === 'corporate'}
-                          onOpenEditorDraft={authUser.role === 'corporate' ? undefined : (id) => { setSelectedDraftId(id); setCurrentTab('editor'); }}
+              drafts={drafts}
+              documents={documents}
+              activeWorkspace={activeWorkspace}
+              onOpenEditorDraft={(id) => { setSelectedDraftId(id); setCurrentTab('editor'); }}
             />
           )}
 
@@ -568,10 +694,41 @@ export function App() {
 
           {safeTab === 'corporate_management' && <CorporateManagementView onOpen={(id: string) => { void handleSelectWorkspace(id).then(() => setCurrentTab('dashboard')).catch(e => showToast(e.message)); }} />}
           {safeTab === 'corporate_users' && <CorporateUsersView />}
-          {safeTab === 'user_management' && (authUser.role === 'corporate' ? <WorkspaceMappingView /> : <UserManagementView users={filterUsersForWorkspace(users, activeWorkspace.id)} activeWorkspace={activeWorkspace} onCreate={handleCreateUser} onDelete={handleDeleteUser} />)}
-          {safeTab === 'audit_log' && <AuditLogView logs={auditLogs} activeWorkspace={activeWorkspace} activeUser={activeUser} />}
           {safeTab === 'admin_management' && <AdminDashboard embedded onOpen={(id: string) => { void handleSelectWorkspace(id).then(() => setCurrentTab('dashboard')).catch(e => showToast(e.message)); }} onLogout={handleLogout} />}
-          {safeTab === 'settings_help' && <SettingsHelpView corporate={authUser.role === 'corporate'} />}
+          {safeTab === 'knowledge_base' && (
+            <KnowledgeBaseView 
+              documents={documents}
+              activeWorkspace={activeWorkspace}
+              activeUser={activeUser}
+              onNotify={showToast}
+              onReload={async () => {
+                if (activeWorkspace) await loadData(activeWorkspace.id);
+              }}
+            />
+          )}
+
+          {safeTab === 'audit_log' && (
+            <AuditLogView 
+              logs={auditLogs}
+              activeWorkspace={activeWorkspace}
+              activeUser={activeUser}
+            />
+          )}
+
+          {safeTab === 'user_management' && (
+            authUser.role === 'corporate' 
+              ? <WorkspaceMappingView /> 
+              : <UserManagementView users={filterUsersForWorkspace(users, activeWorkspace.id)} activeWorkspace={activeWorkspace} onCreate={handleCreateUser} onDelete={handleDeleteUser} />
+          )}
+
+          {safeTab === 'settings_help' && (
+            <SettingsHelpView
+              activeWorkspace={activeWorkspace}
+              settings={appSettings}
+              onSaveSettings={handleSaveSettings}
+              onNotify={showToast}
+            />
+          )}
         </main>
       </div>
 

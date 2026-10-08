@@ -57,14 +57,20 @@ test('register rejects short password', async () => {
 
 test('login rejects wrong password', async () => {
   const bad = await api('POST', '/api/auth/login', { email: 'auth@test.dev', password: 'wrongpassword' });
-  assert.equal(bad.status, 500);
+  assert.equal(bad.status, 401);
+  assert.match(bad.json.error, /invalid email or password/i);
+});
+
+test('login rejects unknown email with unauthorized status', async () => {
+  const bad = await api('POST', '/api/auth/login', { email: 'unknown@test.dev', password: 'somepassword' });
+  assert.equal(bad.status, 401);
   assert.match(bad.json.error, /invalid email or password/i);
 });
 
 test('onboarding admin can login with password', async () => {
   const onboard = await api('POST', '/api/onboarding', {
     organizationName: 'Auth Org', code: 'AUT', sector: 'Water', city: 'Bandung',
-    adminName: 'Auth Admin', adminEmail: 'admin@aut.test', adminPassword: 'adminpass123'
+    adminName: 'Auth Admin', adminEmail: 'Admin@AUT.test', adminPassword: 'adminpass123'
   });
   assert.equal(onboard.status, 201);
   const login = await api('POST', '/api/auth/login', { email: 'admin@aut.test', password: 'adminpass123' });

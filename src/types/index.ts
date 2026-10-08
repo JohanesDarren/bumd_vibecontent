@@ -242,12 +242,39 @@ export type ActiveTab =
   | 'brief_studio' 
   | 'editor'  | 'visual_studio' 
   | 'content_scheduling'
-
   | 'library' 
   | 'brand_profile' 
+  | 'knowledge_base'
   | 'user_management'
   | 'corporate_management'
   | 'corporate_users'
   | 'admin_management'
   | 'audit_log'
   | 'settings_help';
+
+export type ScheduleStatus = 'draft' | 'scheduled' | 'published';
+export type SchedulePlatform = 'instagram' | 'facebook' | 'twitter' | 'linkedin' | 'youtube';
+export type SchedulePillar = 'edukasi' | 'layanan' | 'korporat';
+
+export interface ScheduledContent {
+  id: string;
+  workspaceId: string;
+  title: string;
+  platform: SchedulePlatform;
+  status: ScheduleStatus;
+  date: string; // YYYY-MM-DD
+  time: string; // HH:mm
+  notes?: string | null;
+  draftId?: string | null;
+  /** Platform-specific caption; falls back to the linked draft's text. */
+  caption?: string | null;
+  campaign?: string | null;
+  pillar?: SchedulePillar | null;
+  /** Link to the live post, filled when marked published. */
+  postUrl?: string | null;
+  /** Preview image fetched from postUrl (data URL); cleared when the link changes. */
+  postImage?: string | null;
+  /** Replacement cover chosen by the team (uploaded or AI-generated, data URL). */
+  customImage?: string | null;
+  customImageSource?: 'upload' | 'ai' | null;
+}

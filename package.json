@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "node server/dev.mjs",
     "dev:web": "vite",
-    "server": "tsx server/index.ts",
+    "server": "tsx watch server/index.ts",
     "db:migrate": "tsx server/migrate.ts",
     "db:seed": "tsx server/seed.ts",
     "db:clear": "tsx server/clear.ts",
@@ -15,9 +15,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "test": "node --experimental-strip-types --experimental-specifier-resolution=node --test src/services/*.test.ts",
-    "test:db:roles": "set NODE_ENV=test&& set DATABASE_URL=postgresql://vibecontent:vibecontent_dev@127.0.0.1:5435/vibecontent_test&& tsx --test server/roles.integration.test.ts",
-    "test:api": "node scripts/qa-api.mjs",
-    "test:e2e:admin": "node scripts/admin-e2e.mjs",
+    "test:visual": "tsx --test server/visual.test.ts",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -27,7 +25,8 @@
     "lucide-react": "^1.49.0",
     "pg": "^8.23.1",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "react-spinners": "^0.17.1"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",

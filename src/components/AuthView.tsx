@@ -11,6 +11,7 @@ import type { AuthUser } from '../types';
 
 interface AuthViewProps {
   onAuthed: (user: AuthUser) => Promise<void>;
+  onFirstRun?: () => void;
 }
 
 const WELCOME_SLIDES = [

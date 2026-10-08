@@ -33,9 +33,9 @@ import {
   Scissors,
   Building,
   Lightbulb,
-  Loader2,
   MoreHorizontal
 } from 'lucide-react';
+import { ClipLoader } from 'react-spinners';
 
 interface EditorWorkspaceViewProps {
   draft: ContentDraft;
@@ -358,7 +358,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
               </div>
               {refiningId && (
                 <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.72rem', color: 'var(--accent-cyan)', fontWeight: 600 }}>
-                  <Loader2 size={12} className="spin-animation" />
+                  <ClipLoader size={12} color="currentColor" speedMultiplier={0.8} />
                   Memproses variasi...
                 </span>
               )}
@@ -381,7 +381,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
                 >
                   {refiningId === v.id ? (
                     <>
-                      <Loader2 size={13} className="spin-animation" />
+                      <ClipLoader size={13} color="currentColor" speedMultiplier={0.8} />
                       <span>Memproses...</span>
                     </>
                   ) : (
@@ -458,7 +458,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
                           >
                             {refiningId === v.id ? (
                               <>
-                                <Loader2 size={13} className="spin-animation" />
+                                <ClipLoader size={13} color="currentColor" speedMultiplier={0.8} />
                                 <span>Memproses...</span>
                               </>
                             ) : (
@@ -553,7 +553,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
               onClick={() => setActiveTabSide('grounding')}
             >
               <BookOpen size={14} />
-              <span>Referensi RAG</span>
+              <span>Sumber Dokumen</span>
             </button>
             <button 
               className={`btn btn-sm ${activeTabSide === 'scorecard' ? 'btn-primary' : 'btn-secondary'}`}
@@ -585,18 +585,18 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
           {activeTabSide === 'grounding' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <h4 style={{ fontSize: '0.92rem', fontWeight: 700 }}>Sumber RAG yang Ditemukan</h4>
+                <h4 style={{ fontSize: '0.92rem', fontWeight: 700 }}>Dokumen Sumber yang Ditemukan</h4>
                 <span className="grounding-badge verified">
-                  <ShieldCheck size={12} /> RAG Only
+                  <ShieldCheck size={12} /> Berbasis Dokumen
                 </span>
               </div>
 
               {!currentVer?.citations?.length ? (
                 <div style={{ padding: '16px', borderRadius: '10px', background: 'var(--bg-tertiary)', textAlign: 'center', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                  Tidak ada kutipan sumber yang dikembalikan atau ditemukan lewat pencarian RAG untuk draf ini.
+                  Tidak ada dokumen sumber yang ditemukan untuk draf ini.
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '400px', overflowY: 'auto', paddingRight: '4px' }}>
                   {currentVer.citations.map((c, idx) => (
                     <div 
                       key={c.id || idx}
@@ -629,21 +629,21 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
 
               {/* Unsupported Claims Gap Notice (PRD F-04 Acceptance Criteria) */}
               {currentVer?.unsupportedClaims && currentVer.unsupportedClaims.length > 0 && (
-                <div style={{ padding: '14px', borderRadius: '12px', background: 'rgba(244, 63, 94, 0.1)', border: '1px solid rgba(244, 63, 94, 0.35)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#fb7185', fontSize: '0.8rem', fontWeight: 700, marginBottom: '6px' }}>
+                <div style={{ padding: '14px', borderRadius: '12px', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.35)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#fbbf24', fontSize: '0.82rem', fontWeight: 700, marginBottom: '6px' }}>
                     <AlertTriangle size={14} />
-                    <span>Catatan Grounding dan Verifikasi</span>
+                    <span>Yang Perlu Dicek Sebelum Terbit</span>
                   </div>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-primary)', lineHeight: 1.4 }}>
-                      Catatan berikut menjelaskan keterbatasan dukungan RAG atau status draf; ini bukan hasil verifikasi semantik otomatis untuk setiap kalimat.
+                  <p style={{ fontSize: '0.76rem', color: 'var(--text-primary)', lineHeight: 1.45 }}>
+                    Beberapa bagian berikut belum ditemukan di dokumen resmi. Mohon dicek dan dicocokkan dengan dokumen sumber sebelum konten diterbitkan.
                   </p>
-                  <ul style={{ paddingLeft: '16px', marginTop: '6px', fontSize: '0.75rem', color: '#fb7185' }}>
+                  <ul style={{ paddingLeft: '16px', marginTop: '8px', fontSize: '0.76rem' }}>
                     {currentVer.unsupportedClaims.map((claim, idx) => (
-                      <li key={idx}><strong>{claim}</strong></li>
+                      <li key={idx} style={{ marginBottom: '4px', color: 'var(--text-primary)' }}>{claim}</li>
                     ))}
                   </ul>
                   <div style={{ marginTop: '8px', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                    Peninjau tetap perlu mencocokkan klaim dengan kutipan dokumen aktif sebelum publikasi.
+                    Cocokkan poin di atas dengan dokumen resmi di panel ini. Kalau semua sudah sesuai, konten siap diterbitkan.
                   </div>
                 </div>
               )}
@@ -682,11 +682,11 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
 
               <div className="scorecard-item">
                 <div>
-                  <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>Dukungan Fakta (Grounding)</div>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>Dukungan Fakta</div>
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
                     {liveCheck.factualGrounding.passed
-                      ? 'Sumber rujukan tersedia; cocokkan setiap klaim dengan kutipan karena pemeriksaan otomatis bukan verifikasi semantik.'
-                      : `${liveCheck.factualGrounding.ungroundedClaims.length} catatan perlu diverifikasi; sumber yang terlampir bukan bukti bahwa semua klaim sudah cocok.`}
+                      ? 'Dokumen sumber sudah tersedia. Tetap cocokkan tiap klaim dengan isi dokumennya ya.'
+                      : `${liveCheck.factualGrounding.ungroundedClaims.length} hal perlu Anda cek. Dokumen yang terlampir belum tentu cocok dengan semua klaim.`}
                   </div>
                 </div>
                 <span className={`score-badge ${liveCheck.factualGrounding.passed ? 'score-high' : 'score-low'}`}>

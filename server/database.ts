@@ -11,7 +11,10 @@ const defaultDatabaseUrl = process.env.NODE_ENV === 'test'
   ? 'postgresql://vibecontent:vibecontent_dev@127.0.0.1:5435/vibecontent_test'
   : 'postgresql://vibecontent:vibecontent_dev@127.0.0.1:5435/vibecontent';
 const connectionString = process.env.DATABASE_URL || defaultDatabaseUrl;
-if (process.env.NODE_ENV === 'test' && !new URL(connectionString).pathname.endsWith('_test')) {
+// NODE_TEST_CONTEXT is set by `node --test` / `tsx --test`, so a test file that
+// forgets NODE_ENV=test still cannot truncate the development database.
+const runningTests = process.env.NODE_ENV === 'test' || Boolean(process.env.NODE_TEST_CONTEXT);
+if (runningTests && !new URL(connectionString).pathname.endsWith('_test')) {
   throw new Error('Refusing to run tests against a non-test database');
 }
 export const pool = new Pool({ connectionString });
@@ -34,6 +37,22 @@ export async function runMigrations() {
   if (!(await pool.query("SELECT 1 FROM schema_migrations WHERE name='006_creator_company_link'")).rowCount) {
     await pool.query(await readFile(join(here, 'migrations', '006_creator_company_link.sql'), 'utf8'));
   }
+
+  const settings = await readFile(join(here, 'migrations', '003_workspace_settings.sql'), 'utf8');
+  await pool.query(settings);
+  await pool.query(`INSERT INTO schema_migrations(name) VALUES ('003_workspace_settings') ON CONFLICT DO NOTHING`);
+  const schedules = await readFile(join(here, 'migrations', '004_content_schedules.sql'), 'utf8');
+  await pool.query(schedules);
+  await pool.query(`INSERT INTO schema_migrations(name) VALUES ('004_content_schedules') ON CONFLICT DO NOTHING`);
+  const scheduleDetails = await readFile(join(here, 'migrations', '005_schedule_details.sql'), 'utf8');
+  await pool.query(scheduleDetails);
+  await pool.query(`INSERT INTO schema_migrations(name) VALUES ('005_schedule_details') ON CONFLICT DO NOTHING`);
+  const postImage = await readFile(join(here, 'migrations', '006_schedule_post_image.sql'), 'utf8');
+  await pool.query(postImage);
+  await pool.query(`INSERT INTO schema_migrations(name) VALUES ('006_schedule_post_image') ON CONFLICT DO NOTHING`);
+  const customImage = await readFile(join(here, 'migrations', '007_schedule_custom_image.sql'), 'utf8');
+  await pool.query(customImage);
+  await pool.query(`INSERT INTO schema_migrations(name) VALUES ('007_schedule_custom_image') ON CONFLICT DO NOTHING`);
 }
 
 const scrypt = promisify(nodeCrypto.scrypt);
@@ -45,7 +64,7 @@ export async function hashPassword(password:string):Promise<string> {
 export async function verifyPassword(password:string, stored:string):Promise<boolean> {
   if (!stored) return false;
   const [salt, hash] = stored.split(':');
-  if (!salt || !hash) return false;
+  if (!salt || !hash || !/^[a-f0-9]{32}$/i.test(salt) || !/^[a-f0-9]{128}$/i.test(hash)) return false;
   const candidate = (await scrypt(password, salt, 64) as Buffer);
   return nodeCrypto.timingSafeEqual(Buffer.from(hash, 'hex'), candidate);
 }
@@ -53,16 +72,7 @@ export async function verifyPassword(password:string, stored:string):Promise<boo
 export async function organizationExists(id:string){const result=await pool.query('SELECT 1 FROM organizations WHERE id=$1',[id]);return (result.rowCount||0)>0;}
 
 export async function clearAllData() {
-  await pool.query('TRUNCATE audit_events, review_comments, draft_citations, draft_versions, content_drafts, content_briefs, knowledge_chunks, knowledge_sources, brand_profiles, memberships, auth_sessions, users, organizations, companies RESTART IDENTITY CASCADE');
-}
-
-// Wipe every workspace, account and content record while preserving the
-// superadmin login(s) so the admin console stays reachable for testing.
-export async function resetKeepingSuperadmins() {
-  await pool.query('TRUNCATE audit_events, review_comments, draft_citations, draft_versions, content_drafts, content_briefs, knowledge_chunks, knowledge_sources, brand_profiles, memberships, auth_sessions, organizations RESTART IDENTITY CASCADE');
-  await pool.query('UPDATE users SET company_id = NULL');
-  await pool.query("DELETE FROM users WHERE global_role <> 'superadmin'");
-  await pool.query('DELETE FROM companies');
+  await pool.query('TRUNCATE content_schedules, audit_events, review_comments, draft_citations, draft_versions, content_drafts, content_briefs, knowledge_chunks, knowledge_sources, brand_profiles, workspace_settings, memberships, users, organizations RESTART IDENTITY CASCADE');
 }
 
 export async function createOrganizationWithAdmin(input:{organizationName:string;code:string;sector:string;city:string;adminName:string;adminEmail:string;adminPassword?:string}) {
@@ -72,8 +82,8 @@ export async function createOrganizationWithAdmin(input:{organizationName:string
     const workspaceId=`org-${nodeCrypto.randomUUID()}`;
     const userId=`usr-${crypto.randomUUID()}`;
     const passwordHash=input.adminPassword?await hashPassword(input.adminPassword):'';
-    const workspace={id:workspaceId,name:input.organizationName,code:input.code.toUpperCase(),sector:input.sector,city:input.city,tagline:'',primaryColor:'#0284c7',accentColor:'#0ea5e9',description:''};
-    const user={id:userId,name:input.adminName,email:input.adminEmail,avatar:'',title:'Administrator',department:'',workspaceId,role:'admin'};
+    const workspace={id:workspaceId,name:input.organizationName,code:input.code.trim().toUpperCase(),sector:input.sector,city:input.city,tagline:'',primaryColor:'#0284c7',accentColor:'#0ea5e9',description:''};
+    const user={id:userId,name:input.adminName,email:input.adminEmail.trim().toLowerCase(),avatar:'',title:'Administrator',department:'',workspaceId,role:'admin'};
     await client.query('INSERT INTO organizations(id,name,code,sector,city,tagline,primary_color,accent_color,description) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)',Object.values(workspace));
     await client.query('INSERT INTO users(id,name,email,avatar,title,department,password_hash) VALUES($1,$2,$3,$4,$5,$6,$7)',[user.id,user.name,user.email,user.avatar,user.title,user.department,passwordHash]);
     await client.query(`INSERT INTO memberships(organization_id,user_id,role) VALUES($1,$2,'admin')`,[workspaceId,userId]);
@@ -109,16 +119,17 @@ export async function listWorkspaceDrafts(workspaceId:string) {
 export async function listBootstrap(workspaceId?:string) {
   const workspacesResult=await pool.query('SELECT id,name,code,sector,city,tagline,primary_color AS "primaryColor",accent_color AS "accentColor",description FROM organizations ORDER BY created_at');
   const targetWorkspaceId=workspaceId || workspacesResult.rows[0]?.id;
-  if(!targetWorkspaceId) return {workspaces:[],users:[],documents:[],drafts:[],briefs:[],auditLogs:[],brandProfile:null};
-  const [users,documents,drafts,briefs,auditLogs,brand] = await Promise.all([
+  if(!targetWorkspaceId) return {workspaces:[],users:[],documents:[],drafts:[],briefs:[],auditLogs:[],brandProfile:null,settings:null};
+  const [users,documents,drafts,briefs,auditLogs,brand,settings] = await Promise.all([
     pool.query('SELECT u.id,u.name,u.email,u.avatar,u.title,u.department,m.organization_id AS "workspaceId",m.role FROM users u JOIN memberships m ON m.user_id=u.id WHERE m.organization_id=$1 AND m.active',[targetWorkspaceId]),
     pool.query(`SELECT s.id,s.organization_id AS "workspaceId",s.title,s.category,s.owner,s.version,s.effective_date AS "effectiveDate",s.status,s.upload_date AS "uploadDate",s.file_size AS "fileSize",s.summary,COALESCE(jsonb_agg(jsonb_build_object('id',c.id,'documentId',c.source_id,'section',c.section,'page',c.page,'content',c.content,'keywords',c.keywords)) FILTER (WHERE c.id IS NOT NULL),'[]') chunks FROM knowledge_sources s LEFT JOIN knowledge_chunks c ON c.source_id=s.id WHERE s.organization_id=$1 GROUP BY s.id`,[targetWorkspaceId]),
     listWorkspaceDrafts(targetWorkspaceId),
     pool.query('SELECT data FROM content_briefs WHERE organization_id=$1 ORDER BY created_at DESC',[targetWorkspaceId]),
     pool.query('SELECT id::text,organization_id AS "workspaceId",created_at AS timestamp,actor_name AS "actorName",actor_role AS "actorRole",action,object_type AS "objectType",object_id AS "objectId",object_name AS "objectName",details FROM audit_events WHERE organization_id=$1 ORDER BY created_at DESC',[targetWorkspaceId]),
-    pool.query('SELECT data FROM brand_profiles WHERE organization_id=$1',[targetWorkspaceId])
+    pool.query('SELECT data FROM brand_profiles WHERE organization_id=$1',[targetWorkspaceId]),
+    pool.query('SELECT data FROM workspace_settings WHERE organization_id=$1',[targetWorkspaceId])
   ]);
-  return { workspaces:workspacesResult.rows, users:users.rows, documents:documents.rows, drafts, briefs:briefs.rows.map(row=>row.data), auditLogs:auditLogs.rows, brandProfile:brand.rows[0]?.data ?? null };
+  return { workspaces:workspacesResult.rows, users:users.rows, documents:documents.rows, drafts, briefs:briefs.rows.map(row=>row.data), auditLogs:auditLogs.rows, brandProfile:brand.rows[0]?.data ?? null, settings:settings.rows[0]?.data ?? null };
 }
 
 export async function replaceDraft(draft:any) {
@@ -148,6 +159,9 @@ export async function replaceDraft(draft:any) {
 }
 
 export async function saveBrand(profile:any){await pool.query('INSERT INTO brand_profiles(organization_id,data,updated_at) VALUES($1,$2::jsonb,now()) ON CONFLICT(organization_id) DO UPDATE SET data=EXCLUDED.data,updated_at=now()',[profile.workspaceId,JSON.stringify(profile)]);return profile;}
+
+export async function getWorkspaceSettings(workspaceId:string){const result=await pool.query('SELECT data FROM workspace_settings WHERE organization_id=$1',[workspaceId]);return result.rows[0]?.data ?? null;}
+export async function saveWorkspaceSettings(workspaceId:string,data:any){await pool.query('INSERT INTO workspace_settings(organization_id,data,updated_at) VALUES($1,$2::jsonb,now()) ON CONFLICT(organization_id) DO UPDATE SET data=EXCLUDED.data,updated_at=now()',[workspaceId,JSON.stringify(data)]);return data;}
 
 export async function saveKnowledgeSource(source:any){
   const client=await pool.connect();try{await client.query('BEGIN');const saved=await client.query(`INSERT INTO knowledge_sources(id,organization_id,title,category,owner,version,effective_date,status,upload_date,file_size,summary) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT(id) DO UPDATE SET title=EXCLUDED.title,category=EXCLUDED.category,owner=EXCLUDED.owner,version=EXCLUDED.version,effective_date=EXCLUDED.effective_date,status=EXCLUDED.status,file_size=EXCLUDED.file_size,summary=EXCLUDED.summary WHERE knowledge_sources.organization_id=EXCLUDED.organization_id RETURNING id`,[source.id,source.workspaceId,source.title,source.category,source.owner,source.version,source.effectiveDate,source.status,source.uploadDate,source.fileSize,source.summary]);if(!saved.rowCount)throw new Error('Source ID already belongs to another workspace');await client.query('DELETE FROM knowledge_chunks WHERE source_id=$1',[source.id]);for(const chunk of source.chunks||[]) await client.query('INSERT INTO knowledge_chunks(id,source_id,section,page,content,keywords) VALUES($1,$2,$3,$4,$5,$6)',[chunk.id,source.id,chunk.section,chunk.page||null,chunk.content,chunk.keywords||[]]);await client.query('COMMIT');return source;}catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
@@ -195,25 +209,27 @@ export async function registerUser(input:{name:string;email:string;password:stri
   const client=await pool.connect();
   try {
     await client.query('BEGIN');
-    const existing=await client.query('SELECT id FROM users WHERE email=$1',[input.email.toLowerCase()]);
+    const email=input.email.trim().toLowerCase();
+    const existing=await client.query('SELECT id FROM users WHERE email=$1',[email]);
     if(existing.rowCount) throw new Error('An account with this email already exists');
     let orgId:string|null=null;
     if(input.workspaceCode) {
-      const org=await client.query('SELECT id FROM organizations WHERE code=$1',[input.workspaceCode.toUpperCase()]);
+      const org=await client.query('SELECT id FROM organizations WHERE code=$1',[input.workspaceCode.trim().toUpperCase()]);
       if(!org.rowCount) throw new Error('Workspace code not found');
       orgId=org.rows[0].id;
     }
     const id=`usr-${nodeCrypto.randomUUID()}`;
     const passwordHash=await hashPassword(input.password);
-    await client.query('INSERT INTO users(id,name,email,avatar,title,department,password_hash) VALUES($1,$2,$3,$4,$5,$6,$7)',[id,input.name,input.email.toLowerCase(),'', '', '',passwordHash]);
-    if(orgId) await client.query('INSERT INTO memberships(organization_id,user_id,role) VALUES($1,$2,$3)',[orgId,id,input.workspaceCode && input.workspaceCode.toUpperCase()==='ADMIN'?'admin':'creator']);
+    await client.query('INSERT INTO users(id,name,email,avatar,title,department,password_hash) VALUES($1,$2,$3,$4,$5,$6,$7)',[id,input.name,email,'', '', '',passwordHash]);
+    if(orgId) await client.query('INSERT INTO memberships(organization_id,user_id,role) VALUES($1,$2,$3)',[orgId,id,input.workspaceCode && input.workspaceCode.trim().toUpperCase()==='ADMIN'?'admin':'creator']);
     await client.query('COMMIT');
-    return {id,name:input.name,email:input.email.toLowerCase(),hasWorkspace:Boolean(orgId)};
+    return {id,name:input.name,email,hasWorkspace:Boolean(orgId)};
   } catch(error){await client.query('ROLLBACK');throw error;} finally{client.release();}
 }
 
 export async function authenticateUser(email:string,password:string) {
-  const result=await pool.query('SELECT id,name,email,password_hash FROM users WHERE email=$1',[email.toLowerCase()]);
+  const normalizedEmail=email.trim().toLowerCase();
+  const result=await pool.query('SELECT id,name,email,password_hash FROM users WHERE email=$1',[normalizedEmail]);
   const user=result.rows[0];
   if(!user) throw new Error('Invalid email or password');
   if(!user.password_hash) throw new Error('LEGACY_CLAIM');
@@ -224,17 +240,88 @@ export async function authenticateUser(email:string,password:string) {
 }
 
 export async function claimLegacyPassword(email:string,password:string) {
-  const result=await pool.query('SELECT id,password_hash FROM users WHERE email=$1',[email.toLowerCase()]);
+  const normalizedEmail=email.trim().toLowerCase();
+  const result=await pool.query('SELECT id,name,password_hash FROM users WHERE email=$1',[normalizedEmail]);
   const user=result.rows[0];
   if(!user) throw new Error('Invalid email or password');
   if(user.password_hash) throw new Error('Account already has a password. Please sign in.');
   const passwordHash=await hashPassword(password);
   await pool.query('UPDATE users SET password_hash=$2 WHERE id=$1',[user.id,passwordHash]);
   const orgs=await pool.query('SELECT o.id,o.name,o.code,m.role FROM memberships m JOIN organizations o ON o.id=m.organization_id WHERE m.user_id=$1 AND m.active ORDER BY o.created_at',[user.id]);
-  return {id:user.id,name:user.name,email:email.toLowerCase(),workspaces:orgs.rows};
+  return {id:user.id,name:user.name,email:normalizedEmail,workspaces:orgs.rows};
 }
 
 export async function getUserWorkspaces(userId:string) {
   const orgs=await pool.query('SELECT o.id,o.name,o.code,o.sector,o.city,o.tagline,o.primary_color AS "primaryColor",o.accent_color AS "accentColor",o.description,m.role FROM memberships m JOIN organizations o ON o.id=m.organization_id WHERE m.user_id=$1 AND m.active ORDER BY o.created_at',[userId]);
   return orgs.rows;
+}
+
+const scheduleColumns=`id,organization_id AS "workspaceId",draft_id AS "draftId",title,platform,status,to_char(publish_date,'YYYY-MM-DD') AS date,to_char(publish_time,'HH24:MI') AS time,notes,caption,campaign,pillar,post_url AS "postUrl",post_image AS "postImage",custom_image AS "customImage",custom_image_source AS "customImageSource"`;
+export async function listSchedules(workspaceId:string){const result=await pool.query(`SELECT ${scheduleColumns} FROM content_schedules WHERE organization_id=$1 ORDER BY publish_date,publish_time`,[workspaceId]);return result.rows;}
+/** A scheduling rule the user can fix (mapped to HTTP 400, message shown as-is). */
+export class ScheduleRuleError extends Error {}
+
+const SCHEDULE_STATUS_LABELS:Record<string,string>={draft:'Draf',scheduled:'Terjadwal',published:'Terbit'};
+
+async function scheduleActor(client:pg.PoolClient,workspaceId:string,actorId:string){
+  const actor=await client.query('SELECT u.name,m.role FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.organization_id=$1 AND m.user_id=$2 AND m.active',[workspaceId,actorId]);
+  if(!actor.rowCount) throw new ScheduleRuleError('Pengguna bukan anggota aktif workspace ini.');
+  return actor.rows[0] as {name:string;role:string};
+}
+
+export async function saveSchedule(item:any,actorId:string){
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    const actor=await scheduleActor(client,item.workspaceId,actorId);
+    const existing=await client.query(`SELECT to_char(publish_date,'YYYY-MM-DD') AS date,status,draft_id AS "draftId" FROM content_schedules WHERE id=$1 AND organization_id=$2`,[item.id,item.workspaceId]);
+    const previous=existing.rows[0] as {date:string;status:string;draftId:string|null}|undefined;
+    // New or moved entries cannot land in the past; editing an old entry in place
+    // (e.g. marking it published after the fact) stays allowed.
+    if(!previous||previous.date!==item.date){
+      const past=await client.query('SELECT $1::date < current_date AS past',[item.date]);
+      if(past.rows[0].past) throw new ScheduleRuleError('Tanggal publikasi tidak boleh di masa lalu.');
+    }
+    // Governance: only an approved draft may be scheduled or published. Checked
+    // when status or linked draft changes, so later draft revisions don't lock old entries.
+    const statusOrDraftChanged=!previous||previous.status!==item.status||(previous.draftId||null)!==(item.draftId||null);
+    if(item.status!=='draft'&&statusOrDraftChanged){
+      const draft=item.draftId?await client.query('SELECT status FROM content_drafts WHERE id=$1 AND organization_id=$2',[item.draftId,item.workspaceId]):null;
+      if(!draft?.rowCount||draft.rows[0].status!=='disetujui') throw new ScheduleRuleError('Status Terjadwal/Terbit hanya untuk jadwal yang ditautkan ke draf berstatus Disetujui.');
+    }
+    // Upsert scoped to the workspace: an id owned by another organization is never overwritten.
+    const result=await client.query(`INSERT INTO content_schedules(id,organization_id,draft_id,title,platform,status,publish_date,publish_time,notes,caption,campaign,pillar,post_url) VALUES($1,$2,(SELECT id FROM content_drafts WHERE id=$3 AND organization_id=$2),$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) ON CONFLICT(id) DO UPDATE SET draft_id=EXCLUDED.draft_id,title=EXCLUDED.title,platform=EXCLUDED.platform,status=EXCLUDED.status,publish_date=EXCLUDED.publish_date,publish_time=EXCLUDED.publish_time,notes=EXCLUDED.notes,caption=EXCLUDED.caption,campaign=EXCLUDED.campaign,pillar=EXCLUDED.pillar,post_url=EXCLUDED.post_url,post_image=CASE WHEN content_schedules.post_url IS DISTINCT FROM EXCLUDED.post_url THEN NULL ELSE content_schedules.post_image END,updated_at=now() WHERE content_schedules.organization_id=EXCLUDED.organization_id RETURNING ${scheduleColumns}`,[item.id,item.workspaceId,item.draftId||null,item.title,item.platform,item.status,item.date,item.time||'09:00',item.notes||null,item.caption||null,item.campaign?.trim()||null,item.pillar||null,item.postUrl?.trim()||null]);
+    if(!result.rowCount) throw new Error('Schedule ID already belongs to another workspace');
+    const saved=result.rows[0];
+    const action=!previous?'Jadwal Dibuat':previous.status!==saved.status?`Status Jadwal: ${SCHEDULE_STATUS_LABELS[saved.status]}`:previous.date!==saved.date?'Jadwal Dipindah':'Jadwal Diperbarui';
+    await client.query(`INSERT INTO audit_events(organization_id,actor_id,actor_name,actor_role,action,object_type,object_id,object_name,details) VALUES($1,$2,$3,$4,$5,'schedule',$6,$7,$8)`,
+      [item.workspaceId,actorId,actor.name,actor.role,action,saved.id,saved.title,`${saved.date} ${saved.time} · ${saved.platform} · ${SCHEDULE_STATUS_LABELS[saved.status]}`]);
+    await client.query('COMMIT');
+    return saved;
+  }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
+}
+/** Stores the image fetched from a schedule's post link; returns the updated row. */
+export async function setSchedulePostImage(workspaceId:string,id:string,postImage:string){
+  const result=await pool.query(`UPDATE content_schedules SET post_image=$3,updated_at=now() WHERE organization_id=$1 AND id=$2 RETURNING ${scheduleColumns}`,[workspaceId,id,postImage]);
+  return result.rows[0] ?? null;
+}
+/** Sets (or clears with null) the team's replacement cover image. */
+export async function setScheduleCustomImage(workspaceId:string,id:string,image:string|null,source:'upload'|'ai'|null){
+  const result=await pool.query(`UPDATE content_schedules SET custom_image=$3,custom_image_source=$4,updated_at=now() WHERE organization_id=$1 AND id=$2 RETURNING ${scheduleColumns}`,[workspaceId,id,image,image?source:null]);
+  return result.rows[0] ?? null;
+}
+export async function getSchedulePostLink(workspaceId:string,id:string){
+  const result=await pool.query('SELECT platform,post_url AS "postUrl" FROM content_schedules WHERE organization_id=$1 AND id=$2',[workspaceId,id]);
+  return result.rows[0] as {platform:string;postUrl:string|null}|undefined;
+}
+export async function deleteSchedule(workspaceId:string,id:string,actorId:string){
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    const actor=await scheduleActor(client,workspaceId,actorId);
+    const removed=await client.query(`DELETE FROM content_schedules WHERE organization_id=$1 AND id=$2 RETURNING title,to_char(publish_date,'YYYY-MM-DD') AS date`,[workspaceId,id]);
+    if(removed.rowCount) await client.query(`INSERT INTO audit_events(organization_id,actor_id,actor_name,actor_role,action,object_type,object_id,object_name,details) VALUES($1,$2,$3,$4,'Jadwal Dihapus','schedule',$5,$6,$7)`,
+      [workspaceId,actorId,actor.name,actor.role,id,removed.rows[0].title,`Jadwal ${removed.rows[0].date}`]);
+    await client.query('COMMIT');
+  }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
 }

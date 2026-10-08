@@ -1,11 +1,25 @@
-import type { AuditLog, AuthUser, BrandProfile, ContentBrief, ContentDraft, KnowledgeDocument, User, Workspace } from '../types';
+import type { AuditLog, BrandProfile, ContentBrief, ContentDraft, KnowledgeDocument, ScheduledContent, SchedulePillar, SchedulePlatform, User, Workspace, AuthUser } from '../types';
+import type { AppSettings, RagOptionsPayload } from './appSettings';
+
+export type PlanSlot={date:string;time:string;platform:SchedulePlatform;pillar:SchedulePillar|null;title:string;angle:string;source:string};
+export type PlanRequestBody={workspaceId:string;mode:'plan'|'gap';monthLabel:string;theme:string;count:number;dates:string[];platforms:SchedulePlatform[];pillars:SchedulePillar[];moments:string[];existingTitles:string[]};
 
 const configuredApiUrl = import.meta.env.VITE_API_URL;
 const API_URL = typeof window === 'undefined' ? configuredApiUrl || 'http://127.0.0.1:3005'
   : configuredApiUrl && !/^http:\/\/(127\.0\.0\.1|localhost):3005$/.test(configuredApiUrl) ? configuredApiUrl
   : `${window.location.protocol}//${window.location.hostname}:3005`;
 
-type Bootstrap = { workspaces: Workspace[]; users: User[]; brandProfile: BrandProfile; documents: KnowledgeDocument[]; drafts: ContentDraft[]; briefs: ContentBrief[]; auditLogs: AuditLog[] };
+let authToken = typeof localStorage !== 'undefined' ? (localStorage.getItem('vibecontent_token') || '') : '';
+
+export function setAuthToken(token: string) {
+  authToken = token;
+  if (typeof localStorage !== 'undefined') {
+    if (token) localStorage.setItem('vibecontent_token', token);
+    else localStorage.removeItem('vibecontent_token');
+  }
+}
+
+type Bootstrap = { workspaces: Workspace[]; users: User[]; brandProfile: BrandProfile; documents: KnowledgeDocument[]; drafts: ContentDraft[]; briefs: ContentBrief[]; auditLogs: AuditLog[]; settings: AppSettings | null };
 
 // Fired whenever the API rejects a request as unauthenticated (expired/idle session),
 // so the app can drop straight back to the login screen instead of silently failing.
@@ -22,9 +36,14 @@ const captureIdle = (response: Response) => {
 export const sessionIdleMs = () => idleMs;
 
 async function request<T>(path:string, init?:RequestInit):Promise<T>{
-  const response=await fetch(`${API_URL}${path}`,{...init,credentials:'include',headers:{'Content-Type':'application/json',...(init?.headers||{})}});
+  const headers: Record<string, string> = { 'Content-Type':'application/json', ...(init?.headers as any || {}) };
+  if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+  const response=await fetch(`${API_URL}${path}`,{...init,credentials:'include',headers});
   captureIdle(response);
-  if(response.status===401 && path!=='/api/auth/login' && path!=='/api/auth/logout') unauthorizedHandler?.();
+  if(response.status===401 && path!=='/api/auth/login' && path!=='/api/auth/logout') {
+    unauthorizedHandler?.();
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('vibecontent_logout'));
+  }
   if(!response.ok){const body=await response.json().catch(()=>({}));throw new Error(body.error||`API ${response.status}`);}
   return response.json();
 }
@@ -52,21 +71,38 @@ export type RagStatus={configured:boolean;ready:boolean;dependencies?:Record<str
 
 export const apiService={
   bootstrap:(workspaceId?:string)=>request<Bootstrap>(`/api/bootstrap${workspaceId?`?workspaceId=${encodeURIComponent(workspaceId)}`:''}`),
-  login:(email:string,password:string)=>request<AuthUser>('/api/auth/login',{method:'POST',body:JSON.stringify({email,password})}),
+  login: async (email: string, password: string) => {
+    const res = await request<AuthUser & { token?: string }>('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password })
+    });
+    if (res.token) setAuthToken(res.token);
+    return res;
+  },
   me:async()=>{const response=await fetch(`${API_URL}/api/auth/me`,{credentials:'include'});captureIdle(response);if(response.status===401)return null;if(!response.ok)throw new Error('Unable to restore session');return response.json() as Promise<AuthUser>;},
-  logout:()=>request<{ok:boolean}>('/api/auth/logout',{method:'POST'}),
+  logout: async () => {
+    setAuthToken('');
+    return request<{ok:boolean}>('/api/auth/logout',{method:'POST'});
+  },
+  clearAll:()=>request<{ok:boolean}>('/api/data',{method:'DELETE'}),
+  onboard: async (input:{organizationName:string;code:string;sector:string;city:string;adminName:string;adminEmail:string;adminPassword?:string}) => {
+    const res = await request<{workspace:Workspace;user:User & {token?: string}}>('/api/onboarding',{method:'POST',body:JSON.stringify(input)});
+    if (res.user.token) setAuthToken(res.user.token);
+    return res;
+  },
+  register:(input:{name:string;email:string;password:string;workspaceCode?:string})=>request<{id:string;name:string;email:string;hasWorkspace:boolean}>('/api/auth/register',{method:'POST',body:JSON.stringify(input)}),
   corporateDashboard:()=>request<CompanyDashboard>('/api/corporate/dashboard'),
   updateCorporateSettings:(name:string)=>request<{id:string;name:string}>('/api/corporate/settings',{method:'PUT',body:JSON.stringify({name})}),
   changePassword:(currentPassword:string,newPassword:string)=>request<{ok:boolean}>('/api/auth/password',{method:'PUT',body:JSON.stringify({currentPassword,newPassword})}),
   corporateUsers:()=>request<{id:string;name:string;email:string;workspaceIds:string[]}[]>('/api/corporate/users'),
   createCorporateUser:(input:{name:string;email:string;password:string})=>request<{id:string;name:string;email:string;workspaceIds:string[]}>('/api/corporate/users',{method:'POST',body:JSON.stringify(input)}),
-    updateCorporateUser:(id:string,input:{name:string;email:string;password?:string})=>request<{id:string;name:string;email:string}>(`/api/corporate/users/${encodeURIComponent(id)}`,{method:'PUT',body:JSON.stringify(input)}),
-    deleteCorporateUser:(id:string)=>request<{ok:boolean}>(`/api/corporate/users/${encodeURIComponent(id)}`,{method:'DELETE'}),
-    assignCorporateUser:(id:string,workspaceIds:string[])=>request<{workspaceIds:string[]}>(`/api/corporate/users/${encodeURIComponent(id)}/workspaces`,{method:'PUT',body:JSON.stringify({workspaceIds})}),
-    corporateWorkspaces:()=>request<Workspace[]>('/api/corporate/workspaces'),
-    createCorporateWorkspace:(input:{name:string;code:string;sector:string;city:string})=>request<Workspace>('/api/corporate/workspaces',{method:'POST',body:JSON.stringify(input)}),
-    updateCorporateWorkspace:(id:string,input:{name:string;code:string;sector:string;city:string})=>request<Workspace>(`/api/corporate/workspaces/${encodeURIComponent(id)}`,{method:'PUT',body:JSON.stringify(input)}),
-    deleteCorporateWorkspace:(id:string)=>request<{ok:boolean}>(`/api/corporate/workspaces/${encodeURIComponent(id)}`,{method:'DELETE'}),
+  updateCorporateUser:(id:string,input:{name:string;email:string;password?:string})=>request<{id:string;name:string;email:string}>(`/api/corporate/users/${encodeURIComponent(id)}`,{method:'PUT',body:JSON.stringify(input)}),
+  deleteCorporateUser:(id:string)=>request<{ok:boolean}>(`/api/corporate/users/${encodeURIComponent(id)}`,{method:'DELETE'}),
+  assignCorporateUser:(id:string,workspaceIds:string[])=>request<{workspaceIds:string[]}>(`/api/corporate/users/${encodeURIComponent(id)}/workspaces`,{method:'PUT',body:JSON.stringify({workspaceIds})}),
+  corporateWorkspaces:()=>request<Workspace[]>('/api/corporate/workspaces'),
+  createCorporateWorkspace:(input:{name:string;code:string;sector:string;city:string})=>request<Workspace>('/api/corporate/workspaces',{method:'POST',body:JSON.stringify(input)}),
+  updateCorporateWorkspace:(id:string,input:{name:string;code:string;sector:string;city:string})=>request<Workspace>(`/api/corporate/workspaces/${encodeURIComponent(id)}`,{method:'PUT',body:JSON.stringify(input)}),
+  deleteCorporateWorkspace:(id:string)=>request<{ok:boolean}>(`/api/corporate/workspaces/${encodeURIComponent(id)}`,{method:'DELETE'}),
   adminOverview:()=>request<AdminOverview>('/api/admin/overview'),
   adminCompanies:()=>request<{id:string;name:string}[]>('/api/admin/companies'),
   adminUsers:()=>request<AdminUser[]>('/api/admin/users'),
@@ -86,17 +122,31 @@ export const apiService={
   deleteAdminWorkspace:(id:string)=>request<{ok:boolean}>(`/api/admin/workspaces/${encodeURIComponent(id)}`,{method:'DELETE'}),
   userWorkspaces:(userId:string)=>request<{id:string;name:string;code:string;role:string}[]>(`/api/users/${userId}/workspaces`),
   ragStatus:()=>request<RagStatus>('/api/rag/status'),
-  ragSearch:(workspaceId:string,query:string,topK?:number)=>request<{results:RagHit[]}>(`/api/rag/search`,{method:'POST',body:JSON.stringify({workspaceId,query,topK})}),
-  ragQuery:(workspaceId:string,query:string,topK?:number)=>request<RagAnswer>(`/api/rag/query`,{method:'POST',body:JSON.stringify({workspaceId,query,topK})}),
+  ragSearch:(workspaceId:string,query:string,options?:RagOptionsPayload|number)=>request<{results:RagHit[]}>(`/api/rag/search`,{method:'POST',body:JSON.stringify({workspaceId,query,...(typeof options === 'number' ? {topK:options} : {options})})}),
+  ragQuery:(workspaceId:string,query:string,options?:RagOptionsPayload|number)=>request<RagAnswer>(`/api/rag/query`,{method:'POST',body:JSON.stringify({workspaceId,query,...(typeof options === 'number' ? {topK:options} : {options})})}),
   ragRefine:(workspaceId:string,draftContent:string,promptAction:string)=>request<{answer:string;model?:string}>(`/api/rag/refine`,{method:'POST',body:JSON.stringify({workspaceId,draftContent,promptAction})}),
   generateVisual:(input:import('./visualScene').VisualInput)=>request<{imageUrl:string;provider:string;model:string;llmModel:string;steps:number;fallback:false;format:string;prompt:string;imagePrompt:string;dimensions:string}>('/api/visual/generate',{method:'POST',body:JSON.stringify(input)}),
   saveDraft:(draft:ContentDraft,brief?:ContentBrief)=>request<ContentDraft>(`/api/drafts/${draft.id}`,{method:'PUT',body:JSON.stringify({...draft,brief})}),
+  fetchPostImage:(workspaceId:string,id:string)=>request<ScheduledContent>(`/api/organizations/${workspaceId}/schedules/${id}/post-image`,{method:'POST'}),
+  setScheduleImage:(workspaceId:string,id:string,image:string|null,source?:'upload'|'ai')=>request<ScheduledContent>(`/api/organizations/${workspaceId}/schedules/${id}/custom-image`,{method:'PUT',body:JSON.stringify({image,source})}),
+  ragPlan:(body:PlanRequestBody)=>request<{slots:PlanSlot[];sources:string[];model?:string}>('/api/rag/plan',{method:'POST',body:JSON.stringify(body)}),
+  ragCompose:(workspaceId:string,briefText:string,feedback?:string)=>request<{answer:string;model?:string}>(`/api/rag/compose`,{method:'POST',body:JSON.stringify({workspaceId,briefText,feedback})}),
+  ragSync:(workspaceId:string)=>request<{knowledgeBaseId:string;indexed:number;failed:number;total:number}>(`/api/rag/sync`,{method:'POST',body:JSON.stringify({workspaceId})}),
+  ragPrune:(workspaceId:string)=>request<{knowledgeBaseId:string;removed:number;failed:number;total:number}>(`/api/rag/prune`,{method:'POST',body:JSON.stringify({workspaceId})}),
   saveBrand:(profile:BrandProfile)=>request<BrandProfile>('/api/brand-profile',{method:'PUT',body:JSON.stringify(profile)}),
   deleteBrand:(workspaceId:string)=>request<{ok:boolean}>(`/api/organizations/${workspaceId}/brand-profile`,{method:'DELETE'}),
+  getSettings:(workspaceId:string)=>request<AppSettings|null>(`/api/workspaces/${workspaceId}/settings`),
+  saveSettings:(workspaceId:string,settings:AppSettings)=>request<AppSettings>(`/api/workspaces/${workspaceId}/settings`,{method:'PUT',body:JSON.stringify(settings)}),
 
   createUser:(workspaceId:string,input:Omit<User,'id'|'workspaceId'|'avatar'> & { password?: string })=>request<User & { tempPassword?: string }>(`/api/organizations/${workspaceId}/users`,{method:'POST',body:JSON.stringify(input)}),
   deleteUser:(workspaceId:string,userId:string)=>request<{ok:boolean}>(`/api/organizations/${workspaceId}/users/${userId}`,{method:'DELETE'}),
-  deleteDraft:(workspaceId:string,id:string)=>request<{ok:boolean}>(`/api/organizations/${workspaceId}/drafts/${id}`,{method:'DELETE'})
+  listSchedules:(workspaceId:string)=>request<ScheduledContent[]>(`/api/workspaces/${workspaceId}/schedules`),
+  saveSchedule:(item:ScheduledContent)=>request<ScheduledContent>(`/api/schedules/${item.id}`,{method:'PUT',body:JSON.stringify(item)}),
+  deleteSchedule:(workspaceId:string,id:string)=>request<{ok:boolean}>(`/api/organizations/${workspaceId}/schedules/${id}`,{method:'DELETE'}),
+  deleteDraft:(workspaceId:string,id:string)=>request<{ok:boolean}>(`/api/organizations/${workspaceId}/drafts/${id}`,{method:'DELETE'}),
+
+  saveKnowledgeSource: (source: KnowledgeDocument) => request<KnowledgeDocument & {ragSynced?: boolean}>(`/api/knowledge-sources/${source.id}`, { method: 'PUT', body: JSON.stringify(source) }),
+  deleteKnowledgeSource: (workspaceId: string, id: string) => request<{ok: boolean, ragSynced?: boolean}>(`/api/organizations/${workspaceId}/knowledge-sources/${id}`, { method: 'DELETE' })
 };
 
 // ---------------------------------------------------------------------------
