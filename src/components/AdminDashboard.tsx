@@ -246,32 +246,19 @@ export const AdminDashboard: React.FC<{ onOpen: (id: string) => void; onLogout: 
 
   return (
     <div className="flex flex-col md:flex-row w-full min-h-screen bg-[var(--bg-primary)]">
-      {/* ── Sticky Full-Height Corporate Admin Sidebar ── */}
+      {/* ── Sticky Full-Height Corporate Admin Sidebar (icon-only "sandwich" rail) ── */}
       <aside 
-        className="w-full md:w-64 shrink-0 md:sticky md:top-0 h-auto md:h-screen bg-[var(--bg-secondary)] border-r border-[var(--border-subtle)] flex flex-col justify-between p-4 z-40 overflow-y-auto"
+        className="w-full md:w-[76px] shrink-0 md:sticky md:top-0 h-auto md:h-screen bg-[var(--bg-secondary)] border-r border-[var(--border-subtle)] flex flex-col justify-between items-center p-3 z-40 overflow-y-auto"
       >
-        <div>
-          {/* Header Brand */}
-          <div className="flex items-center gap-3 px-2 py-3 mb-4 border-b border-[var(--border-subtle)]">
-            <div className="brand-icon-gem" style={{ width: 36, height: 36, borderRadius: 10 }}>
-              V
-            </div>
-            <div>
-              <div style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text-primary)', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
-                VibeContent
-              </div>
-              <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--accent-cyan)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                Admin &amp; Korporat
-              </span>
-            </div>
+        <div className="flex flex-col items-center gap-2 w-full">
+          {/* Brand mark */}
+          <div className="brand-icon-gem" style={{ width: 40, height: 40, borderRadius: 12 }} title="VibeContent — Admin &amp; Korporat" aria-label="VibeContent Admin dan Korporat">
+            V
           </div>
+          <div className="nav-divider" aria-hidden />
 
-          <div className="nav-section-title" style={{ paddingLeft: '8px', marginBottom: '8px' }}>
-            Menu Administrasi
-          </div>
-
-          {/* Nav Tab Buttons */}
-          <nav className="flex flex-col gap-1">
+          {/* Nav Tab Buttons — icons only */}
+          <nav className="flex flex-col gap-1 items-center" aria-label="Menu administrasi">
             {TABS.map(tab => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -280,46 +267,46 @@ export const AdminDashboard: React.FC<{ onOpen: (id: string) => void; onLogout: 
                   key={tab.id}
                   type="button"
                   aria-current={isActive}
+                  aria-label={tab.label}
+                  title={tab.label}
                   className={`nav-item-btn ${isActive ? 'active' : ''}`}
                   onClick={() => setActiveTab(tab.id)}
-                  style={{ width: '100%' }}
+                  style={{ width: 48, height: 48, justifyContent: 'center', padding: 0 }}
                 >
                   <span className="nav-item-icon">
-                    <Icon size={18} />
+                    <Icon size={22} />
                   </span>
-                  <span className="nav-item-label">{tab.label}</span>
                 </button>
               );
             })}
           </nav>
         </div>
 
-        {/* Footer Tenant Status & Logout */}
-        <div className="flex flex-col gap-3 pt-4 border-t border-[var(--border-subtle)] mt-6">
-          <div className="tenant-status-box" style={{ padding: '10px 12px' }}>
-            <div className="tenant-status-header" style={{ fontSize: '0.72rem' }}>
-              <Lock size={12} />
-              <span>Multi-Tenant Enterprise</span>
-            </div>
-            <div className="tenant-status-body" style={{ fontSize: '0.72rem' }}>
-              Akses Superadmin Tingkat Sistem. Isolasi basis data terverifikasi.
-            </div>
+        {/* Footer — icon-only tenant status & logout */}
+        <div className="flex flex-col items-center gap-3 pt-4 border-t border-[var(--border-subtle)] mt-6 w-full">
+          <div
+            className="sidebar-rail-status"
+            title="Multi-Tenant Enterprise — akses Superadmin tingkat sistem, isolasi basis data terverifikasi."
+            aria-label="Multi-Tenant Enterprise. Akses Superadmin tingkat sistem, isolasi basis data terverifikasi."
+          >
+            <Lock size={22} />
           </div>
 
           <button 
             type="button" 
             className="btn btn-secondary" 
             onClick={onLogout}
-            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: '8px', color: 'var(--accent-rose)' }}
+            title="Keluar Akun"
+            aria-label="Keluar Akun"
+            style={{ width: 48, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, color: 'var(--accent-rose)' }}
           >
-            <LogOut size={16} />
-            <span>Keluar Akun</span>
+            <LogOut size={22} />
           </button>
         </div>
       </aside>
 
       {/* ── Main Dynamic Viewport ── */}
-      <main className="content-viewport" style={{ flex: 1, minWidth: 0, padding: '28px 36px' }}>
+      <main className="content-viewport" style={{ flex: 1, minWidth: 0, padding: '28px 32px' }}>
         {activeTab === 'ringkasan' && (
           <div className="corporate-view-container">
             {/* Header */}

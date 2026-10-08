@@ -44,7 +44,6 @@ import { WorkspaceMappingView } from './components/WorkspaceMappingView';
 import { CorporateUsersView } from './components/CorporateUsersView';
 
 import { AdminDashboard } from './components/AdminDashboard';
-import { Building2 } from 'lucide-react';
 
 import { canAccessTab, canTransitionDraft, filterUsersForWorkspace } from './services/policies';
 
@@ -54,15 +53,6 @@ export function App() {
   const [loading, setLoading] = useState(false);
   // Theme state
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
-  // Icon-only sidebar rail; persisted so it survives reloads.
-  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
-    try { return localStorage.getItem('vc-sidebar-collapsed') === '1'; } catch { return false; }
-  });
-  const toggleSidebar = () => setSidebarCollapsed(prev => {
-    const next = !prev;
-    try { localStorage.setItem('vc-sidebar-collapsed', next ? '1' : '0'); } catch { /* ignore */ }
-    return next;
-  });
 
   // Core App State
   const [currentTab, setCurrentTab] = useState<ActiveTab>('dashboard');
@@ -103,41 +93,7 @@ export function App() {
   };
 
   useEffect(() => {
-    // Check for saved token and restore session
-    const token = localStorage.getItem('vibecontent_token');
-    if (token) {
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        if (payload.exp > Date.now()) {
-          const user: AuthUser = {
-            id: payload.id,
-            name: payload.name,
-            email: payload.email,
-            role: payload.role || payload.workspaces?.[0]?.role || 'creator',
-            companyId: payload.companyId ?? null,
-            workspaces: payload.workspaces || []
-          };
-          setAuthUser(user);
-          setAuthenticated(true);
-          const savedWsId = localStorage.getItem('vibecontent_active_ws');
-          const wsId = savedWsId && user.workspaces.some((w: any) => w.id === savedWsId) 
-            ? savedWsId 
-            : (user.workspaces[0]?.id || null);
-          
-          if (wsId) {
-            setActiveWorkspaceById(wsId, user).catch(error => { setToastMessage(`Failed to load workspace: ${error.message}`); setLoading(false); });
-            return;
-          }
-        } else {
-          localStorage.removeItem('vibecontent_token');
-        }
-      } catch (e) {
-        localStorage.removeItem('vibecontent_token');
-      }
-    }
-    
-    // Fallback loadData if no active workspace auto-load happened
-    loadData().catch(error => { setToastMessage(`Failed to load database: ${error.message}`); setLoading(false); });
+    apiService.me().then(user => { if (user) void handleAuthed(user).catch(() => { setAuthUser(null); setAuthenticated(false); }); }).catch(() => {});
   }, []);
 
   // Session guards. The server enforces the idle window; these keep the UI honest:
@@ -209,7 +165,10 @@ export function App() {
       setActiveWorkspace(null); setActiveUser(null);
       return;
     }
-    if (user.workspaces.length && (user.role === 'corporate' || user.workspaces.length === 1)) await setActiveWorkspaceById(user.workspaces[0].id, user);
+    // Any user with at least one workspace lands straight in the dashboard — no
+    // intermediate picker screen. Switching tenants afterwards is done from the
+    // header workspace switcher, which is available on every workspace screen.
+    if (user.workspaces.length) await setActiveWorkspaceById(user.workspaces[0].id, user);
     setAuthUser(user); setAuthenticated(true);
   };
 
@@ -457,7 +416,7 @@ export function App() {
           </div>
         </header>
 
-        <div className="main-layout" style={{ maxWidth: 1200, margin: '24px auto', padding: '0 24px', width: '100%' }}>
+        <div className="main-layout" style={{ padding: '0 24px', width: '100%' }}>
           <main className="content-viewport" style={{ padding: 0 }}>
             <nav style={{ display: 'flex', gap: '8px', marginBottom: '24px', flexWrap: 'wrap' }}>
               <button 
@@ -493,29 +452,15 @@ export function App() {
     );
   }
 
-  // Workspace picker — authenticated but no workspace selected yet
+  // No workspace at all (e.g. a creator whose memberships were revoked): there
+  // is nothing to open, so show a minimal notice rather than an empty picker.
   if (!activeWorkspace || !activeUser) {
-    const memberships = authUser?.workspaces || [];
     return <main className="login-shell">
       <section className="login-card card-panel" style={{ maxWidth: '480px', margin: '0 auto' }}>
-        <span className="login-kicker">Pilih Workspace</span>
+        <span className="login-kicker">Tidak Ada Workspace</span>
         <h2>Selamat datang, {authUser?.name}</h2>
-        <p>Pilih workspace yang akan dibuka.</p>
-        {memberships.length === 0 ? (
-          <div>
-            <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)' }}>Anda belum menjadi anggota workspace mana pun.</p>
-            <button className="btn btn-secondary" onClick={handleLogout}>Kembali ke halaman masuk</button>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {memberships.map(ws => (
-              <button key={ws.id} className="btn btn-secondary" style={{ justifyContent: 'flex-start', display: 'flex', alignItems: 'center', gap: '10px' }}
-                onClick={async () => { await setActiveWorkspaceById(ws.id); }}>
-                <Building2 size={16}/><span>{ws.name} ({ws.code}) — {ws.role}</span>
-              </button>
-            ))}
-          </div>
-        )}
+        <p>Akun Anda belum terhubung ke workspace mana pun.</p>
+        <button className="btn btn-secondary" onClick={handleLogout}>Kembali ke halaman masuk</button>
       </section>
     </main>;
   }
@@ -557,8 +502,6 @@ export function App() {
         onSelectWorkspace={handleSelectWorkspace}
         users={filterUsersForWorkspace(users, activeWorkspace.id)}
         activeUser={activeUser}
-        sidebarCollapsed={sidebarCollapsed}
-        onToggleSidebar={toggleSidebar}
       />
 
       <div className="main-layout">
@@ -569,7 +512,6 @@ export function App() {
 
           userRole={activeUser.role}
           activeWorkspace={activeWorkspace}
-          collapsed={sidebarCollapsed}
           onLogout={handleLogout}
         />
 

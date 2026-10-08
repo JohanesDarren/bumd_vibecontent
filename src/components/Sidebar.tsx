@@ -1,18 +1,18 @@
 import React from 'react';
 import { ActiveTab, UserRole, Workspace } from '../types';
-import { 
-  LayoutDashboard, 
-  PenTool, 
-  FileEdit, 
-  Image as ImageIcon, 
+import {
+  LayoutDashboard,
+  PenTool,
+  FileEdit,
+  Image as ImageIcon,
   CalendarDays,
-  FolderArchive, 
-  Building2, 
-  ShieldAlert, 
+  FolderArchive,
+  Building2,
+  ShieldAlert,
   Users,
   CircleHelp,
   LogOut,
-  BookOpen
+  ShieldCheck
 } from 'lucide-react';
 import { canAccessTab } from '../services/policies';
 
@@ -21,7 +21,6 @@ interface SidebarProps {
   onSelectTab: (tab: ActiveTab) => void;
   userRole: UserRole;
   activeWorkspace: Workspace;
-  collapsed?: boolean;
   onLogout?: () => void;
 }
 
@@ -30,27 +29,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectTab,
   userRole,
   activeWorkspace,
-  collapsed = false,
   onLogout
 }) => {
+  // Icon-only ("sandwich") rail. Every destination is a single icon carrying an
+  // accessible label; there is intentionally no text / expanded mode.
   const navButton = (tab: ActiveTab, label: string, Icon: React.ComponentType<{ size?: number }>, badge?: React.ReactNode) => {
     if (!canAccessTab(userRole, tab)) return null;
     return <button
       className={`nav-item-btn ${currentTab === tab ? 'active' : ''}`}
       onClick={() => onSelectTab(tab)}
-      title={collapsed ? label : undefined}
+      title={label}
       aria-label={label}
     >
-      <span className="nav-item-icon"><Icon size={18} /></span>
+      <span className="nav-item-icon"><Icon size={22} /></span>
       <span className="nav-item-label">{label}</span>
-      {collapsed ? (badge ? <span className="nav-dot" aria-hidden /> : null) : badge}
+      {badge ? <span className="nav-dot" aria-hidden /> : null}
     </button>;
   };
   return (
-    <aside className={`app-sidebar ${collapsed ? 'collapsed' : ''}`}>
+    <aside className="app-sidebar">
       <div>
         {/* Creation & Content Section */}
-        {collapsed ? <div className="nav-divider" aria-hidden /> : <div className="nav-section-title">{userRole === 'corporate' ? 'Ringkasan & Jadwal' : 'Produksi Konten'}</div>}
+        <div className="nav-divider" aria-hidden />
         <div className="nav-group">
           {navButton('dashboard', 'Dasbor', LayoutDashboard)}
           {navButton('brief_studio', 'Brief & Generasi', PenTool)}
@@ -60,14 +60,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {userRole !== 'corporate' && <>
-          {collapsed ? <div className="nav-divider" aria-hidden /> : <div className="nav-section-title">Tata Kelola & Review</div>}
+          <div className="nav-divider" aria-hidden />
           <div className="nav-group">
             {navButton('library', 'Pustaka & Ekspor', FolderArchive)}
           </div>
         </>}
 
         {/* Knowledge & Administration Section */}
-        {collapsed ? <div className="nav-divider" aria-hidden /> : <div className="nav-section-title">Pengetahuan & Pengaturan</div>}
+        <div className="nav-divider" aria-hidden />
         <div className="nav-group">
           {navButton('brand_profile', 'Profil & Merek', Building2)}
           {navButton('corporate_management', 'Workspace Perusahaan', Building2)}
@@ -79,28 +79,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
-      {/* Tenant Status Footer (hidden in icon-only mode) */}
-      {!collapsed && (
-        <div className="tenant-status-box">
-          <div className="tenant-status-header">
-            <span>Isolasi Tenant Aktif</span>
-          </div>
-          <div className="tenant-status-body">
-            {userRole === 'corporate' && currentTab === 'dashboard' ? 'Dasbor menampilkan seluruh workspace perusahaan Anda.' : <>Data terikat pada <strong>{activeWorkspace.code}</strong>. Dokumen dan draf terisolasi dengan aman.</>}
-          </div>
-        </div>
-      )}
+      {/* Tenant-isolation status chip (icon-only footer) */}
+      <div
+        className="sidebar-rail-status"
+        title={`Isolasi tenant aktif — data terikat pada ${activeWorkspace.code}`}
+        aria-label={`Isolasi tenant aktif. Data terikat pada workspace ${activeWorkspace.code}.`}
+      >
+        <ShieldCheck size={22} />
+      </div>
 
       {onLogout && (
-        <div style={{ marginTop: 'auto', padding: '16px' }}>
-          <button 
-            className="btn btn-secondary" 
-            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'flex-start', gap: '8px', padding: '10px' }}
+        <div style={{ marginTop: '12px' }}>
+          <button
+            className="btn btn-secondary"
+            style={{ width: '48px', height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
             onClick={onLogout}
             title="Keluar"
+            aria-label="Keluar"
           >
-            <LogOut size={18} />
-            {!collapsed && <span>Keluar</span>}
+            <LogOut size={22} />
           </button>
         </div>
       )}

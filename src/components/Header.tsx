@@ -16,8 +16,7 @@ import {
   Sparkles,
   PenTool,
   ShieldAlert,
-  Crown,
-  Menu
+  Crown
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -26,8 +25,6 @@ interface HeaderProps {
   onSelectWorkspace: (wsId: string) => void;
   users: User[];
   activeUser: User;
-  sidebarCollapsed: boolean;
-  onToggleSidebar: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -35,25 +32,13 @@ export const Header: React.FC<HeaderProps> = ({
   activeWorkspace,
   onSelectWorkspace,
   users,
-  activeUser,
-  sidebarCollapsed,
-  onToggleSidebar
+  activeUser
 }) => {
   const [showWsMenu, setShowWsMenu] = useState(false);
 
   return (
     <header className="top-header">
       <div className="header-left">
-        {/* Sidebar collapse toggle (icon-only rail) */}
-        <button
-          className="icon-btn sidebar-toggle-btn"
-          onClick={onToggleSidebar}
-          title={sidebarCollapsed ? 'Perluas sidebar' : 'Ciutkan sidebar'}
-          aria-label={sidebarCollapsed ? 'Perluas sidebar' : 'Ciutkan sidebar'}
-          aria-expanded={!sidebarCollapsed}
-        >
-          <Menu size={18} />
-        </button>
         <div className="brand-logo-wrap" onClick={() => window.location.reload()}>
           <div className="brand-title-group">
             <h1>VibeContent <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--accent-cyan)', background: 'rgba(6, 182, 212, 0.15)', padding: '2px 6px', borderRadius: '4px', marginLeft: '6px' }}>BUMD</span></h1>

@@ -20,7 +20,7 @@ export function knowledgeBaseIdFor(workspaceId: string) {
   return `kb-vibecontent-${safe}`;
 }
 
-async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function call<T>(path: string, init: RequestInit = {}, options: { ignoreNotFound?: boolean } = {}): Promise<T> {
   if (!ragConfigured()) throw new RagNotConfiguredError();
   const response = await fetch(`${baseUrl()}${path}`, {
     ...init,
@@ -31,6 +31,9 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
     },
     signal: AbortSignal.timeout(TIMEOUT_MS)
   });
+
+  // A 404 on a delete means "already gone" — treat it as success for idempotent syncs.
+  if (options.ignoreNotFound && response.status === 404) return undefined as T;
 
   const body = await response.json().catch(() => null);
   if (!response.ok || (body && body.success === false)) {
@@ -269,9 +272,12 @@ export function ragCompose(workspaceId: string, briefText: string, feedback?: st
 }
 
 export function ragDeleteDocument(workspaceId: string, documentId: string) {
+  // Deleting a document that is not (or no longer) indexed is a no-op, not an error:
+  // a pending/inactive source may never have been indexed, and re-syncs are idempotent.
   return call<Record<string, unknown>>(
     `/knowledge/${encodeURIComponent(documentId)}?knowledge_base_id=${encodeURIComponent(knowledgeBaseIdFor(workspaceId))}`,
-    { method: 'DELETE' }
+    { method: 'DELETE' },
+    { ignoreNotFound: true }
   );
 }
 
