@@ -26,7 +26,7 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
 
-  const workspaceLogs = logs.filter(l => l.workspaceId === activeWorkspace.id);
+  const workspaceLogs = activeWorkspace ? logs.filter(l => l.workspaceId === activeWorkspace.id) : logs;
 
   const filteredLogs = workspaceLogs.filter(log => {
     const matchesSearch = 
@@ -45,7 +45,7 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({
         <div>
           <h2 className="page-title">Jejak Audit Aktivitas</h2>
           <p className="page-subtitle">
-            Pencatatan transparan atas semua perubahan draf, keputusan persetujuan, dan unggahan dokumen untuk akuntabilitas tata kelola BUMD <strong>{activeWorkspace.name}</strong>.
+            Pencatatan transparan atas semua perubahan draf, keputusan persetujuan, dan unggahan dokumen untuk akuntabilitas tata kelola BUMD <strong>{activeWorkspace?.name || 'Seluruh Sistem'}</strong>.
           </p>
         </div>
       </div>
@@ -68,7 +68,7 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <Lock size={20} color="#10b981" />
           <span style={{ fontSize: '0.85rem' }}>
-            <strong>Kepatuhan Isolasi Tenant (PRD F-01 & F-12):</strong> Semua event audit terenkripsi dan terikat ketat pada ID workspace <code>{activeWorkspace.id}</code>. Tidak ada kebocoran metadata antar entitas BUMD.
+            <strong>Kepatuhan Isolasi Tenant (PRD F-01 & F-12):</strong> Semua event audit terenkripsi dan terikat ketat pada ID workspace <code>{activeWorkspace?.id || 'GLOBAL'}</code>. Tidak ada kebocoran metadata antar entitas BUMD.
           </span>
         </div>
         <span style={{ fontSize: '0.78rem', color: '#34d399', fontWeight: 700, display: 'flex', alignItems: 'center' }}>

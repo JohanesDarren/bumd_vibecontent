@@ -50,7 +50,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <aside className={`app-sidebar ${collapsed ? 'collapsed' : ''}`}>
       <div>
         {/* Creation & Content Section */}
-        {collapsed ? <div className="nav-divider" aria-hidden /> : <div className="nav-section-title">Produksi Konten</div>}
+        {collapsed ? <div className="nav-divider" aria-hidden /> : <div className="nav-section-title">{userRole === 'corporate' ? 'Ringkasan & Jadwal' : 'Produksi Konten'}</div>}
         <div className="nav-group">
           {navButton('dashboard', 'Dasbor', LayoutDashboard)}
           {navButton('brief_studio', 'Brief & Generasi', PenTool)}
@@ -59,10 +59,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {navButton('content_scheduling', 'Penjadwalan Konten', CalendarDays)}
         </div>
 
-        {collapsed ? <div className="nav-divider" aria-hidden /> : <div className="nav-section-title">Tata Kelola & Review</div>}
-        <div className="nav-group">
-          {navButton('library', 'Pustaka & Ekspor', FolderArchive)}
-        </div>
+        {userRole !== 'corporate' && <>
+          {collapsed ? <div className="nav-divider" aria-hidden /> : <div className="nav-section-title">Tata Kelola & Review</div>}
+          <div className="nav-group">
+            {navButton('library', 'Pustaka & Ekspor', FolderArchive)}
+          </div>
+        </>}
 
         {/* Knowledge & Administration Section */}
         {collapsed ? <div className="nav-divider" aria-hidden /> : <div className="nav-section-title">Pengetahuan & Pengaturan</div>}
@@ -71,6 +73,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {navButton('knowledge_base', 'Knowledge Base', BookOpen)}
           {navButton('user_management', 'Pengguna & Peran', Users)}
           {navButton('audit_log', 'Jejak Audit', ShieldAlert)}
+          {navButton('admin_management', 'Administrasi Aplikasi', ShieldAlert)}
           {navButton('settings_help', 'Pengaturan & Bantuan', CircleHelp)}
         </div>
       </div>
@@ -82,7 +85,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span>Isolasi Tenant Aktif</span>
           </div>
           <div className="tenant-status-body">
-            Data terikat pada <strong>{activeWorkspace.code}</strong>. Dokumen dan draf terisolasi dengan aman.
+            {userRole === 'corporate' && currentTab === 'dashboard' ? 'Dasbor menampilkan seluruh workspace perusahaan Anda.' : <>Data terikat pada <strong>{activeWorkspace.code}</strong>. Dokumen dan draf terisolasi dengan aman.</>}
           </div>
         </div>
       )}

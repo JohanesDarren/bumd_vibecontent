@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS memberships (
   organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  role text NOT NULL CHECK (role IN ('creator','reviewer','admin')),
+  role text NOT NULL CHECK (role IN ('creator','admin')),
   active boolean NOT NULL DEFAULT true,
   PRIMARY KEY (organization_id, user_id)
 );

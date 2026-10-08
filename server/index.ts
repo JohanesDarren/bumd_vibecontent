@@ -16,6 +16,12 @@ app.use(cors({ origin: true }));
 app.use(express.json({ limit: '8mb' }));
 
 const isNonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0;
+const contentOnly=(req:express.Request,res:express.Response,next:express.NextFunction)=>res.locals.user.role==='corporate'?res.status(403).json({error:'Corporate accounts cannot create or edit content'}):next();
+
+app.post('/api/visual/generate', authenticate, contentOnly, requireWorkspace(req=>req.body?.workspaceId), async (req, res) => {
+  try { res.json(await generateVisual(req.body)); }
+  catch (error) { const e = error as VisualError; res.status(e.status || 500).json({ error: e.message, code: e.code || 'VISUAL_ERROR' }); }
+});
 
 app.post('/api/visual/generate', async (req, res) => {
   try { res.json(await generateVisual(req.body)); }
@@ -139,7 +145,7 @@ app.post('/api/rag/sync', requireAdmin(req => req.body?.workspaceId), async(req,
 // Remove remote-KB entries that no longer correspond to any DB document (e.g. after a demo reset).
 app.post('/api/rag/prune', requireAdmin(req => req.body?.workspaceId), async(req,res,next)=>{try{const{workspaceId}=req.body||{};if(!isNonEmptyString(workspaceId))return res.status(400).json({error:'workspaceId is required'});const data=await listBootstrap(workspaceId);const validIds=new Set(data.documents.map((d:any)=>d.id));const listed=await ragListDocuments(workspaceId);const docs=(listed as any)?.documents||[];let removed=0,failed=0;for(const entry of docs){const id=entry?.document_id||entry?.id;if(id&&!validIds.has(String(id))){const ok=await removeKnowledgeDocFromRag(workspaceId,String(id));if(ok)removed++;else failed++;}}res.json({knowledgeBaseId:knowledgeBaseIdFor(workspaceId),removed,failed,total:docs.length});}catch(error){next(error);}});
 app.use('/api',(_req,res)=>{res.status(404).json({error:'Endpoint not found'});});
-app.use((error:unknown,_req:express.Request,res:express.Response,_next:express.NextFunction)=>{console.error(error);res.status(500).json({error:error instanceof Error?error.message:'Internal server error'});});
+app.use((error:unknown,_req:express.Request,res:express.Response,_next:express.NextFunction)=>{console.error(error);if((error as {code?:string}).code==='23505')return res.status(409).json({error:'A record with these unique values already exists (duplicate email or code)'});res.status(500).json({error:error instanceof Error?error.message:'Internal server error'});});
 
 const port=Number(process.env.API_PORT||3005);
 if(process.env.NODE_ENV!=='test') {

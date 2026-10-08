@@ -52,7 +52,7 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
   const [newCtaLabel, setNewCtaLabel] = useState('');
   const [newCtaText, setNewCtaText] = useState('');
 
-  const isAdmin = activeUser.role === 'admin';
+  const isAdmin = activeUser.role === 'corporate' || activeUser.role === 'superadmin';
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();

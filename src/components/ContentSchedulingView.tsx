@@ -66,6 +66,7 @@ interface ContentSchedulingViewProps {
   documents: KnowledgeDocument[];
   activeWorkspace: Workspace;
   onOpenEditorDraft?: (draftId: string) => void;
+  readOnly?: boolean;
 }
 
 /* ─── Mini SVG Social Icons ─── */
@@ -790,7 +791,7 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
 
       {/* ── Action Bar ── */}
       <div className="scheduling-action-bar">
-        <button className="btn btn-primary scheduling-add-btn" onClick={() => openAddModal()}>
+        {!readOnly && <button className="btn btn-primary scheduling-add-btn" onClick={() => openAddModal()}>
           <Plus size={18} />
           <span>Tambah Jadwal Baru</span>
         </button>

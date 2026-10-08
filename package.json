@@ -10,6 +10,7 @@
     "db:migrate": "tsx server/migrate.ts",
     "db:seed": "tsx server/seed.ts",
     "db:clear": "tsx server/clear.ts",
+    "db:reset": "tsx server/reset.ts",
     "test:db": "set NODE_ENV=test&& set DATABASE_URL=postgresql://vibecontent:vibecontent_dev@127.0.0.1:5435/vibecontent_test&& tsx --test --test-concurrency=1 server/empty.integration.test.ts server/database.integration.test.ts server/crud.integration.test.ts server/endpoints.integration.test.ts server/auth.integration.test.ts",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
@@ -28,6 +29,7 @@
     "react-spinners": "^0.17.1"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^24.13.3",
@@ -36,6 +38,8 @@
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
     "oxlint": "^1.81.0",
+    "puppeteer-core": "^25.12.0",
+    "tailwindcss": "^4.3.3",
     "tsx": "^4.23.15",
     "typescript": "~6.0.2",
     "vite": "^8.3.0"

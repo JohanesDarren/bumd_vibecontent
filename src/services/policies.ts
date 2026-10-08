@@ -12,9 +12,9 @@ export function canAccessTab(role: UserRole, tab: ActiveTab): boolean {
 }
 
 export function canTransitionDraft(role: UserRole, current: DraftStatus, next: DraftStatus): boolean {
-  return (role === 'creator' || role === 'admin' || role === 'reviewer')
+  return (role === 'creator' || role === 'superadmin')
     && (current === 'draft' || current === 'revisi_diminta' || current === 'menunggu_review')
-    && (next === 'disetujui' || next === 'revisi_diminta' || next === 'menunggu_review');
+    && next === 'disetujui';
 }
 
 export function filterUsersForWorkspace<T extends Pick<User, 'workspaceId'>>(users: T[], workspaceId: string): T[] {

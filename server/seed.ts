@@ -6,19 +6,23 @@ import { knowledgeBaseIdFor, ragDeleteDocument, ragIndexDocument, ragListDocumen
 const DEMO_PASSWORD = 'DemoPass123';
 
 // Local demo seed: resets the database and inserts one workspace with a
-// ready-to-use account for each role (admin, reviewer, creator), plus a brand
+// ready-to-use account for each role (admin, creator), plus a brand
 // profile and one active knowledge document so the app is immediately usable.
 const workspaceId = 'org-demo-tirta';
+const companyId = 'co-demo-tirta';
+const companyName = 'Perumda Tirta Demo Holding';
 
 const avatar = (initials: string, color: string) => {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="${color}"/><text x="32" y="42" font-size="26" font-family="Arial,sans-serif" font-weight="bold" text-anchor="middle" fill="white">${initials}</text></svg>`;
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 };
 
+// `globalRole` drives platform-wide access; `membership` is the workspace role
+// (only creators are enrolled as workspace members in the three-tier model).
 const users = [
-  { id: 'usr-demo-admin', name: 'Andi Prasetyo', email: 'admin@tirta.demo', role: 'admin', title: 'Knowledge Administrator', department: 'Corporate Secretariat', initials: 'AP', color: '#0284c7' },
-  { id: 'usr-demo-reviewer', name: 'Sari Wulandari', email: 'reviewer@tirta.demo', role: 'reviewer', title: 'Reviewer / Approver', department: 'Public Relations', initials: 'SW', color: '#059669' },
-  { id: 'usr-demo-creator', name: 'Budi Santoso', email: 'creator@tirta.demo', role: 'creator', title: 'Content Creator', department: 'Creative Communications', initials: 'BS', color: '#7c3aed' }
+  { id: 'usr-demo-admin', name: 'Andi Prasetyo', email: 'admin@tirta.demo', globalRole: 'superadmin', membership: null as string | null, title: 'Knowledge Administrator', department: 'Corporate Secretariat', initials: 'AP', color: '#0284c7' },
+
+  { id: 'usr-demo-creator', name: 'Budi Santoso', email: 'creator@tirta.demo', globalRole: 'creator', membership: 'creator', title: 'Content Creator', department: 'Creative Communications', initials: 'BS', color: '#7c3aed' }
 ];
 
 const brandProfile = {
@@ -120,20 +124,27 @@ console.log('Resetting database and seeding demo data...');
 await clearAllData();
 
 await pool.query(
-  `INSERT INTO organizations(id,name,code,sector,city,tagline,primary_color,accent_color,description)
-   VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-  [workspaceId, 'Perumda Tirta Demo', 'TIRTA', 'Water Utility', 'Bandung', 'Serving the community with clean water', '#0284c7', '#0ea5e9', 'Demo workspace for local testing.']
+  `INSERT INTO companies(id,name) VALUES($1,$2) ON CONFLICT(id) DO UPDATE SET name=EXCLUDED.name`,
+  [companyId, companyName]
+);
+
+await pool.query(
+  `INSERT INTO organizations(id,company_id,name,code,sector,city,tagline,primary_color,accent_color,description)
+   VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+  [workspaceId, companyId, 'Perumda Tirta Demo', 'TIRTA', 'Water Utility', 'Bandung', 'Serving the community with clean water', '#0284c7', '#0ea5e9', 'Demo workspace for local testing.']
 );
 
 for (const user of users) {
   await pool.query(
-    `INSERT INTO users(id,name,email,avatar,title,department,password_hash) VALUES($1,$2,$3,$4,$5,$6,$7)`,
-    [user.id, user.name, user.email, avatar(user.initials, user.color), user.title, user.department, await hashPassword(DEMO_PASSWORD)]
+    `INSERT INTO users(id,name,email,avatar,title,department,password_hash,global_role,company_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+    [user.id, user.name, user.email, avatar(user.initials, user.color), user.title, user.department, await hashPassword(DEMO_PASSWORD), user.globalRole, user.globalRole === 'superadmin' ? null : companyId]
   );
-  await pool.query(
-    `INSERT INTO memberships(organization_id,user_id,role,active) VALUES($1,$2,$3,true)`,
-    [workspaceId, user.id, user.role]
-  );
+  if (user.membership) {
+    await pool.query(
+      `INSERT INTO memberships(organization_id,user_id,role,active) VALUES($1,$2,$3,true)`,
+      [workspaceId, user.id, user.membership]
+    );
+  }
 }
 
 await pool.query(
@@ -155,7 +166,7 @@ for (const chunk of document.chunks) {
 }
 
 for (const draft of drafts) {
-  const creator = users.find(u => u.role === 'creator')!;
+  const creator = users.find(u => u.membership === 'creator')!;
   await pool.query(
     `INSERT INTO content_drafts(id,organization_id,brief_id,title,format,status,current_version,created_by,creator_name,visual_asset,approval_info,created_at,updated_at)
      VALUES($1,$2,$3,$4,$5,$6,1,$7,$8,NULL,NULL,now(),now())`,
@@ -179,10 +190,10 @@ for (const draft of drafts) {
   );
 }
 
-for (const user of users.filter(u => u.role === 'admin')) {
+for (const user of users.filter(u => u.globalRole === 'superadmin')) {
   await pool.query(
     `INSERT INTO audit_events(organization_id,actor_id,actor_name,actor_role,action,object_type,object_id,object_name,details)
-     VALUES($1,$2,$3,'admin','Organization Created','brand_profile',$4,'Demo workspace','Saved to PostgreSQL')`,
+     VALUES($1,$2,$3,'superadmin','Organization Created','brand_profile',$4,'Demo workspace','Saved to PostgreSQL')`,
     [workspaceId, user.id, user.name, workspaceId]
   );
 }
@@ -222,7 +233,7 @@ console.log('');
 console.log('Demo workspace seeded:');
 console.log(`  Workspace : Perumda Tirta Demo (${workspaceId})`);
 console.log(`  Password  : ${DEMO_PASSWORD} (same for every account below)`);
-for (const user of users) console.log(`  ${user.role.padEnd(9)}: ${user.name} <${user.email}>`);
+for (const user of users) console.log(`  ${user.globalRole.padEnd(9)}: ${user.name} <${user.email}>`);
 console.log(`  Knowledge : ${document.title} (active, ${document.chunks.length} chunks)`);
 console.log(`  Drafts    : ${drafts.length} (${drafts.map(d => `${d.status}: ${d.title}`).join(', ')})`);
 console.log('');

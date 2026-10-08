@@ -4,7 +4,10 @@ import type { AppSettings, RagOptionsPayload } from './appSettings';
 export type PlanSlot={date:string;time:string;platform:SchedulePlatform;pillar:SchedulePillar|null;title:string;angle:string;source:string};
 export type PlanRequestBody={workspaceId:string;mode:'plan'|'gap';monthLabel:string;theme:string;count:number;dates:string[];platforms:SchedulePlatform[];pillars:SchedulePillar[];moments:string[];existingTitles:string[]};
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:3005';
+const configuredApiUrl = import.meta.env.VITE_API_URL;
+const API_URL = typeof window === 'undefined' ? configuredApiUrl || 'http://127.0.0.1:3005'
+  : configuredApiUrl && !/^http:\/\/(127\.0\.0\.1|localhost):3005$/.test(configuredApiUrl) ? configuredApiUrl
+  : `${window.location.protocol}//${window.location.hostname}:3005`;
 
 let authToken = localStorage.getItem('vibecontent_token') || '';
 
@@ -29,6 +32,23 @@ async function request<T>(path:string, init?:RequestInit):Promise<T>{
   }
   return response.json();
 }
+
+export type AdminOverview={
+  companies:{id:string;name:string;workspaceCount:number;userCount:number}[];
+  workspaces:number;
+  users:{total:number;creators:number;corporate:number;superadmins:number};
+  drafts:number;
+  knowledgeSources:number;
+  auditEvents:number;
+};
+export type CompanyDashboard = {
+  company: {id:string;name:string};
+  workspaces: {id:string;name:string;code:string;sector:string;city:string;creatorCount:number;draftCount:number;approvedCount:number;reviewCount:number;sourceCount:number;briefCount:number;auditCount:number}[];
+  users: {id:string;name:string;role:string;workspaces:string[]}[];
+  userCount: number;
+  recentDrafts: {id:string;title:string;status:string;format:string;updatedAt:string;workspaceId:string;workspaceName:string}[];
+};
+export type AdminUser={id:string;name:string;email:string;role:string;companyId:string|null;workspaceIds:string[]};
 
 export type RagHit={document_id:string;chunk_id:string;content:string;score:number;page?:number|null;document_name?:string|null;section?:string|null;source_url?:string|null};
 export type RagAnswer={answer:string;grounded:boolean;sources:RagHit[];model?:string;no_answer_reason?:string|null};
@@ -55,6 +75,7 @@ export const apiService={
   ragSearch:(workspaceId:string,query:string,options?:RagOptionsPayload|number)=>request<{results:RagHit[]}>(`/api/rag/search`,{method:'POST',body:JSON.stringify({workspaceId,query,...(typeof options === 'number' ? {topK:options} : {options})})}),
   ragQuery:(workspaceId:string,query:string,options?:RagOptionsPayload|number)=>request<RagAnswer>(`/api/rag/query`,{method:'POST',body:JSON.stringify({workspaceId,query,...(typeof options === 'number' ? {topK:options} : {options})})}),
   ragRefine:(workspaceId:string,draftContent:string,promptAction:string)=>request<{answer:string;model?:string}>(`/api/rag/refine`,{method:'POST',body:JSON.stringify({workspaceId,draftContent,promptAction})}),
+  generateVisual:(input:import('./visualScene').VisualInput)=>request<{imageUrl:string;provider:string;model:string;llmModel:string;steps:number;fallback:false;format:string;prompt:string;imagePrompt:string;dimensions:string}>('/api/visual/generate',{method:'POST',body:JSON.stringify(input)}),
   saveDraft:(draft:ContentDraft,brief?:ContentBrief)=>request<ContentDraft>(`/api/drafts/${draft.id}`,{method:'PUT',body:JSON.stringify({...draft,brief})}),
   fetchPostImage:(workspaceId:string,id:string)=>request<ScheduledContent>(`/api/organizations/${workspaceId}/schedules/${id}/post-image`,{method:'POST'}),
   setScheduleImage:(workspaceId:string,id:string,image:string|null,source?:'upload'|'ai')=>request<ScheduledContent>(`/api/organizations/${workspaceId}/schedules/${id}/custom-image`,{method:'PUT',body:JSON.stringify({image,source})}),
