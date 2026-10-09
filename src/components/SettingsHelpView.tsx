@@ -40,7 +40,7 @@ import {
 
 interface SettingsHelpViewProps {
   activeWorkspace: Workspace;
-  /** Per-workspace settings loaded from the server (workspace_settings table). */
+  /** Company-wide settings loaded from the server. */
   settings: AppSettings;
   /** Persist the settings for the active workspace. */
   onSaveSettings: (settings: AppSettings) => void | Promise<void>;
@@ -110,8 +110,8 @@ const TROUBLESHOOTING = [
 ];
 
 const FAQS = [
-  { q: 'Apakah aplikasi memakai pencarian web?', a: 'Tidak. Semua fakta hanya diambil dari knowledge base internal tenant Anda melalui layanan RAG. Tidak ada pencarian internet saat generasi.' },
-  { q: 'Apakah dokumen saya bocor ke tenant lain?', a: 'Tidak. Setiap workspace memiliki knowledge base terpisah yang ditentukan di sisi server, sehingga klien tidak dapat menargetkan knowledge base tenant lain.' },
+  { q: 'Apakah aplikasi memakai pencarian web?', a: 'Tidak. Semua fakta hanya diambil dari knowledge base internal perusahaan melalui layanan RAG. Tidak ada pencarian internet saat generasi.' },
+  { q: 'Apakah dokumen saya bocor ke tenant lain?', a: 'Tidak. Tiap perusahaan punya corpus sendiri; hanya workspace perusahaan yang dipilih corporate dan statusnya aktif menerima dokumen di RAG.' },
   { q: 'Apakah kunci API RAG aman?', a: 'Kunci API hanya disimpan di server (.env.local) dan tidak pernah dikirim ke peramban. Peramban hanya berbicara ke API internal aplikasi.' },
   { q: 'Apa arti skor skala grounding?', a: 'Skala 1 (Sangat Longgar) mengambil banyak potongan dengan ambang rendah; skala 5 (Sangat Ketat) hanya memakai potongan dengan kemiripan tinggi. Naikkan bila ingin lebih faktual, turunkan bila jawaban terlalu sering kosong.' }
 ];
@@ -125,10 +125,11 @@ export const SettingsHelpView: React.FC<SettingsHelpViewProps> = ({ activeWorksp
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Reload the editing copy whenever the active workspace changes.
+  // Refresh across workspaces and live updates; cancel any pending write from the previous scope.
   useEffect(() => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     setSettings(normalizeSettings(serverSettings));
-  }, [activeWorkspace.id]);
+  }, [activeWorkspace.id, serverSettings]);
 
   // Flush nothing on unmount, but never leave a dangling timer.
   useEffect(() => () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); }, []);
@@ -190,7 +191,7 @@ export const SettingsHelpView: React.FC<SettingsHelpViewProps> = ({ activeWorksp
   const handleReset = () => {
     persist(DEFAULT_SETTINGS);
     setTestResult(null);
-    onNotify?.('Pengaturan dikembalikan ke bawaan dan disimpan ke database.');
+    onNotify?.('Pengaturan perusahaan dikembalikan ke bawaan dan diterapkan ke semua workspace.');
   };
 
   const handleSync = async () => {
@@ -327,9 +328,8 @@ export const SettingsHelpView: React.FC<SettingsHelpViewProps> = ({ activeWorksp
               <span style={{ fontSize: '0.82rem', fontWeight: 700 }}>{activeWorkspace.name} ({activeWorkspace.code})</span>
             </SettingRow>
             <p className="settings-hint">
-              Data aplikasi disimpan melalui API Node.js di PostgreSQL. Draf hasil generasi tersimpan ke database selama
-              opsi privasi "Simpan draf" aktif. Pengaturan di halaman ini disimpan ke database per workspace
-              (tabel <code>workspace_settings</code>), sehingga berlaku untuk seluruh anggota tenant.
+              Data aplikasi disimpan melalui API Node.js di PostgreSQL. Pengaturan halaman ini disimpan sekali untuk
+              perusahaan dan otomatis berlaku pada seluruh workspace perusahaan; kreator tidak dapat mengubahnya.
             </p>
           </div>
 

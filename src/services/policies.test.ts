@@ -47,13 +47,21 @@ test('workspace member lists are isolated', () => {
   assert.deepEqual(filterUsersForWorkspace(users, 'ws-a').map(user => user.id), ['1']);
 });
 
-test('user interface does not expose knowledge-base management', async () => {
+test('knowledge-base management is scoped to corporate and superadmin, not creators', async () => {
   const [sidebar, dashboard, brief] = await Promise.all([
     readFile(new URL('../components/Sidebar.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../components/DashboardView.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../components/BriefStudioView.tsx', import.meta.url), 'utf8')
   ]);
-  assert.doesNotMatch(sidebar, /RAG Knowledge Base|knowledge_base/);
+  // The KB menu was deliberately hidden; corporate now owns KB management for its company.
+  assert.match(sidebar, /navButton\('knowledge_base'/);
+  assert.equal(canAccessTab(corporate.role, 'knowledge_base'), true);
+  assert.equal(canAccessTab(superadmin.role, 'knowledge_base'), true);
+  // Creators must not reach KB management: the server rejects it and the nav must not offer it.
+  assert.equal(canAccessTab(creator.role, 'knowledge_base'), false);
+  assert.equal(canAccessTab(creator.role, 'settings_help'), false);
+  assert.equal(canAccessTab(corporate.role, 'settings_help'), true);
+  assert.equal(canAccessTab(superadmin.role, 'settings_help'), true);
   assert.doesNotMatch(dashboard, /Check RAG Knowledge|RAG Active Documents/);
   assert.doesNotMatch(brief, /RAG Knowledge Base Radar|retrieveKnowledge/);
 });

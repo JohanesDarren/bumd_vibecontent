@@ -12,7 +12,8 @@ import {
   Users,
   CircleHelp,
   LogOut,
-  ShieldCheck
+  ShieldCheck,
+  BookOpen
 } from 'lucide-react';
 import { canAccessTab } from '../services/policies';
 
@@ -69,6 +70,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Knowledge & Administration Section */}
         <div className="nav-divider" aria-hidden />
         <div className="nav-group">
+          {navButton('knowledge_base', 'Knowledge Base', BookOpen)}
           {navButton('brand_profile', 'Profil & Merek', Building2)}
           {navButton('corporate_management', 'Workspace Perusahaan', Building2)}
           {navButton('corporate_users', 'Kreator Perusahaan', Users)}

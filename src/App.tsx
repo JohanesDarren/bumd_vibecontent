@@ -64,7 +64,7 @@ export function App() {
   const [documents, setDocuments] = useState<KnowledgeDocument[]>([]);
   const [drafts, setDrafts] = useState<ContentDraft[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
-  // Per-workspace settings are owned by the server (workspace_settings table).
+  // Company-wide settings are owned by the server and shared across its workspaces.
   const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
 
   // Selection & Modal States
@@ -346,7 +346,7 @@ export function App() {
     showToast('Panduan merek dan profil BUMD berhasil diperbarui.');
   };
 
-  // Persist per-workspace grounding/privacy settings to PostgreSQL.
+  // Persist company-wide grounding/privacy settings; the server derives company from workspace.
   const handleSaveSettings = async (next: AppSettings) => {
     if (!activeWorkspace) return;
     try {
@@ -354,6 +354,7 @@ export function App() {
       setAppSettings(normalizeSettings(saved));
     } catch (error) {
       showToast(`Gagal menyimpan pengaturan: ${error instanceof Error ? error.message : String(error)}`);
+      throw error;
     }
   };
 
@@ -640,6 +641,7 @@ export function App() {
           {safeTab === 'knowledge_base' && (
             <KnowledgeBaseView 
               documents={documents}
+              workspaces={workspaces.filter(workspace => workspace.companyId === activeWorkspace.companyId)}
               activeWorkspace={activeWorkspace}
               activeUser={activeUser}
               onNotify={showToast}

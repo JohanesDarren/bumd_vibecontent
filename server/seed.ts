@@ -154,11 +154,12 @@ await pool.query(
 );
 
 await pool.query(
-  `INSERT INTO knowledge_sources(id,organization_id,title,category,owner,version,effective_date,status,file_size,summary)
-   VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-  [document.id, workspaceId, document.title, document.category, document.owner, document.version, document.effectiveDate, document.status, document.fileSize, document.summary]
-);
-for (const chunk of document.chunks) {
+  `INSERT INTO knowledge_sources(id,organization_id,company_id,title,category,owner,version,effective_date,status,file_size,summary)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+    [document.id, workspaceId, companyId, document.title, document.category, document.owner, document.version, document.effectiveDate, document.status, document.fileSize, document.summary]
+  );
+  await pool.query('INSERT INTO knowledge_source_workspaces(source_id,workspace_id,enabled) VALUES($1,$2,true)', [document.id, workspaceId]);
+  for (const chunk of document.chunks) {
   await pool.query(
     `INSERT INTO knowledge_chunks(id,source_id,section,page,content,keywords) VALUES($1,$2,$3,$4,$5,$6)`,
     [chunk.id, document.id, chunk.section, chunk.page, chunk.content, chunk.keywords]
@@ -202,8 +203,9 @@ if (ragConfigured()) {
   try {
     // The demo reset wipes the local DB but the remote KB persists; prune stale
     // entries first so old test documents cannot ground future answers.
-    const kbId = knowledgeBaseIdFor(workspaceId);
-    const listed = await ragListDocuments(workspaceId);
+    // Demo documents are indexed only to their assigned workspace scope.
+        const kbId = knowledgeBaseIdFor(workspaceId);
+        const listed = await ragListDocuments(workspaceId);
     const remoteIds: string[] = ((listed as any)?.documents || [])
       .map((e: any) => e?.document_id || e?.id)
       .filter(Boolean);
@@ -214,7 +216,7 @@ if (ragConfigured()) {
     if (pruned > 0) console.log(`RAG: pruned ${pruned} stale document(s) from ${kbId}`);
 
     await ragIndexDocument({
-      workspaceId,
+      scopeId: workspaceId,
       documentId: document.id,
       documentName: document.title,
       text: document.chunks.map(chunk => `${chunk.section}\n${chunk.content}`).join('\n\n'),

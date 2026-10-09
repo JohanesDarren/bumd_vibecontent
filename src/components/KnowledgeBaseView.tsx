@@ -5,13 +5,14 @@ import { BookOpen, Plus, Search, Trash2, Edit, RefreshCw, AlertTriangle, ArrowLe
 
 interface Props {
   documents: KnowledgeDocument[];
+  workspaces: Workspace[];
   activeWorkspace: Workspace;
   activeUser: User;
   onNotify: (msg: string) => void;
   onReload: () => Promise<void>;
 }
 
-export const KnowledgeBaseView: React.FC<Props> = ({ documents, activeWorkspace, activeUser, onNotify, onReload }) => {
+export const KnowledgeBaseView: React.FC<Props> = ({ documents, workspaces, activeWorkspace, activeUser, onNotify, onReload }) => {
   const [search, setSearch] = useState('');
   const [editingDoc, setEditingDoc] = useState<KnowledgeDocument | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -79,6 +80,7 @@ export const KnowledgeBaseView: React.FC<Props> = ({ documents, activeWorkspace,
       const newDoc: KnowledgeDocument = {
         id: `doc-${activeWorkspace.code.toLowerCase()}-${Date.now()}`,
         workspaceId: activeWorkspace.id,
+        workspaceAssignments: [{ workspaceId: activeWorkspace.id, enabled: true }],
         title: '',
         category: 'sk_direksi',
         owner: activeUser.name,
@@ -188,6 +190,26 @@ export const KnowledgeBaseView: React.FC<Props> = ({ documents, activeWorkspace,
             </label>
           </div>
 
+          <fieldset style={{ gridColumn: '1 / -1', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '14px' }}>
+            <legend style={{ padding: '0 6px', fontWeight: 700 }}>Workspace yang boleh memakai dokumen</legend>
+            <p className="settings-hint">Hanya workspace terpilih yang akan menerima dokumen ini di knowledge base RAG mereka. Hapus centang untuk menonaktifkan akses workspace tersebut.</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: '8px' }}>
+              {workspaces.map(workspace => {
+                const assigned = editingDoc.workspaceAssignments?.find(item => item.workspaceId === workspace.id);
+                return <label key={workspace.id} style={{ display: 'flex', gap: '8px', alignItems: 'center', padding: '8px', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
+                  <input type="checkbox" checked={Boolean(assigned?.enabled)} disabled={busy} onChange={event => {
+                    const current = editingDoc.workspaceAssignments || [];
+                    const next = current.some(item => item.workspaceId === workspace.id)
+                      ? current.map(item => item.workspaceId === workspace.id ? { ...item, enabled: event.target.checked } : item)
+                      : [...current, { workspaceId: workspace.id, enabled: event.target.checked }];
+                    setEditingDoc({ ...editingDoc, workspaceAssignments: next });
+                  }} />
+                  <span>{workspace.name} <small style={{ color: 'var(--text-muted)' }}>({workspace.code})</small></span>
+                </label>;
+              })}
+            </div>
+          </fieldset>
+
           <div style={{ gridColumn: '1 / -1' }}>
             <label className="form-group">
               <span className="form-label">Teks Dokumen (Pisahkan antar paragraf/bab dengan baris kosong untuk pemecahan chunk)</span>
@@ -266,6 +288,7 @@ export const KnowledgeBaseView: React.FC<Props> = ({ documents, activeWorkspace,
                     <td style={{ padding: '12px 16px' }}>
                       <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{doc.title}</div>
                       <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '2px' }}>{doc.summary.substring(0, 60)}...</div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>{doc.workspaceAssignments?.filter(item => item.enabled).length || 0} workspace aktif</div>
                     </td>
                     <td style={{ padding: '12px 16px', fontSize: '0.88rem' }}>{doc.category.replace('_', ' ')}</td>
                     <td style={{ padding: '12px 16px' }}>

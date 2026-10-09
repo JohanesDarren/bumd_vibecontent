@@ -49,3 +49,12 @@ test('session endpoints reject missing credentials; CORS allows credentials', as
 test('login validates credentials without provisioning an account', async () => {
   assert.equal((await request('POST','/api/auth/login',{email:'not-an-email',password:'x'})).status,400);
 });
+
+test('company settings and KB writes require corporate or superadmin access', () => {
+  const creator={role:'creator',workspaces:[{id:'a'}]};
+  const corporate={role:'corporate',workspaces:[{id:'a'},{id:'b'}]};
+  assert.equal(permitted(creator,'a',true),false);
+  assert.equal(permitted(corporate,'a',true),true);
+  assert.equal(permitted(corporate,'other-company',true),false);
+  assert.equal(permitted({role:'superadmin',workspaces:[]},'a',true),true);
+});

@@ -14,6 +14,7 @@ export interface User {
 
 export interface Workspace {
   id: string;
+  companyId?: string | null;
   name: string;
   code: string;
   sector: string;
@@ -46,6 +47,7 @@ export interface KnowledgeChunk {
 export interface KnowledgeDocument {
   id: string;
   workspaceId: string;
+  workspaceAssignments?: { workspaceId: string; enabled: boolean }[];
   title: string;
   category: DocumentCategory;
   owner: string;

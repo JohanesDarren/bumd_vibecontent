@@ -14,7 +14,7 @@
     "test:db": "set NODE_ENV=test&& set DATABASE_URL=postgresql://vibecontent:vibecontent_dev@127.0.0.1:5435/vibecontent_test&& tsx --test --test-concurrency=1 server/empty.integration.test.ts server/database.integration.test.ts server/crud.integration.test.ts server/endpoints.integration.test.ts server/auth.integration.test.ts",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "test": "node --experimental-strip-types --experimental-specifier-resolution=node --test src/services/*.test.ts",
+    "test": "node --experimental-strip-types --experimental-specifier-resolution=node --test src/services/*.test.ts server/knowledgeAccess.test.ts server/security.test.ts",
     "test:visual": "tsx --test server/visual.test.ts",
     "preview": "vite preview"
   },

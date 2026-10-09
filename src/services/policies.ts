@@ -1,8 +1,8 @@
 import type { ActiveTab, DraftStatus, User, UserRole } from '../types/index.ts';
 
 const access: Record<UserRole, ActiveTab[]> = {
-  creator: ['dashboard', 'brief_studio', 'editor', 'visual_studio', 'content_scheduling', 'library', 'knowledge_base', 'settings_help'],
-  corporate: ['dashboard', 'content_scheduling', 'user_management', 'corporate_management', 'corporate_users', 'settings_help'],
+  creator: ['dashboard', 'brief_studio', 'editor', 'visual_studio', 'content_scheduling', 'library'],
+  corporate: ['dashboard', 'content_scheduling', 'user_management', 'corporate_management', 'corporate_users', 'knowledge_base', 'settings_help'],
   superadmin: ['dashboard', 'brief_studio', 'editor', 'visual_studio', 'library', 'brand_profile', 'knowledge_base', 'content_scheduling', 'user_management', 'admin_management', 'audit_log', 'settings_help']
 };
 

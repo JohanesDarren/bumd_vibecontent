@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import nodeCrypto from 'node:crypto';
 import pg from 'pg';
+import { normalizeWorkspaceAssignments } from './knowledgeAccess.ts';
 
 const { Pool } = pg;
 const defaultDatabaseUrl = process.env.NODE_ENV === 'test'
@@ -53,6 +54,14 @@ export async function runMigrations() {
   const customImage = await readFile(join(here, 'migrations', '007_schedule_custom_image.sql'), 'utf8');
   await pool.query(customImage);
   await pool.query(`INSERT INTO schema_migrations(name) VALUES ('007_schedule_custom_image') ON CONFLICT DO NOTHING`);
+  // Knowledge source scope + company-wide settings + workspace-level knowledge assignments.
+  const knowledgeScope = await readFile(join(here, 'migrations', '008_knowledge_company_scope.sql'), 'utf8');
+  await pool.query(knowledgeScope);
+  if (!(await pool.query("SELECT 1 FROM schema_migrations WHERE name='009_company_settings_workspace_knowledge'")).rowCount) {
+    const companySettingsKnowledge = await readFile(join(here, 'migrations', '009_company_settings_workspace_knowledge.sql'), 'utf8');
+    await pool.query(companySettingsKnowledge);
+    await pool.query("INSERT INTO schema_migrations(name) VALUES ('009_company_settings_workspace_knowledge') ON CONFLICT DO NOTHING");
+  }
 }
 
 const scrypt = promisify(nodeCrypto.scrypt);
@@ -72,7 +81,7 @@ export async function verifyPassword(password:string, stored:string):Promise<boo
 export async function organizationExists(id:string){const result=await pool.query('SELECT 1 FROM organizations WHERE id=$1',[id]);return (result.rowCount||0)>0;}
 
 export async function clearAllData() {
-  await pool.query('TRUNCATE content_schedules, audit_events, review_comments, draft_citations, draft_versions, content_drafts, content_briefs, knowledge_chunks, knowledge_sources, brand_profiles, workspace_settings, memberships, users, organizations RESTART IDENTITY CASCADE');
+  await pool.query('TRUNCATE content_schedules, audit_events, review_comments, draft_citations, draft_versions, content_drafts, content_briefs, knowledge_chunks, knowledge_sources, brand_profiles, workspace_settings, company_settings, memberships, users, organizations RESTART IDENTITY CASCADE');
 }
 
 export async function createOrganizationWithAdmin(input:{organizationName:string;code:string;sector:string;city:string;adminName:string;adminEmail:string;adminPassword?:string}) {
@@ -102,7 +111,7 @@ export async function createDraft(input: { workspaceId:string; title:string; for
     await client.query(`INSERT INTO content_drafts(id,organization_id,title,format,status,current_version,created_by,creator_name) VALUES($1,$2,$3,$4,'draft',1,$5,$6)`,[id,input.workspaceId,input.title,input.format,input.creatorId,member.rows[0].name]);
     await client.query(`INSERT INTO draft_versions(draft_id,version_number,content,created_by,change_summary) VALUES($1,1,$2,$3,'Initial version')`,[id,input.content,member.rows[0].name]);
     for (const sourceId of input.sourceIds || []) {
-      const source = await client.query(`SELECT id,title FROM knowledge_sources WHERE id=$1 AND organization_id=$2 AND status='aktif'`,[sourceId,input.workspaceId]);
+      const source = await client.query(`SELECT s.id,s.title FROM knowledge_sources s JOIN knowledge_source_workspaces a ON a.source_id=s.id WHERE s.id=$1 AND a.workspace_id=$2 AND a.enabled AND s.status='aktif'`,[sourceId,input.workspaceId]);
       if (!source.rowCount) continue;
       await client.query(`INSERT INTO draft_citations(id,draft_id,version_number,source_id,data) VALUES($1,$2,1,$3,$4::jsonb)`,[`cit-${id}-${sourceId}`,id,sourceId,JSON.stringify({documentId:sourceId,documentTitle:source.rows[0].title,section:'Sumber aktif',excerpt:'Rujukan tersimpan',relevanceScore:100,verified:true,claimExcerpt:''})]);
     }      await client.query(`INSERT INTO audit_events(organization_id,actor_id,actor_name,actor_role,action,object_type,object_id,object_name,details) VALUES($1,$2,$3,'creator','New Draft Created','draft',$4,$5,'Saved to PostgreSQL')`,[input.workspaceId,input.creatorId,member.rows[0].name,id,input.title]);
@@ -117,17 +126,17 @@ export async function listWorkspaceDrafts(workspaceId:string) {
 }
 
 export async function listBootstrap(workspaceId?:string) {
-  const workspacesResult=await pool.query('SELECT id,name,code,sector,city,tagline,primary_color AS "primaryColor",accent_color AS "accentColor",description FROM organizations ORDER BY created_at');
+  const workspacesResult=await pool.query('SELECT id,name,code,sector,city,company_id AS "companyId",tagline,primary_color AS "primaryColor",accent_color AS "accentColor",description FROM organizations ORDER BY created_at');
   const targetWorkspaceId=workspaceId || workspacesResult.rows[0]?.id;
   if(!targetWorkspaceId) return {workspaces:[],users:[],documents:[],drafts:[],briefs:[],auditLogs:[],brandProfile:null,settings:null};
   const [users,documents,drafts,briefs,auditLogs,brand,settings] = await Promise.all([
     pool.query('SELECT u.id,u.name,u.email,u.avatar,u.title,u.department,m.organization_id AS "workspaceId",m.role FROM users u JOIN memberships m ON m.user_id=u.id WHERE m.organization_id=$1 AND m.active',[targetWorkspaceId]),
-    pool.query(`SELECT s.id,s.organization_id AS "workspaceId",s.title,s.category,s.owner,s.version,s.effective_date AS "effectiveDate",s.status,s.upload_date AS "uploadDate",s.file_size AS "fileSize",s.summary,COALESCE(jsonb_agg(jsonb_build_object('id',c.id,'documentId',c.source_id,'section',c.section,'page',c.page,'content',c.content,'keywords',c.keywords)) FILTER (WHERE c.id IS NOT NULL),'[]') chunks FROM knowledge_sources s LEFT JOIN knowledge_chunks c ON c.source_id=s.id WHERE s.organization_id=$1 GROUP BY s.id`,[targetWorkspaceId]),
+    pool.query(`SELECT s.id,s.organization_id AS "workspaceId",s.title,s.category,s.owner,s.version,s.effective_date AS "effectiveDate",s.status,s.upload_date AS "uploadDate",s.file_size AS "fileSize",s.summary,COALESCE((SELECT jsonb_agg(jsonb_build_object('workspaceId',a.workspace_id,'enabled',a.enabled) ORDER BY o.name) FROM knowledge_source_workspaces a JOIN organizations o ON o.id=a.workspace_id WHERE a.source_id=s.id),'[]') AS "workspaceAssignments",COALESCE(jsonb_agg(jsonb_build_object('id',c.id,'documentId',c.source_id,'section',c.section,'page',c.page,'content',c.content,'keywords',c.keywords)) FILTER (WHERE c.id IS NOT NULL),'[]') chunks FROM knowledge_sources s LEFT JOIN knowledge_chunks c ON c.source_id=s.id WHERE (s.company_id IS NOT NULL AND s.company_id=(SELECT company_id FROM organizations WHERE id=$1)) OR (s.company_id IS NULL AND s.organization_id=$1) GROUP BY s.id`,[targetWorkspaceId]),
     listWorkspaceDrafts(targetWorkspaceId),
     pool.query('SELECT data FROM content_briefs WHERE organization_id=$1 ORDER BY created_at DESC',[targetWorkspaceId]),
     pool.query('SELECT id::text,organization_id AS "workspaceId",created_at AS timestamp,actor_name AS "actorName",actor_role AS "actorRole",action,object_type AS "objectType",object_id AS "objectId",object_name AS "objectName",details FROM audit_events WHERE organization_id=$1 ORDER BY created_at DESC',[targetWorkspaceId]),
     pool.query('SELECT data FROM brand_profiles WHERE organization_id=$1',[targetWorkspaceId]),
-    pool.query('SELECT data FROM workspace_settings WHERE organization_id=$1',[targetWorkspaceId])
+    pool.query('SELECT COALESCE((SELECT data FROM company_settings WHERE company_id=(SELECT company_id FROM organizations WHERE id=$1)),(SELECT data FROM workspace_settings WHERE organization_id=$1)) AS data',[targetWorkspaceId])
   ]);
   return { workspaces:workspacesResult.rows, users:users.rows, documents:documents.rows, drafts, briefs:briefs.rows.map(row=>row.data), auditLogs:auditLogs.rows, brandProfile:brand.rows[0]?.data ?? null, settings:settings.rows[0]?.data ?? null };
 }
@@ -160,11 +169,36 @@ export async function replaceDraft(draft:any) {
 
 export async function saveBrand(profile:any){await pool.query('INSERT INTO brand_profiles(organization_id,data,updated_at) VALUES($1,$2::jsonb,now()) ON CONFLICT(organization_id) DO UPDATE SET data=EXCLUDED.data,updated_at=now()',[profile.workspaceId,JSON.stringify(profile)]);return profile;}
 
-export async function getWorkspaceSettings(workspaceId:string){const result=await pool.query('SELECT data FROM workspace_settings WHERE organization_id=$1',[workspaceId]);return result.rows[0]?.data ?? null;}
-export async function saveWorkspaceSettings(workspaceId:string,data:any){await pool.query('INSERT INTO workspace_settings(organization_id,data,updated_at) VALUES($1,$2::jsonb,now()) ON CONFLICT(organization_id) DO UPDATE SET data=EXCLUDED.data,updated_at=now()',[workspaceId,JSON.stringify(data)]);return data;}
+export async function getWorkspaceSettings(workspaceId:string){const result=await pool.query('SELECT COALESCE((SELECT data FROM company_settings WHERE company_id=o.company_id),(SELECT data FROM workspace_settings WHERE organization_id=o.id)) AS data FROM organizations o WHERE o.id=$1',[workspaceId]);return result.rows[0]?.data ?? null;}
+export async function saveWorkspaceSettings(workspaceId:string,data:any){const result=await pool.query('INSERT INTO company_settings(company_id,data,updated_at) SELECT company_id,$2::jsonb,now() FROM organizations WHERE id=$1 AND company_id IS NOT NULL ON CONFLICT(company_id) DO UPDATE SET data=EXCLUDED.data,updated_at=now() RETURNING data',[workspaceId,JSON.stringify(data)]);if(!result.rowCount)throw new Error('Workspace has no company');return result.rows[0].data;}
+
+export async function getKnowledgeAssignments(sourceId:string){
+  return (await pool.query('SELECT workspace_id AS "workspaceId",enabled FROM knowledge_source_workspaces WHERE source_id=$1 ORDER BY workspace_id',[sourceId])).rows;
+}
 
 export async function saveKnowledgeSource(source:any){
-  const client=await pool.connect();try{await client.query('BEGIN');const uploadDate=source.uploadDate||source.effectiveDate||new Date().toISOString().slice(0,10);const saved=await client.query(`INSERT INTO knowledge_sources(id,organization_id,title,category,owner,version,effective_date,status,upload_date,file_size,summary) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT(id) DO UPDATE SET title=EXCLUDED.title,category=EXCLUDED.category,owner=EXCLUDED.owner,version=EXCLUDED.version,effective_date=EXCLUDED.effective_date,status=EXCLUDED.status,upload_date=EXCLUDED.upload_date,file_size=EXCLUDED.file_size,summary=EXCLUDED.summary WHERE knowledge_sources.organization_id=EXCLUDED.organization_id RETURNING id`,[source.id,source.workspaceId,source.title,source.category,source.owner,source.version,source.effectiveDate,source.status,uploadDate,source.fileSize??'',source.summary??'']);if(!saved.rowCount)throw new Error('Source ID already belongs to another workspace');await client.query('DELETE FROM knowledge_chunks WHERE source_id=$1',[source.id]);for(const chunk of source.chunks||[]) await client.query('INSERT INTO knowledge_chunks(id,source_id,section,page,content,keywords) VALUES($1,$2,$3,$4,$5,$6)',[chunk.id,source.id,chunk.section,chunk.page||null,chunk.content,chunk.keywords||[]]);await client.query('COMMIT');return source;}catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
+  const client=await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const workspace=(await client.query('SELECT company_id FROM organizations WHERE id=$1',[source.workspaceId])).rows[0];
+    if(!workspace?.company_id)throw new Error('Knowledge source workspace has no company');
+    const uploadDate=source.uploadDate||source.effectiveDate||new Date().toISOString().slice(0,10);
+    const saved=await client.query(`INSERT INTO knowledge_sources(id,organization_id,company_id,title,category,owner,version,effective_date,status,upload_date,file_size,summary) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT(id) DO UPDATE SET title=EXCLUDED.title,category=EXCLUDED.category,owner=EXCLUDED.owner,version=EXCLUDED.version,effective_date=EXCLUDED.effective_date,status=EXCLUDED.status,upload_date=EXCLUDED.upload_date,file_size=EXCLUDED.file_size,summary=EXCLUDED.summary WHERE knowledge_sources.company_id=EXCLUDED.company_id RETURNING id`,[source.id,source.workspaceId,workspace.company_id,source.title,source.category,source.owner,source.version,source.effectiveDate,source.status,uploadDate,source.fileSize??'',source.summary??'']);
+    if(!saved.rowCount)throw new Error('Source ID already belongs to another company');
+    let assignments;
+    if(source.workspaceAssignments!==undefined || (await client.query('SELECT 1 FROM knowledge_source_workspaces WHERE source_id=$1 LIMIT 1',[source.id])).rowCount===0){
+      assignments=normalizeWorkspaceAssignments(source.workspaceAssignments,source.workspaceId);
+      const ids=assignments.map((item:any)=>item.workspaceId);
+      const valid=ids.length?Number((await client.query('SELECT count(*)::int AS n FROM organizations WHERE id=ANY($1::text[]) AND company_id=$2',[ids,workspace.company_id])).rows[0].n):0;
+      if(valid!==ids.length)throw new Error('Knowledge can only be assigned to workspaces in its company');
+      await client.query('DELETE FROM knowledge_source_workspaces WHERE source_id=$1',[source.id]);
+      for(const assignment of assignments)await client.query('INSERT INTO knowledge_source_workspaces(source_id,workspace_id,enabled) VALUES($1,$2,$3)',[source.id,assignment.workspaceId,assignment.enabled]);
+    } else assignments=(await client.query('SELECT workspace_id AS "workspaceId",enabled FROM knowledge_source_workspaces WHERE source_id=$1 ORDER BY workspace_id',[source.id])).rows;
+    await client.query('DELETE FROM knowledge_chunks WHERE source_id=$1',[source.id]);
+    for(const chunk of source.chunks||[])await client.query('INSERT INTO knowledge_chunks(id,source_id,section,page,content,keywords) VALUES($1,$2,$3,$4,$5,$6)',[chunk.id,source.id,chunk.section,chunk.page||null,chunk.content,chunk.keywords||[]]);
+    await client.query('COMMIT');
+    return {...source,workspaceAssignments:assignments};
+  } catch(error){await client.query('ROLLBACK');throw error;} finally{client.release();}
 }
 
 export async function updateOrganization(id:string,input:any){const result=await pool.query('UPDATE organizations SET name=$2,code=$3,sector=$4,city=$5,tagline=$6,primary_color=$7,accent_color=$8,description=$9 WHERE id=$1 RETURNING id,name,code,sector,city,tagline,primary_color AS "primaryColor",accent_color AS "accentColor",description',[id,input.name,input.code.toUpperCase(),input.sector,input.city,input.tagline||'',input.primaryColor||'#0284c7',input.accentColor||'#0ea5e9',input.description||'']);if(!result.rowCount)throw new Error('Organization not found');return result.rows[0];}
@@ -201,7 +235,7 @@ export async function createUserMembership(workspaceId:string,input:any){const c
 }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}}
 
 export async function deleteUserMembership(workspaceId:string,userId:string){const client=await pool.connect();try{await client.query('BEGIN');await client.query('DELETE FROM memberships WHERE organization_id=$1 AND user_id=$2',[workspaceId,userId]);await client.query('COMMIT');}catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}}
-export async function deleteKnowledgeSource(workspaceId:string,id:string){await pool.query('DELETE FROM knowledge_sources WHERE organization_id=$1 AND id=$2',[workspaceId,id]);}
+export async function deleteKnowledgeSource(workspaceId:string,id:string){await pool.query('DELETE FROM knowledge_sources WHERE id=$2 AND (company_id IS NOT DISTINCT FROM (SELECT company_id FROM organizations WHERE id=$1))',[workspaceId,id]);}
 export async function deleteBrand(workspaceId:string){await pool.query('DELETE FROM brand_profiles WHERE organization_id=$1',[workspaceId]);}
 export async function deleteDraft(workspaceId:string,id:string){await pool.query('DELETE FROM content_drafts WHERE organization_id=$1 AND id=$2',[workspaceId,id]);}
 
