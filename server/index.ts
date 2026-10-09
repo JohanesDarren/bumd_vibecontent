@@ -6,14 +6,13 @@ import express from 'express';
 import cors from 'cors';
 import { 
   createDraft, createUserMembership, deleteBrand, deleteDraft, deleteKnowledgeSource, getKnowledgeAssignments,
-  deleteSchedule, deleteUserMembership, getWorkspaceSettings, getUserWorkspaces, 
+  deleteSchedule, deleteUserMembership, getWorkspaceSettings,
   listBootstrap, listSchedules, listWorkspaceDrafts, organizationExists, pool, 
   replaceDraft, runMigrations, saveBrand, saveKnowledgeSource, saveSchedule, 
   saveWorkspaceSettings, updateOrganization, ScheduleRuleError, getSchedulePostLink, 
-  setScheduleCustomImage, setSchedulePostImage, clearAllData, registerUser, 
-  authenticateUser, claimLegacyPassword 
+  setScheduleCustomImage, setSchedulePostImage
 } from './database.ts';
-import { authenticate, login, logout, permitted, provisionSuperadmin, requireAdmin, requireMember, requireWorkspace } from './security.ts';
+import { authenticate, login, logout, permitted, provisionSuperadmin, requireMember, requireWorkspace } from './security.ts';
 import { randomUUID } from 'node:crypto';
 import { assignCompanyUser, createCompanyUser, listCompanyUsers } from './companyUsers.ts';
 import { publish, subscribe, unsubscribe, subscriberCount, resolveScope } from './events.ts';
@@ -28,9 +27,9 @@ app.use(express.json({ limit: '8mb' }));
 app.use('/api',(req,res,next)=>{if(['GET','HEAD','OPTIONS'].includes(req.method))return next();const origin=req.headers.origin;if(origin&&!allowedOrigins.includes(origin))return res.status(403).json({error:'Origin denied'});next();});
 
 const isNonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0;
-const contentOnly=(req:express.Request,res:express.Response,next:express.NextFunction)=>res.locals.user.role==='corporate'?res.status(403).json({error:'Corporate accounts cannot create or edit content'}):next();
+const contentOnly=(req:express.Request<any>,res:express.Response,next:express.NextFunction)=>res.locals.user.role==='corporate'?res.status(403).json({error:'Corporate accounts cannot create or edit content'}):next();
 // Corporate owns the company corpus; assignments determine which workspace RAG can retrieve it from.
-const knowledgeManager=(req:express.Request,res:express.Response,next:express.NextFunction)=>['corporate','superadmin'].includes(res.locals.user.role)?next():res.status(403).json({error:'Corporate account required to manage the knowledge base'});
+const knowledgeManager=(req:express.Request<any>,res:express.Response,next:express.NextFunction)=>['corporate','superadmin'].includes(res.locals.user.role)?next():res.status(403).json({error:'Corporate account required to manage the knowledge base'});
 const workspaceScopeFor=(workspaceId:string)=>workspaceId;
 
 app.post('/api/visual/generate', authenticate, contentOnly, requireWorkspace(req=>req.body?.workspaceId), async (req, res) => {
@@ -91,7 +90,7 @@ app.put('/api/auth/password',authenticate,async(req,res,next)=>{try{
   await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2',[await hashPassword(newPassword),res.locals.user.id]);
   res.json({ok:true});
 }catch(e){next(e);}});
-app.post('/api/auth/logout',authenticate,async(req,res,next)=>{try{await logout(req,res);res.json({ok:true});}catch(error){next(error);}});
+app.post('/api/auth/logout',async(req,res,next)=>{try{await logout(req,res);res.json({ok:true});}catch(error){next(error);}});
 app.use('/api',authenticate);
 
 // ---------------------------------------------------------------------------
@@ -130,8 +129,8 @@ app.use('/api',(req,res,next)=>{
 });
 app.get('/api/users/:userId/workspaces',(req,res)=>req.params.userId===res.locals.user.id||res.locals.user.role==='superadmin'?res.json(res.locals.user.workspaces):res.status(403).json({error:'Access denied'}));
 app.get('/api/bootstrap', async (req,res,next) => { try {const user=res.locals.user;const workspaceId=String(req.query.workspaceId||user.workspaces[0]?.id||'');if(!permitted(user,workspaceId))return res.status(403).json({error:'Workspace access denied'});const data=await listBootstrap(workspaceId);data.workspaces=data.workspaces.filter((w:any)=>permitted(user,w.id));if(user.role==='creator')data.documents=data.documents.filter((doc:any)=>doc.status==='aktif'&&doc.workspaceAssignments?.some((a:any)=>a.workspaceId===workspaceId&&a.enabled));res.json(data); } catch(error){next(error);} });
-const globalOnly=(req:express.Request,res:express.Response,next:express.NextFunction)=>res.locals.user.role==='superadmin'?next():res.status(403).json({error:'Superadmin required'});
-const corporateOnly=(req:express.Request,res:express.Response,next:express.NextFunction)=>['corporate','superadmin'].includes(res.locals.user.role)?next():res.status(403).json({error:'Corporate role required'});
+const globalOnly=(req:express.Request<any>,res:express.Response,next:express.NextFunction)=>res.locals.user.role==='superadmin'?next():res.status(403).json({error:'Superadmin required'});
+const corporateOnly=(req:express.Request<any>,res:express.Response,next:express.NextFunction)=>['corporate','superadmin'].includes(res.locals.user.role)?next():res.status(403).json({error:'Corporate role required'});
 app.get('/api/admin/overview',globalOnly,async(_req,res,next)=>{try{
   const [companies,workspaces,users,drafts,sources,audit]=await Promise.all([
     pool.query(`SELECT c.id,c.name,(SELECT count(*) FROM organizations o WHERE o.company_id=c.id)::int AS "workspaceCount",(SELECT count(*) FROM users u WHERE u.company_id=c.id OR EXISTS(SELECT 1 FROM memberships m JOIN organizations o2 ON o2.id=m.organization_id WHERE m.user_id=u.id AND o2.company_id=c.id))::int AS "userCount" FROM companies c ORDER BY c.name`),
@@ -214,7 +213,7 @@ app.post('/api/corporate/workspaces/:workspaceId/members',corporateOnly,requireW
 app.delete('/api/corporate/workspaces/:workspaceId/members/:userId',corporateOnly,requireWorkspace(req=>req.params.workspaceId,true),async(req,res,next)=>{try{await deleteUserMembership(req.params.workspaceId,req.params.userId);res.json({ok:true});}catch(e){next(e);}});
 app.get('/api/workspaces/:workspaceId/drafts', requireWorkspace(req=>req.params.workspaceId), async (req,res,next) => { try { res.json(await listWorkspaceDrafts(req.params.workspaceId)); } catch(error){next(error);} });
 app.post('/api/drafts', contentOnly, requireWorkspace(req=>req.body?.workspaceId), async (req,res,next) => { try { const {workspaceId,title,format,content}=req.body||{}; const creatorId=res.locals.user.id; if(!workspaceId||!title||!format||!content) return res.status(400).json({error:'workspaceId, title, format, and content are required'}); res.status(201).json(await createDraft({workspaceId,title,format,creatorId,content,sourceIds:req.body?.sourceIds})); } catch(error){next(error);} });
-app.put('/api/drafts/:id',contentOnly,requireWorkspace(req=>req.body?.workspaceId),async(req,res,next)=>{try{if(req.params.id!==req.body?.id)return res.status(400).json({error:'Draft ID mismatch'});if(!isNonEmptyString(req.body.workspaceId))return res.status(400).json({error:'workspaceId is required'});const draft={...req.body,createdBy:res.locals.user.id};res.json(await replaceDraft(draft));}catch(error){next(error);}});
+app.put('/api/drafts/:id',contentOnly,requireWorkspace(req=>req.body?.workspaceId),async(req,res,next)=>{try{if(req.params.id!==req.body?.id)return res.status(400).json({error:'Draft ID mismatch'});if(!isNonEmptyString(req.body.workspaceId))return res.status(400).json({error:'workspaceId is required'});const createdBy=res.locals.user.id;const draft={...req.body,createdBy,brief:req.body.brief&&{...req.body.brief,createdBy}};res.json(await replaceDraft(draft));}catch(error){next(error);}});
 app.put('/api/brand-profile',contentOnly,requireWorkspace(req=>req.body?.workspaceId,true),async(req,res,next)=>{try{res.json(await saveBrand(req.body));}catch(error){next(error);}});
 app.put('/api/knowledge-sources/:id',knowledgeManager,requireWorkspace(req=>req.body?.workspaceId,true),async(req,res,next)=>{try{if(req.params.id!==req.body?.id)return res.status(400).json({error:'Source ID mismatch'});const previous=await getKnowledgeAssignments(req.params.id);const saved=await saveKnowledgeSource(req.body);const nextAssignments=saved.workspaceAssignments||[];const touched=new Set([...previous.map((a:any)=>a.workspaceId),...nextAssignments.map((a:any)=>a.workspaceId)]);let ragSynced=true;for(const workspaceId of touched){const assignment=nextAssignments.find((a:any)=>a.workspaceId===workspaceId&&a.enabled);const ok=assignment&&saved.status==='aktif'?await syncKnowledgeDocToRag(workspaceScopeFor(workspaceId),saved):await removeKnowledgeDocFromRag(workspaceScopeFor(workspaceId),saved.id);ragSynced=ok&&ragSynced;}res.json({...saved,ragSynced});}catch(error){next(error);}});
 app.put('/api/organizations/:id',requireWorkspace(req=>req.params.id,true),async(req,res,next)=>{try{if(!(await organizationExists(req.params.id)))return res.status(404).json({error:'Organization not found'});const {name,code,sector,city}=req.body||{};if(!isNonEmptyString(name)||!isNonEmptyString(code)||!isNonEmptyString(sector)||!isNonEmptyString(city))return res.status(400).json({error:'name, code, sector, and city are required'});res.json(await updateOrganization(req.params.id,req.body));}catch(error){next(error);}});
@@ -246,6 +245,7 @@ app.use((error:unknown,_req:express.Request,res:express.Response,_next:express.N
 const port=Number(process.env.API_PORT||3005);
 if(process.env.NODE_ENV!=='test') {
   runMigrations()
+    .then(provisionSuperadmin)
     .then(() => app.listen(port, () => console.log(`VibeContent API http://127.0.0.1:${port}`)))
     .catch(async error => {
       console.error('Database migrations failed; API server was not started.', error);

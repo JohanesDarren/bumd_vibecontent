@@ -148,7 +148,8 @@ export async function replaceDraft(draft:any) {
     const member=await client.query(`SELECT u.name,u.global_role AS role FROM users u JOIN organizations o ON o.id=$1 WHERE u.id=$2 AND (u.global_role='superadmin' OR (u.global_role='corporate' AND u.company_id=o.company_id) OR EXISTS (SELECT 1 FROM memberships m WHERE m.organization_id=o.id AND m.user_id=u.id AND m.active))`,[draft.workspaceId,draft.createdBy]);
     if(!member.rowCount) throw new Error('Creator is not a member of this workspace');
     if(draft.brief){
-      if(draft.brief.id!==draft.briefId||draft.brief.workspaceId!==draft.workspaceId||draft.brief.createdBy!==draft.createdBy) throw new Error('Brief does not match the draft workspace, ID, or creator');
+      const mismatched=[draft.brief.id!==draft.briefId&&'id',draft.brief.workspaceId!==draft.workspaceId&&'workspaceId',draft.brief.createdBy!==draft.createdBy&&'createdBy'].filter(Boolean);
+      if(mismatched.length) throw new Error(`Brief does not match the draft: ${mismatched.join(', ')}`);
       const savedBrief=await client.query(`INSERT INTO content_briefs(id,organization_id,created_by,data) VALUES($1,$2,$3,$4::jsonb) ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data WHERE content_briefs.organization_id=EXCLUDED.organization_id RETURNING id`,[draft.brief.id,draft.workspaceId,draft.createdBy,JSON.stringify(draft.brief)]);
       if(!savedBrief.rowCount) throw new Error('Brief ID already belongs to another workspace');
     }
@@ -221,8 +222,9 @@ export async function createUserMembership(workspaceId:string,input:any){const c
   }
   else {
     // password_hash is NOT NULL (migration 002): use the admin-supplied password or generate a temporary one.
-    tempPassword = adminPassword ?? nodeCrypto.randomBytes(4).toString('hex');
-    const passwordHash = await hashPassword(tempPassword);
+    const password = adminPassword ?? nodeCrypto.randomBytes(4).toString('hex');
+    tempPassword = password;
+    const passwordHash = await hashPassword(password);
     const id=`usr-${nodeCrypto.randomUUID()}`;
     await client.query(`INSERT INTO users(id,name,email,avatar,title,department,password_hash,global_role,company_id) VALUES($1,$2,$3,$4,$5,$6,$7,'creator',(SELECT company_id FROM organizations WHERE id=$8))`,[id,input.name,String(input.email||'').toLowerCase().trim(),input.avatar||'',input.title||'',input.department||'',passwordHash,workspaceId]);
     userId=id;

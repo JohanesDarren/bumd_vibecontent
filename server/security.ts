@@ -57,16 +57,16 @@ export function permitted(user:any,workspaceId:unknown,manage=false) {
   if(!user.workspaces.some((w:any)=>w.id===workspaceId)) return false;
   return !manage || user.role==='corporate';
 }
-export function requireWorkspace(source:(req:Request)=>unknown,manage=false) {
-  return (req:Request,res:Response,next:NextFunction) => permitted(res.locals.user,source(req),manage) ? next() : res.status(403).json({error:'Workspace access denied'});
+export function requireWorkspace(source:(req:Request<any>)=>unknown,manage=false) {
+  return (req:Request<any>,res:Response,next:NextFunction) => permitted(res.locals.user,source(req),manage) ? next() : res.status(403).json({error:'Workspace access denied'});
 }
 // Compatibility aliases for routes that arrived from the incoming branch. Those routes were
 // written against a JWT guard (requireWorkspaceRole + Bearer token) that the merge dropped in
 // favour of this cookie-session model. Mapping the names onto requireWorkspace keeps their
 // authorisation semantics identical to every neighbouring route: requireAdmin == the manage
 // tier (corporate/superadmin), requireMember == plain workspace membership.
-export const requireAdmin = (source:(req:Request)=>unknown) => requireWorkspace(source,true);
-export const requireMember = (source:(req:Request)=>unknown) => requireWorkspace(source);
+export const requireAdmin = (source:(req:Request<any>)=>unknown) => requireWorkspace(source,true);
+export const requireMember = (source:(req:Request<any>)=>unknown) => requireWorkspace(source);
 export async function provisionSuperadmin() {
   const email=process.env.SUPERADMIN_EMAIL?.trim().toLowerCase();
   const password=process.env.SUPERADMIN_PASSWORD;

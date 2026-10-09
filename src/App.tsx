@@ -174,6 +174,8 @@ export function App() {
 
   // Logout
   const handleLogout = (msg?: string | React.MouseEvent | React.FormEvent) => {
+    // Revoke the server session too; the HttpOnly cookie would otherwise restore it on refresh.
+    void apiService.logout().catch(() => {});
     setAuthenticated(false);
     setAuthUser(null);
     setActiveWorkspace(null);
