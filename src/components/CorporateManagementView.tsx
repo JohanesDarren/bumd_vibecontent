@@ -107,7 +107,7 @@ export const CorporateManagementView: React.FC<{ onOpen: (id: string) => void }>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
             <span style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--accent-cyan)' }}>
-              ENTITAS KORPORAT • UNIT KERJA BUMD
+              ENTITAS KORPORAT • UNIT KERJA 
             </span>
           </div>
           <h2 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -115,7 +115,7 @@ export const CorporateManagementView: React.FC<{ onOpen: (id: string) => void }>
             Workspace Perusahaan
           </h2>
           <p className="page-subtitle">
-            Daftar, konfigurasi, dan isolasi lingkungan kerja untuk setiap unit atau anak perusahaan BUMD.
+            Daftar, konfigurasi, dan isolasi lingkungan kerja untuk setiap unit atau anak perusahaan .
           </p>
         </div>
       </div>
@@ -213,7 +213,7 @@ export const CorporateManagementView: React.FC<{ onOpen: (id: string) => void }>
               />
             </div>
             <div>
-              <label className="form-label" style={{ marginBottom: '6px' }}>Sektor BUMD *</label>
+              <label className="form-label" style={{ marginBottom: '6px' }}>Sektor  *</label>
               <input 
                 required 
                 placeholder="cth. Utilitas Air Bersih / Transportasi"
@@ -280,7 +280,7 @@ export const CorporateManagementView: React.FC<{ onOpen: (id: string) => void }>
                 <tr>
                   <th>Nama Workspace &amp; Unit</th>
                   <th>Kode Sistem</th>
-                  <th>Sektor BUMD</th>
+                  <th>Sektor </th>
                   <th>Kota / Lokasi</th>
                   <th style={{ textAlign: 'right' }}>Aksi</th>
                 </tr>
@@ -368,7 +368,7 @@ export const CorporateManagementView: React.FC<{ onOpen: (id: string) => void }>
         )}
 
         <div className="corporate-table-footer">
-          <span>Menampilkan {visible.length} dari {workspaces.length} workspace BUMD</span>
+          <span>Menampilkan {visible.length} dari {workspaces.length} workspace </span>
           <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <ShieldCheck size={14} style={{ color: 'var(--accent-emerald)' }} />
             Isolasi Tenant Terverifikasi

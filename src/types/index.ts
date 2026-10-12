@@ -58,6 +58,9 @@ export interface KnowledgeDocument {
   fileSize: string;
   summary: string;
   chunks: KnowledgeChunk[];
+  kmsDocumentId?: string;
+  kmsStatus?: 'pending' | 'processing' | 'indexed' | 'failed';
+  kmsError?: string;
 }
 
 export interface TerminologyItem {
@@ -258,6 +261,14 @@ export type ScheduleStatus = 'draft' | 'scheduled' | 'published';
 export type SchedulePlatform = 'instagram' | 'facebook' | 'twitter' | 'linkedin' | 'youtube';
 export type SchedulePillar = 'edukasi' | 'layanan' | 'korporat';
 
+export interface ScheduleComment {
+  id: string;
+  authorName: string;
+  authorRole: 'corporate' | 'superadmin';
+  text: string;
+  createdAt: string;
+}
+
 export interface ScheduledContent {
   id: string;
   workspaceId: string;
@@ -279,4 +290,5 @@ export interface ScheduledContent {
   /** Replacement cover chosen by the team (uploaded or AI-generated, data URL). */
   customImage?: string | null;
   customImageSource?: 'upload' | 'ai' | null;
+  comments?: ScheduleComment[];
 }

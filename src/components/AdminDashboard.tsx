@@ -27,7 +27,7 @@ type Tab = 'ringkasan' | 'perusahaan' | 'workspace' | 'pengguna' | 'kreator' | '
 
 const TABS: { id: Tab; label: string; icon: React.ComponentType<{ size?: number }> }[] = [
   { id: 'ringkasan', label: 'Ringkasan Admin', icon: LayoutDashboard },
-  { id: 'perusahaan', label: 'Data Master BUMD', icon: Building2 },
+  { id: 'perusahaan', label: 'Data Master ', icon: Building2 },
   { id: 'workspace', label: 'Manajemen Workspace', icon: Layers },
   { id: 'pengguna', label: 'Pengguna & Peran', icon: Users },
   { id: 'kreator', label: 'Kreator Perusahaan', icon: UserCheck },
@@ -102,7 +102,7 @@ export const AdminDashboard: React.FC<{ onOpen: (id: string) => void; onLogout: 
                 Ringkasan Sistem &amp; Tata Kelola
               </h2>
               <p className="page-subtitle">
-                Kondisi terkini seluruh perusahaan induk, unit kerja workspace BUMD, dan akun pengguna pada platform.
+                Kondisi terkini seluruh perusahaan induk, unit kerja workspace , dan akun pengguna pada platform.
               </p>
             </div>
 
@@ -153,7 +153,7 @@ export const AdminDashboard: React.FC<{ onOpen: (id: string) => void; onLogout: 
               <div>
                 <div className="corporate-table-title">
                   <Building2 size={20} style={{ color: 'var(--primary)' }} />
-                  <span>Data Master Entitas BUMD</span>
+                  <span>Data Master Entitas </span>
                 </div>
                 <p className="corporate-table-subtitle">Perusahaan induk beserta jumlah unit kerja workspace dan akun terhubung.</p>
               </div>
@@ -221,7 +221,7 @@ export const AdminDashboard: React.FC<{ onOpen: (id: string) => void; onLogout: 
 
             <div className="corporate-table-footer">
               <span>
-                {loading ? 'Memuat ringkasan…' : !overview?.companies.length ? 'Belum ada perusahaan terdaftar.' : `Total ${overview.companies.length} entitas induk BUMD terdaftar.`}
+                {loading ? 'Memuat ringkasan…' : !overview?.companies.length ? 'Belum ada perusahaan terdaftar.' : `Total ${overview.companies.length} entitas induk  terdaftar.`}
               </span>
               <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <CheckCircle2 size={14} style={{ color: 'var(--accent-emerald)' }} />
@@ -322,7 +322,7 @@ export const AdminDashboard: React.FC<{ onOpen: (id: string) => void; onLogout: 
                   Ringkasan Sistem &amp; Tata Kelola
                 </h2>
                 <p className="page-subtitle">
-                  Kondisi terkini seluruh perusahaan induk, unit kerja workspace BUMD, dan akun pengguna pada platform.
+                  Kondisi terkini seluruh perusahaan induk, unit kerja workspace , dan akun pengguna pada platform.
                 </p>
               </div>
 
@@ -373,7 +373,7 @@ export const AdminDashboard: React.FC<{ onOpen: (id: string) => void; onLogout: 
                 <div>
                   <div className="corporate-table-title">
                     <Building2 size={20} style={{ color: 'var(--primary)' }} />
-                    <span>Data Master Entitas BUMD</span>
+                    <span>Data Master Entitas </span>
                   </div>
                   <p className="corporate-table-subtitle">Perusahaan induk beserta jumlah unit kerja workspace dan akun terhubung.</p>
                 </div>
@@ -441,7 +441,7 @@ export const AdminDashboard: React.FC<{ onOpen: (id: string) => void; onLogout: 
 
               <div className="corporate-table-footer">
                 <span>
-                  {loading ? 'Memuat ringkasan…' : !overview?.companies.length ? 'Belum ada perusahaan terdaftar.' : `Total ${overview.companies.length} entitas induk BUMD terdaftar.`}
+                  {loading ? 'Memuat ringkasan…' : !overview?.companies.length ? 'Belum ada perusahaan terdaftar.' : `Total ${overview.companies.length} entitas induk  terdaftar.`}
                 </span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <CheckCircle2 size={14} style={{ color: 'var(--accent-emerald)' }} />

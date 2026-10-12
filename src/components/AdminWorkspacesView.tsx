@@ -139,7 +139,7 @@ export const AdminWorkspacesView: React.FC<{ onOpen: (id: string) => void }> = (
             Manajemen Workspace
           </h2>
           <p className="page-subtitle">
-            Buat, konfigurasi, dan kelola alokasi unit kerja BUMD di seluruh entitas holding perusahaan terdaftar.
+            Buat, konfigurasi, dan kelola alokasi unit kerja  di seluruh entitas holding perusahaan terdaftar.
           </p>
         </div>
       </div>
@@ -236,7 +236,7 @@ export const AdminWorkspacesView: React.FC<{ onOpen: (id: string) => void }> = (
 
           {!companies.length && (
             <div style={{ padding: '12px 16px', background: 'rgba(245, 158, 11, 0.08)', borderRadius: '10px', color: '#d97706', fontSize: '0.85rem', marginBottom: '16px' }}>
-              Peringatan: Belum ada perusahaan induk terdaftar. Silakan buat perusahaan terlebih dahulu di menu Data Master BUMD.
+              Peringatan: Belum ada perusahaan induk terdaftar. Silakan buat perusahaan terlebih dahulu di menu Data Master .
             </div>
           )}
 
@@ -281,7 +281,7 @@ export const AdminWorkspacesView: React.FC<{ onOpen: (id: string) => void }> = (
             </div>
 
             <div>
-              <label className="form-label" style={{ marginBottom: '6px' }}>Sektor BUMD *</label>
+              <label className="form-label" style={{ marginBottom: '6px' }}>Sektor  *</label>
               <input 
                 required 
                 className="form-input"
@@ -322,7 +322,7 @@ export const AdminWorkspacesView: React.FC<{ onOpen: (id: string) => void }> = (
               <Layers size={20} style={{ color: 'var(--primary)' }} />
               <span>Daftar Seluruh Workspace Unit Kerja</span>
             </div>
-            <p className="corporate-table-subtitle">Unit kerja operasional yang dikelompokkan berdasarkan entitas induk BUMD.</p>
+            <p className="corporate-table-subtitle">Unit kerja operasional yang dikelompokkan berdasarkan entitas induk .</p>
           </div>
         </div>
 

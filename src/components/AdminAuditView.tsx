@@ -90,7 +90,7 @@ export const AdminAuditView: React.FC = () => {
             Jejak Audit Sistem
           </h2>
           <p className="page-subtitle">
-            Rekaman aktivitas mutasi konten, perubahan entitas, dan keputusan editorial untuk kepatuhan tata kelola BUMD.
+            Rekaman aktivitas mutasi konten, perubahan entitas, dan keputusan editorial untuk kepatuhan tata kelola .
           </p>
         </div>
       </div>
@@ -178,7 +178,7 @@ export const AdminAuditView: React.FC = () => {
               <ShieldCheck size={20} style={{ color: 'var(--primary)' }} />
               <span>Log Peristiwa Sistem &amp; Transaksi Data</span>
             </div>
-            <p className="corporate-table-subtitle">100 catatan transaksi data paling mutakhir dari seluruh entitas BUMD.</p>
+            <p className="corporate-table-subtitle">100 catatan transaksi data paling mutakhir dari seluruh entitas .</p>
           </div>
         </div>
 

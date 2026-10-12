@@ -168,7 +168,7 @@ export const AdminAccountsView: React.FC = () => {
             Pengguna &amp; Peran Sistem
           </h2>
           <p className="page-subtitle">
-            Kelola akun superadmin, admin korporat BUMD, dan kreator beserta hak akses entitas holding.
+            Kelola akun superadmin, admin korporat , dan kreator beserta hak akses entitas holding.
           </p>
         </div>
       </div>
@@ -254,7 +254,7 @@ export const AdminAccountsView: React.FC = () => {
                   {form.id ? `Ubah Akun: ${form.name}` : 'Buat Akun Pengguna Baru'}
                 </h3>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                  Tentukan peran sistem, kata sandi, dan entitas holding BUMD yang terhubung.
+                  Tentukan peran sistem, kata sandi, dan entitas holding  yang terhubung.
                 </p>
               </div>
             </div>
@@ -318,7 +318,7 @@ export const AdminAccountsView: React.FC = () => {
 
             {form.role !== 'superadmin' && (
               <div>
-                <label className="form-label" style={{ marginBottom: '6px' }}>Perusahaan Induk BUMD *</label>
+                <label className="form-label" style={{ marginBottom: '6px' }}>Perusahaan Induk  *</label>
                 <select 
                   required 
                   className="form-select"

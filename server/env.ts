@@ -9,6 +9,7 @@ if (process.env.NODE_ENV !== 'test') dotenv.config({ path: '.env.local', overrid
 export const env = {
   ragApiUrl: process.env.RAG_API_URL || '',
   ragApiKey: process.env.RAG_API_KEY || '',
+
   jwtSecret: process.env.JWT_SECRET || nodeCrypto.randomBytes(32).toString('hex')
 };
 

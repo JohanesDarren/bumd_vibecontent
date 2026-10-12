@@ -9,15 +9,13 @@ import {
 } from '../types';
 import { 
   FileText, 
-  Clock, 
   CheckCircle2, 
-
-  ArrowRight, 
   Sparkles, 
   AlertTriangle, 
   ShieldCheck,
   PlusCircle,
-  Eye
+  Eye,
+  ArrowRight
 } from 'lucide-react';
 
 interface DashboardViewProps {
@@ -39,9 +37,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigate,
   onSelectDraft
 }) => {
-  const pendingReviewDrafts = drafts.filter(d => d.status === 'menunggu_review');
-  const approvedDrafts = drafts.filter(d => d.status === 'disetujui');
-
 
   return (
     <div>
@@ -60,7 +55,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
               <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--accent-cyan)' }}>
-                Portal Kerja BUMD Terpadu
+                Portal Kerja  Terpadu
               </span>
               <span className="status-pill disetujui" style={{ fontSize: '0.68rem', padding: '2px 8px' }}>
                 <ShieldCheck size={12} /> Grounding Terverifikasi
@@ -70,7 +65,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               Selamat datang, {activeUser.name}
             </h2>
             <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', maxWidth: '650px' }}>
-              Workspace resmi <strong>{activeWorkspace.name}</strong>. Produksi draf promosi, siaran pers, dan konten multimedia hanya bersumber dari dokumen yang disetujui resmi oleh direksi.
+              Workspace <strong>{activeWorkspace.name}</strong>. Buat brief, hasilkan konten, edit versi, lalu pilih versi untuk visualisasi.
             </p>
           </div>
 
@@ -100,94 +95,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        <div className="card-panel" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(245, 158, 11, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-amber)' }}>
-            <Clock size={24} />
-          </div>
-          <div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>Perlu Konfirmasi</div>
-            <div style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--accent-amber)' }}>{pendingReviewDrafts.length}</div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Buka di Editor lalu setujui sendiri</div>
-          </div>
-        </div>
-
-        <div className="card-panel" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(16, 185, 129, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-emerald)' }}>
-            <CheckCircle2 size={24} />
-          </div>
-          <div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>Disetujui & Siap Pakai</div>
-            <div style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--accent-emerald)' }}>{approvedDrafts.length}</div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Siap masuk Studio Visual</div>
-          </div>
-        </div>
-
-
       </div>
 
-      {/* Main Grid: Pending Approvals & Recent Drafts */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: '24px', marginBottom: '32px' }}>
-        {/* Review Queue Card */}
-        <div className="card-panel">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Clock size={18} color="var(--accent-amber)" />
-              <h3 style={{ fontSize: '1.05rem', fontWeight: 700 }}>Brief Belum Disetujui</h3>
-            </div>
-            <button 
-              className="btn btn-secondary btn-sm"
-              onClick={() => onNavigate('editor')}
-            >
-              <span>Buka Editor</span>
-              <ArrowRight size={14} />
-            </button>
-          </div>
-
-          {pendingReviewDrafts.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--text-muted)' }}>
-              <CheckCircle2 size={36} color="var(--accent-emerald)" style={{ margin: '0 auto 8px', opacity: 0.8 }} />
-              <p style={{ fontSize: '0.88rem' }}>Tidak ada draf yang menunggu persetujuan.</p>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {pendingReviewDrafts.map(d => (
-                <div 
-                  key={d.id}
-                  style={{
-                    padding: '14px',
-                    borderRadius: '12px',
-                    background: 'var(--bg-tertiary)',
-                    border: '1px solid var(--border-subtle)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '12px'
-                  }}
-                >
-                  <div>
-                    <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>
-                      {d.title}
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      By: <strong>{d.creatorName}</strong> • Versi {d.currentVersionon} • {d.format.replace('_', ' ').toUpperCase()}
-                    </div>
-                  </div>
-                  <button 
-                    className="btn btn-warning btn-sm"
-                    onClick={() => {
-                      onSelectDraft(d.id);
-                      onNavigate('editor');
-                    }}
-                  >
-                    <span>Edit</span>
-                    <ArrowRight size={12} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: '24px', marginBottom: '32px' }}>
         {/* Brand & Grounding Guidelines Quickcard */}
         <div className="card-panel">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
@@ -233,7 +143,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
 
             <div style={{ marginTop: '4px', padding: '10px 12px', borderRadius: '8px', background: 'rgba(13, 12, 189, 0.08)', border: '1px dashed rgba(13, 12, 189, 0.3)', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-              <strong>Prinsip Anti-Halusinasi BUMD:</strong> VibeContent menolak klaim publik tanpa referensi SK atau SOP resmi. Jika data tidak terdaftar, draf akan ditandai <code>[Perlu Verifikasi]</code>.
+              <strong>Prinsip Anti-Halusinasi :</strong> VibeContent menolak klaim publik tanpa referensi SK atau SOP resmi. Jika data tidak terdaftar, draf akan ditandai <code>[Perlu Verifikasi]</code>.
             </div>
           </div>
         </div>
@@ -282,12 +192,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       {d.format === 'brief_visual' && 'Grafis Visual'}
                     </td>
                     <td style={{ padding: '12px 14px' }}>
-                      <span className={`status-pill ${d.status}`}>
-                        {d.status === 'draft' && 'Draf'}
-                        {d.status === 'menunggu_review' && 'Menunggu Review'}
-                        {d.status === 'revisi_diminta' && 'Revisi Diminta'}
-                        {d.status === 'disetujui' && 'Disetujui'}
-                        {d.status === 'diarsipkan' && 'Diarsipkan'}
+                      <span className={`status-pill ${d.status === 'diarsipkan' ? 'diarsipkan' : 'draft'}`}>
+                        {d.status === 'diarsipkan' ? 'Diarsipkan' : 'Draf'}
                       </span>
                     </td>
                     <td style={{ padding: '12px 14px' }}>

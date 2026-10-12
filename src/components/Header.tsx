@@ -1,23 +1,26 @@
 import React, { useState } from 'react';
 import { 
-  Workspace, 
-  User, 
-  UserRole 
+  Workspace,
+  User,
+  ActiveTab
 } from '../types';
 import { 
-  Building2, 
+  Building2,
   ChevronDown,
   LogOut,
-  ShieldCheck, 
-  Sun, 
-  Moon, 
-  RotateCcw, 
   CheckCircle2,
-  Sparkles,
   PenTool,
-  ShieldAlert,
   Crown
 } from 'lucide-react';
+
+const creatorMenu: { tab: ActiveTab; label: string }[] = [
+  { tab: 'dashboard', label: 'Dasbor' },
+  { tab: 'brief_studio', label: 'Brief & Generasi' },
+  { tab: 'editor', label: 'Editor & Versi' },
+  { tab: 'visual_studio', label: 'Visualisasi' },
+  { tab: 'content_scheduling', label: 'Jadwal' },
+  { tab: 'library', label: 'Pustaka' }
+];
 
 interface HeaderProps {
   workspaces: Workspace[];
@@ -25,6 +28,9 @@ interface HeaderProps {
   onSelectWorkspace: (wsId: string) => void;
   users: User[];
   activeUser: User;
+  currentTab: ActiveTab;
+  onSelectTab: (tab: ActiveTab) => void;
+  onLogout: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -32,20 +38,35 @@ export const Header: React.FC<HeaderProps> = ({
   activeWorkspace,
   onSelectWorkspace,
   users,
-  activeUser
+  activeUser,
+  currentTab,
+  onSelectTab,
+  onLogout
 }) => {
   const [showWsMenu, setShowWsMenu] = useState(false);
 
   return (
-    <header className="top-header">
+    <header className={`top-header ${activeUser.role === 'creator' ? 'creator-top-header' : ''}`}>
       <div className="header-left">
         <div className="brand-logo-wrap" onClick={() => window.location.reload()}>
           <div className="brand-title-group">
-            <h1>VibeContent <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--accent-cyan)', background: 'rgba(6, 182, 212, 0.15)', padding: '2px 6px', borderRadius: '4px', marginLeft: '6px' }}>BUMD</span></h1>
+            <h1>VibeContent</h1>
             <div className="brand-tagline">AI Workspace • Knowledge Base Resmi</div>
             <div className="brand-tagline" style={{ marginTop: '2px', opacity: 0.8, fontSize: '0.7rem' }}>Mesin Konten Korporat</div>
           </div>
         </div>
+
+        {activeUser.role === 'creator' && <nav className="creator-top-menu" aria-label="Menu kreator">
+          {creatorMenu.map(({ tab, label }) => <button
+            key={tab}
+            type="button"
+            className={`creator-top-menu-item ${currentTab === tab ? 'active' : ''}`}
+            aria-current={currentTab === tab ? 'page' : undefined}
+            aria-label={label}
+            title={label}
+            onClick={() => onSelectTab(tab)}
+          ><span>{label}</span></button>)}
+        </nav>}
 
         {/* Organization / Workspace Switcher — creator side only.
             Corporate accounts are bound to their own company workspace, so the
@@ -55,7 +76,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button 
             className="org-switcher-pill"
             onClick={() => setShowWsMenu(!showWsMenu)}
-            title="Ganti Organisasi / BUMD"
+            title="Ganti Organisasi / "
           >
             <Building2 size={16} color="var(--primary)" />
             <span className="org-name-text">{activeWorkspace.name}</span>
@@ -79,7 +100,7 @@ export const Header: React.FC<HeaderProps> = ({
               }}
             >
               <div style={{ padding: '8px 12px', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                Pilih Workspace BUMD (Tenant Terisolasi)
+                Pilih Workspace  (Tenant Terisolasi)
               </div>
               {workspaces.map(ws => (
                 <div
@@ -144,6 +165,7 @@ export const Header: React.FC<HeaderProps> = ({
             </span>
           </div>
         </div>
+        {activeUser.role === 'creator' && <button type="button" className="creator-logout-btn" onClick={onLogout} title="Keluar" aria-label="Keluar"><LogOut size={16} /></button>}
       </div>
     </header>
   );

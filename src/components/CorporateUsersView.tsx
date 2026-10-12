@@ -106,7 +106,7 @@ export const CorporateUsersView: React.FC = () => {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
             <span style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--accent-cyan)' }}>
-              BUMD HOLDING • MANAJEMEN SDM KREATOR
+               HOLDING • MANAJEMEN SDM KREATOR
             </span>
           </div>
           <h2 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>

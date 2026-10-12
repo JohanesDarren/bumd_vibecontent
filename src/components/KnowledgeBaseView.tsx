@@ -12,6 +12,9 @@ interface Props {
   onReload: () => Promise<void>;
 }
 
+const hasGeneralPlacement = (assignments: KnowledgeDocument['workspaceAssignments'], workspaces: Workspace[]) =>
+  workspaces.length > 0 && workspaces.every(workspace => assignments?.some(item => item.workspaceId === workspace.id && item.enabled));
+
 export const KnowledgeBaseView: React.FC<Props> = ({ documents, workspaces, activeWorkspace, activeUser, onNotify, onReload }) => {
   const [search, setSearch] = useState('');
   const [editingDoc, setEditingDoc] = useState<KnowledgeDocument | null>(null);
@@ -80,7 +83,7 @@ export const KnowledgeBaseView: React.FC<Props> = ({ documents, workspaces, acti
       const newDoc: KnowledgeDocument = {
         id: `doc-${activeWorkspace.code.toLowerCase()}-${Date.now()}`,
         workspaceId: activeWorkspace.id,
-        workspaceAssignments: [{ workspaceId: activeWorkspace.id, enabled: true }],
+        workspaceAssignments: workspaces.map(workspace => ({ workspaceId: workspace.id, enabled: workspace.id === activeWorkspace.id })),
         title: '',
         category: 'sk_direksi',
         owner: activeUser.name,
@@ -191,8 +194,16 @@ export const KnowledgeBaseView: React.FC<Props> = ({ documents, workspaces, acti
           </div>
 
           <fieldset style={{ gridColumn: '1 / -1', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '14px' }}>
-            <legend style={{ padding: '0 6px', fontWeight: 700 }}>Workspace yang boleh memakai dokumen</legend>
-            <p className="settings-hint">Hanya workspace terpilih yang akan menerima dokumen ini di knowledge base RAG mereka. Hapus centang untuk menonaktifkan akses workspace tersebut.</p>
+            <legend style={{ padding: '0 6px', fontWeight: 700 }}>Penempatan Dokumen</legend>
+            <p className="settings-hint">Pilih Umum untuk semua workspace, atau tentukan workspace tertentu.</p>
+            <label style={{ display: 'flex', gap: '8px', alignItems: 'center', padding: '8px', marginBottom: '8px' }}>
+              <input type="checkbox" checked={hasGeneralPlacement(editingDoc.workspaceAssignments, workspaces)} disabled={busy || workspaces.length === 0} onChange={event => {
+                const selected = new Set(editingDoc.workspaceAssignments?.filter(item => item.enabled).map(item => item.workspaceId) || []);
+                const next = workspaces.map(workspace => ({ workspaceId: workspace.id, enabled: event.target.checked ? true : workspace.id === activeWorkspace.id && selected.has(workspace.id) }));
+                setEditingDoc({ ...editingDoc, workspaceId: activeWorkspace.id, workspaceAssignments: next });
+              }} />
+              <span>Umum · Semua workspace</span>
+            </label>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: '8px' }}>
               {workspaces.map(workspace => {
                 const assigned = editingDoc.workspaceAssignments?.find(item => item.workspaceId === workspace.id);
@@ -236,7 +247,7 @@ export const KnowledgeBaseView: React.FC<Props> = ({ documents, workspaces, acti
             <BookOpen size={20} /> Knowledge Base Workspace
           </h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>
-            Kelola sumber kebenaran (Source of Truth) untuk RAG BUMD Anda.
+            Kelola sumber kebenaran (Source of Truth) untuk RAG  Anda.
           </p>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
@@ -288,7 +299,11 @@ export const KnowledgeBaseView: React.FC<Props> = ({ documents, workspaces, acti
                     <td style={{ padding: '12px 16px' }}>
                       <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{doc.title}</div>
                       <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '2px' }}>{doc.summary.substring(0, 60)}...</div>
-                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>{doc.workspaceAssignments?.filter(item => item.enabled).length || 0} workspace aktif</div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                        {hasGeneralPlacement(doc.workspaceAssignments, workspaces)
+                          ? 'Umum · Semua workspace'
+                          : workspaces.filter(workspace => doc.workspaceAssignments?.some(item => item.workspaceId === workspace.id && item.enabled)).map(workspace => workspace.name).join(', ') || 'Tidak ditempatkan'}
+                      </div>
                     </td>
                     <td style={{ padding: '12px 16px', fontSize: '0.88rem' }}>{doc.category.replace('_', ' ')}</td>
                     <td style={{ padding: '12px 16px' }}>

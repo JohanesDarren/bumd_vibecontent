@@ -39,6 +39,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
   onSaveVisual
 }) => {
   const [savingVisual, setSavingVisual] = useState(false);
+  const [selectedVersionNumber, setSelectedVersionNumber] = useState(draft?.currentVersionon || 1);
   const draftVisual = draft?.visualAsset;
   const defaultVisual: VisualAsset = {
     ...(draftVisual || {
@@ -73,24 +74,29 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState('');
   const [mediaError, setMediaError] = useState('');
-  const approvedDrafts = drafts.filter(item => item.status === 'disetujui');
+  const availableDrafts = drafts.filter(item => item.status !== 'diarsipkan');
+  const selectedVersion = draft?.versions.find(item => item.versionNumber === selectedVersionNumber) || draft?.versions[0];
+
+  useEffect(() => {
+    setSelectedVersionNumber(draft?.currentVersionon || 1);
+  }, [draft?.id, draft?.currentVersionon]);
 
   useEffect(() => {
     setVisual({
       ...defaultVisual,
       id: `vis-${draft?.id || 'new'}-${Date.now()}`,
-      headline: '',
+      headline: draft?.title || '',
       subheadline: '',
       badgeText: '',
       ctaText: '',
-      visualPrompt: ''
+      visualPrompt: selectedVersion?.content ? `Create a visual inspired by this edited copy: ${selectedVersion.content.slice(0, 500)}` : ''
     });
     setGeneratedImageUrl(null);
     clearOutput();
     setImageLoaded(false);
     setGenerationError('');
     setMediaError('');
-  }, [draft?.id, activeWorkspace.id]);
+  }, [draft?.id, selectedVersion?.versionNumber, activeWorkspace.id]);
 
   const updateVisual = (patch: Partial<VisualAsset>) => {
     setVisual(current => ({ ...current, ...patch }));
@@ -128,18 +134,18 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
     }
   };
 
-  if (!draft || draft.status !== 'disetujui') {
+  if (!draft) {
     return <div className="card-panel" style={{ textAlign: 'center', padding: '48px 24px' }}>
       <FileCheck size={42} color="var(--text-muted)" style={{ margin: '0 auto 12px' }} />
-      <h2 className="page-title">Perlu Konten Disetujui</h2>
-      <p className="page-subtitle">Pilih konten yang telah menyelesaikan review dan persetujuan sebelum membuat aset visual.</p>
-      {approvedDrafts.length > 0 ? (
+      <h2 className="page-title">Pilih Draf Konten</h2>
+      <p className="page-subtitle">Pilih draf untuk melanjutkan pembuatan aset visual.</p>
+      {availableDrafts.length > 0 ? (
         <select className="form-select" style={{ maxWidth: '420px', margin: '18px auto 0' }} defaultValue="" onChange={event => event.target.value && onSelectDraft(event.target.value)}>
-          <option value="" disabled>Pilih konten yang disetujui</option>
-          {approvedDrafts.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
+          <option value="" disabled>Pilih draf konten</option>
+          {availableDrafts.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
         </select>
       ) : (
-        <p style={{ marginTop: '14px', color: 'var(--text-muted)' }}>Belum ada konten yang disetujui. Ajukan draf hasil generasi untuk review terlebih dahulu.</p>
+        <p style={{ marginTop: '14px', color: 'var(--text-muted)' }}>Belum ada draf. Buat draf dari Brief &amp; Generasi terlebih dahulu.</p>
       )}
     </div>;
   }
@@ -157,10 +163,16 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
       </div>
 
       <div className="card-panel" style={{ marginBottom: '20px', padding: '14px' }}>
-        <label className="form-label">Konten Disetujui</label>
+        <label className="form-label">Brief / Konten</label>
         <select className="form-select" value={draft.id} onChange={event => onSelectDraft(event.target.value)}>
-          {approvedDrafts.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
+          {availableDrafts.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
         </select>
+        <label className="form-label" style={{ marginTop: '12px' }}>Versi konten yang divisualisasikan</label>
+        <select className="form-select" value={selectedVersion?.versionNumber ?? ''} onChange={event => setSelectedVersionNumber(Number(event.target.value))}>
+          {draft.versions.map(item => <option key={item.versionNumber} value={item.versionNumber}>v{item.versionNumber}{item.versionNumber === draft.currentVersionon ? ' · Terbaru' : ''}</option>)}
+        </select>
+        <label className="form-label" style={{ marginTop: '12px' }}>Konten versi terpilih</label>
+        <textarea className="form-textarea" rows={4} value={selectedVersion?.content ?? ''} readOnly aria-label="Isi versi konten yang dipilih" />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.8fr', gap: '32px', alignItems: 'start' }}>
@@ -228,7 +240,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
             <ul style={{ paddingLeft: '18px', display: 'flex', flexDirection: 'column', gap: '4px', color: 'var(--text-secondary)' }}>
               <li>Gambar raster yang dihasilkan AI; tidak ada penempatan logo resmi otomatis.</li>
               <li>Sistem menerima palet warna yang diminta ({activeWorkspace.primaryColor}).</li>
-              <li>Periksa kesesuaian merek dengan panduan visual BUMD sebelum digunakan.</li>
+              <li>Periksa kesesuaian merek dengan panduan visual  sebelum digunakan.</li>
             </ul>
           </div>
         </div>

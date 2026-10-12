@@ -90,11 +90,10 @@ const WORKFLOW_STEPS: Array<{ title: string; detail: string; tabs: string[] }> =
   { title: '3. Atur batas grounding', detail: 'Buka tab Batas Grounding di halaman ini. Atur skala keketatan, ambang relevansi, dan jumlah potongan pengetahuan (top-k). Perubahan langsung berlaku pada generasi berikutnya.', tabs: ['Pengaturan & Bantuan'] },
   { title: '4. Susun brief', detail: 'Di Brief & Generasi Konten, isi judul, pesan kunci, target audiens, format, kanal, dan CTA. Semakin spesifik pesan kunci, semakin akurat pencocokan RAG.', tabs: ['Brief & Generasi Konten'] },
   { title: '5. Jalankan generasi berbasis RAG', detail: 'Tekan "Jalankan Generasi Berbasis RAG". Sistem memanggil knowledge base, mengambil potongan pengetahuan sesuai skala grounding, lalu menyusun draf disertai sitasi sumber.', tabs: ['Brief & Generasi Konten'] },
-  { title: '6. Edit & simpan versi', detail: 'Perbaiki draf langsung di Editor Draf AI, lalu simpan versi baru. Setiap versi tercatat di riwayat agar dapat diaudit.', tabs: ['Editor & Versi'] },
-  { title: '7. Review & persetujuan', detail: 'Periksa skor kualitas (kepatuhan brief, nada, grounding faktual, CTA), lalu setujui brief bila sudah layak. Persetujuan membuka Studio Visual.', tabs: ['Editor & Versi'] },
-  { title: '8. Studio visual', detail: 'Buat aset visual dari brief yang telah disetujui: headline, subheadline, badge, CTA, rasio, dan template gaya perusahaan.', tabs: ['Studio Visual'] },
-  { title: '9. Penjadwalan konten', detail: 'Jadwalkan konten yang sudah siap ke kalender distribusi dan hubungkan ke draf di Pustaka.', tabs: ['Penjadwalan Konten'] },
-  { title: '10. Ekspor & arsip', detail: 'Ekspor draf final tanpa mengubah statusnya, atau pindahkan draf lama ke arsip untuk menjaga pustaka tetap bersih.', tabs: ['Pustaka & Ekspor'] }
+  { title: '6. Edit & simpan versi', detail: 'Perbaiki draf langsung di Editor Draf AI, lalu simpan versi baru. Setiap versi tercatat di riwayat.', tabs: ['Editor & Versi'] },
+  { title: '7. Studio visual', detail: 'Pilih brief dan versi konten hasil edit, lalu buat aset visual.', tabs: ['Studio Visual'] },
+  { title: '8. Penjadwalan konten', detail: 'Jadwalkan hasil edit ke kalender distribusi.', tabs: ['Penjadwalan Konten'] },
+  { title: '9. Ekspor & arsip', detail: 'Ekspor konten atau pindahkan draf lama ke arsip.', tabs: ['Pustaka & Ekspor'] }
 ];
 
 const ROLE_NOTES = [
@@ -590,7 +589,7 @@ const HelpSection: React.FC = () => {
           <div className="card-panel">
             <div className="settings-card-head"><FileText size={20} /><h3>Transisi Status Draf</h3></div>
             <p className="settings-hint">
-              Draf berjalan: draft → menunggu review → disetujui / revisi diminta → diarsipkan. Persetujuan membuka Studio Visual.
+              Alur kreator: brief → generasi → edit & versi → pilih konten → visual.
             </p>
           </div>
         </div>

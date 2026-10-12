@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { canAccessTab, canTransitionDraft, filterUsersForWorkspace } from './policies.ts';
+import { canAccessTab, filterUsersForWorkspace } from './policies.ts';
 
 const creator = { role: 'creator' as const, workspaceId: 'ws-a' };
 const corporate = { role: 'corporate' as const, workspaceId: 'ws-a' };
@@ -35,16 +35,60 @@ test('updated admin pages do not present fictional BUMD data', async () => {
   }
 });
 
-test('creator can approve their draft but cannot undo approval', () => {
-  assert.equal(canTransitionDraft(creator.role, 'draft', 'disetujui'), true);
-  assert.equal(canTransitionDraft(creator.role, 'revisi_diminta', 'disetujui'), true);
-  assert.equal(canTransitionDraft(creator.role, 'disetujui', 'draft'), false);
-  assert.equal(canTransitionDraft(corporate.role, 'draft', 'menunggu_review'), false);
+test('creator workflow moves from brief to editor and visual without approval gates', async () => {
+  const [app, dashboard, schedule, visual, help] = await Promise.all([
+    readFile(new URL('../App.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../components/DashboardView.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../components/ContentSchedulingView.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../components/VisualStudioView.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../components/SettingsHelpView.tsx', import.meta.url), 'utf8')
+  ]);
+  assert.match(app, /onOpenEditor=\{\(id\) => \{ setSelectedDraftId\(id\); setCurrentTab\('editor'\); \}\}/);
+  assert.match(app, /handleContinueToVisual/);
+  assert.doesNotMatch(dashboard, /Brief Belum Disetujui|Perlu Konfirmasi|Buka di Editor lalu setujui/);
+  assert.doesNotMatch(schedule, /status === 'disetujui'|linkedDraft\?\.status !== 'disetujui'|Belum ada draf yang disetujui/);
+  assert.match(visual, /availableDrafts/);
+  assert.match(visual, /currentVersionon/);
+  assert.doesNotMatch(help, /Review & persetujuan|Persetujuan membuka Studio Visual/);
 });
 
 test('workspace member lists are isolated', () => {
   const users = [{ id: '1', ...creator }, { id: '2', ...corporate, workspaceId: 'ws-b' }];
   assert.deepEqual(filterUsersForWorkspace(users, 'ws-a').map(user => user.id), ['1']);
+});
+
+test('corporate schedule is company-wide, read-only, color-labeled, and supports per-entry comments', async () => {
+  const [app, schedule, api, migration, database, server] = await Promise.all([
+    readFile(new URL('../App.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../components/ContentSchedulingView.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('./apiService.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../../server/migrations/010_schedule_comments.sql', import.meta.url), 'utf8'),
+    readFile(new URL('../../server/database.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../../server/index.ts', import.meta.url), 'utf8')
+  ]);
+  assert.match(app, /activeUser=\{activeUser\}/);
+  assert.match(schedule, /listSchedules\(workspace\.id\)/);
+  assert.match(schedule, /Semua Workspace/);
+  assert.match(schedule, /workspaceColors/);
+  assert.match(schedule, /readOnly/);
+  assert.match(schedule, /addScheduleComment/);
+  assert.match(schedule, /Komentar/);
+  assert.match(api, /addScheduleComment/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS schedule_comments/);
+  assert.match(database, /addScheduleComment/);
+  assert.match(database, /jsonb_agg/);
+  assert.match(server, /app\.put\('\/api\/schedules\/:id',contentOnly/);
+  assert.match(server, /app\.delete\('\/api\/organizations\/:workspaceId\/schedules\/:id',contentOnly/);
+  assert.match(server, /app\.post\('\/api\/schedules\/:id\/comments',corporateOnly/);
+});
+
+test('knowledge documents show their workspace placement and support general placement for every workspace', async () => {
+  const view = await readFile(new URL('../components/KnowledgeBaseView.tsx', import.meta.url), 'utf8');
+  assert.match(view, /Penempatan/);
+  assert.match(view, /Umum · Semua workspace/);
+  assert.match(view, /workspaces\.every/);
+  assert.match(view, /workspaceAssignments/);
+  assert.match(view, /Pilih Umum untuk semua workspace/);
 });
 
 test('knowledge-base management is scoped to corporate and superadmin, not creators', async () => {
@@ -66,15 +110,30 @@ test('knowledge-base management is scoped to corporate and superadmin, not creat
   assert.doesNotMatch(brief, /RAG Knowledge Base Radar|retrieveKnowledge/);
 });
 
-test('generation workflow exposes saved drafts and approved-only visual selection', async () => {
+test('creator saves generated draft, then opens that exact draft in editor without approval', async () => {
+  const [brief, editor, app] = await Promise.all([
+    readFile(new URL('../components/BriefStudioView.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../components/EditorWorkspaceView.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../App.tsx', import.meta.url), 'utf8')
+  ]);
+  assert.match(brief, /Simpan Draf Brief/);
+  assert.match(brief, /Lanjut ke Editor/);
+  assert.match(brief, /savedBrief\.id/);
+  assert.match(brief, /onOpenEditor\(savedBrief\.id\)/);
+  assert.match(app, /return newDraft\.id/);
+  assert.doesNotMatch(editor, /Setujui Brief & Lanjutkan/);
+  assert.match(editor, /Lanjut ke Studio Visual/);
+});
+
+test('generation workflow opens any saved active draft in visual studio', async () => {
   const [brief, visual] = await Promise.all([
     readFile(new URL('../components/BriefStudioView.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../components/VisualStudioView.tsx', import.meta.url), 'utf8')
   ]);
   assert.match(brief, /drafts\.map/);
   assert.match(brief, /onOpenEditor\(draft\.id\)/);
-  assert.match(visual, /approvedDrafts/);
-  assert.match(visual, /status === 'disetujui'/);
+  assert.match(visual, /availableDrafts/);
+  assert.match(visual, /status !== 'diarsipkan'/);
   assert.match(visual, /Creative Direction|Arahan Kreatif/);
   assert.doesNotMatch(visual, /Visual Style Theme/);
 });

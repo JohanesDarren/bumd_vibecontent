@@ -65,7 +65,7 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
     if (!newTerm.trim()) return;
     const item: TerminologyItem = {
       term: newTerm.trim(),
-      definition: newDef.trim() || 'Official BUMD definition',
+      definition: newDef.trim() || 'Official  definition',
       mandatory: true
     };
     setProfile({ ...profile, terminology: [...profile.terminology, item] });
@@ -83,7 +83,7 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
     if (!newBanned.trim()) return;
     const item: BannedWordItem = {
       word: newBanned.trim(),
-      reason: newReason.trim() || 'Violates BUMD public communication standards',
+      reason: newReason.trim() || 'Violates  public communication standards',
       suggestedReplacement: newReplacement.trim() || 'measured formal term'
     };
     setProfile({ ...profile, bannedWords: [...profile.bannedWords, item] });

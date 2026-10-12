@@ -42,7 +42,7 @@ interface EditorWorkspaceViewProps {
   brandProfile: BrandProfile;
   activeUser: User;
   onSaveNewVersionon: (draftId: string, version: DraftVersionon, changeSummary: string) => void;
-  onApproveDraft: (draftId: string) => void;
+  onContinueToVisual: (draftId: string) => void;
   onOpenExportModal: (draft: ContentDraft) => void;
 }
 
@@ -78,7 +78,7 @@ const VARIATIONS: VariationOption[] = [
     id: 'formal',
     label: 'Formal Korporat',
     group: 'primary',
-    promptAction: 'Tulis ulang teks ini menggunakan gaya bahasa formal korporat yang baku, sesuai dengan standar surat resmi BUMD. Gunakan diksi yang presisi dan profesional.'
+    promptAction: 'Tulis ulang teks ini menggunakan gaya bahasa formal korporat yang baku, sesuai dengan standar surat resmi . Gunakan diksi yang presisi dan profesional.'
   },
   // Format Distribusi (in overflow)
   {
@@ -122,7 +122,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
   brandProfile,
   activeUser,
   onSaveNewVersionon,
-  onApproveDraft,
+  onContinueToVisual,
   onOpenExportModal
 }) => {
   const currentVer = draft.versions[0];
@@ -271,12 +271,8 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
       <div className="page-header-row" style={{ alignItems: 'center' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-            <span className={`status-pill ${draft.status}`}>
-              {draft.status === 'draft' && 'Draf'}
-              {draft.status === 'menunggu_review' && 'Menunggu Review'}
-              {draft.status === 'revisi_diminta' && 'Revisi Diminta'}
-              {draft.status === 'disetujui' && 'Disetujui'}
-              {draft.status === 'diarsipkan' && 'Diarsipkan'}
+            <span className={`status-pill ${draft.status === 'diarsipkan' ? 'diarsipkan' : 'draft'}`}>
+              {draft.status === 'diarsipkan' ? 'Diarsipkan' : 'Draf'}
             </span>
             <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
               Versi: <strong>v{draft.currentVersionon}</strong> ({draft.versions.length} versi tersimpan)
@@ -302,15 +298,10 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
             <span>Simpan Versi Baru</span>
           </button>
 
-          {draft.status !== 'disetujui' && (
-            <button 
-              className="btn btn-primary"
-              onClick={() => onApproveDraft(draft.id)}
-            >
-              <CheckCircle2 size={16} />
-              <span>Setujui Brief & Lanjutkan</span>
-            </button>
-          )}
+          <button className="btn btn-primary" onClick={() => onContinueToVisual(draft.id)}>
+            <CheckCircle2 size={16} />
+            <span>Lanjut ke Studio Visual</span>
+          </button>
         </div>
       </div>
 
@@ -318,7 +309,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
       <div className="draft-watermark" style={{ marginBottom: '20px' }}>
         <AlertTriangle size={16} />
         <span>
-          STATUS: <strong>DRAF</strong> — Sempurnakan brief ini, lalu setujui untuk membuka Studio Visual.
+          STATUS: <strong>DRAF</strong> — Sempurnakan naskah, simpan versinya, lalu lanjutkan ke Studio Visual tanpa approval brief.
         </span>
       </div>
 
@@ -672,7 +663,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
 
               <div className="scorecard-item">
                 <div>
-                  <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>Kepatuhan Tone & Gaya BUMD</div>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>Kepatuhan Tone & Gaya </div>
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{liveCheck.toneCompliance.details}</div>
                 </div>
                 <span className={`score-badge ${liveCheck.toneCompliance.score >= 80 ? 'score-high' : 'score-low'}`}>
@@ -710,7 +701,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
                     🚨 Kata Terlarang Terdeteksi:
                   </div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-primary)' }}>
-                    The terms "{liveCheck.bannedWordsFound.join(', ')}" violate BUMD brand guidelines. Please replace them with measured, formal language.
+                    The terms "{liveCheck.bannedWordsFound.join(', ')}" violate  brand guidelines. Please replace them with measured, formal language.
                   </div>
                 </div>
               )}
@@ -818,7 +809,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
             </div>
             <div className="modal-body">
               <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)' }}>
-                Versi baru akan disimpan dalam riwayat audit draf BUMD. Mohon sertakan ringkasan perubahan Anda.
+                Versi baru akan disimpan dalam riwayat audit draf . Mohon sertakan ringkasan perubahan Anda.
               </p>
               <div className="form-group">
                 <label className="form-label">Ringkasan Perubahan *</label>

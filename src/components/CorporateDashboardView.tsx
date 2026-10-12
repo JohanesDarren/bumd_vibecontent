@@ -90,7 +90,7 @@ export const CorporateDashboardView: React.FC<Props> = ({ onNavigate, onOpenWork
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
             <span style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--accent-cyan)' }}>
-              BUMD HOLDING • RINGKASAN EKSEKUTIF
+               HOLDING • RINGKASAN EKSEKUTIF
             </span>
           </div>
           <h2 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -98,7 +98,7 @@ export const CorporateDashboardView: React.FC<Props> = ({ onNavigate, onOpenWork
             Dasbor Eksekutif: {data.company.name}
           </h2>
           <p className="page-subtitle">
-            Pemantauan holistik aktivitas produksi konten, status disposisi review, dan tata kelola unit kerja BUMD lintas cabang.
+            Pemantauan holistik aktivitas produksi konten, status disposisi review, dan tata kelola unit kerja  lintas cabang.
           </p>
         </div>
       </div>
@@ -205,7 +205,7 @@ export const CorporateDashboardView: React.FC<Props> = ({ onNavigate, onOpenWork
             </div>
           </div>
           <div className="corporate-kpi-value">{sum('sourceCount')}</div>
-          <div className="corporate-kpi-hint">Arsip RAG grounded BUMD</div>
+          <div className="corporate-kpi-hint">Arsip RAG grounded </div>
         </div>
       </div>
 
@@ -215,7 +215,7 @@ export const CorporateDashboardView: React.FC<Props> = ({ onNavigate, onOpenWork
           <div>
             <div className="corporate-table-title">
               <Building2 size={20} style={{ color: 'var(--primary)' }} />
-              <span>Unit Kerja &amp; Workspace BUMD</span>
+              <span>Unit Kerja &amp; Workspace </span>
             </div>
             <p className="corporate-table-subtitle">
               Distribusi indikator konten dan operasional per unit kerja dalam naungan {data.company.name}.

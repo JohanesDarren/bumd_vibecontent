@@ -138,7 +138,7 @@ export const AdminCreatorsView: React.FC = () => {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
             <span style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--accent-cyan)' }}>
-              SUPERADMIN • DISTRIBUSI KREATOR BUMD
+              SUPERADMIN • DISTRIBUSI KREATOR 
             </span>
           </div>
           <h2 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -215,7 +215,7 @@ export const AdminCreatorsView: React.FC = () => {
               </div>
               <div>
                 <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                  Registrasi Kreator BUMD Baru
+                  Registrasi Kreator  Baru
                 </h3>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                   Kreator ditugaskan secara spesifik pada unit kerja workspace di perusahaan induk yang dipilih.
@@ -266,7 +266,7 @@ export const AdminCreatorsView: React.FC = () => {
             </div>
 
             <div>
-              <label className="form-label" style={{ marginBottom: '6px' }}>Perusahaan Induk BUMD *</label>
+              <label className="form-label" style={{ marginBottom: '6px' }}>Perusahaan Induk  *</label>
               <select 
                 required 
                 className="form-select"

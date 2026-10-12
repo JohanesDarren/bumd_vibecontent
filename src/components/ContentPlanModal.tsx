@@ -91,7 +91,7 @@ export const ContentPlanModal: React.FC<ContentPlanModalProps> = ({
         </div>
         <div className="modal-body">
           <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-            AI menyusun usulan dari dokumen resmi di Knowledge Base. Usulan masuk kalender sebagai <strong>Draf</strong>, lalu tetap perlu dibuatkan draf konten dan disetujui sebelum dijadwalkan.
+            AI menyusun usulan dari dokumen resmi di Knowledge Base. Usulan masuk kalender sebagai <strong>Draf</strong>, lalu hubungkan dengan draf konten aktif saat dijadwalkan.
             {mode === 'gap' && ` Tersedia ${dates.length} hari kosong.`}
           </p>
           {weakPillars.length > 0 && (

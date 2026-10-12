@@ -45,7 +45,7 @@ import { CorporateUsersView } from './components/CorporateUsersView';
 
 import { AdminDashboard } from './components/AdminDashboard';
 
-import { canAccessTab, canTransitionDraft, filterUsersForWorkspace } from './services/policies';
+import { canAccessTab, filterUsersForWorkspace } from './services/policies';
 
 export function App() {
   const [authenticated, setAuthenticated] = useState(false);
@@ -259,8 +259,8 @@ export function App() {
   // Content Generation from Brief
   // `output` is supplied by the Brief Studio (grounded live against the RAG service);
   // otherwise we fall back to the local engine for callers that only pass a brief.
-  const handleGenerateDraft = async (brief: ContentBrief, output?: GeneratedOutput) => {
-    if (!brandProfile || !activeWorkspace || !activeUser) return;
+  const handleGenerateDraft = async (brief: ContentBrief, output?: GeneratedOutput): Promise<string> => {
+    if (!brandProfile || !activeWorkspace || !activeUser) throw new Error('Workspace or user is unavailable.');
 
     const generated = output ?? generateContentFromBrief(brief, brandProfile, documents, activeWorkspace.id);
 
@@ -298,7 +298,8 @@ export function App() {
     setDrafts(refreshed.drafts);
     setAuditLogs(refreshed.auditLogs);
     setSelectedDraftId(newDraft.id);
-    showToast(`Draf "${newDraft.title}" dibuat dengan ${generated.citations.length} sitasi RAG!`);
+    showToast(`Draf "${newDraft.title}" berhasil disimpan.`);
+    return newDraft.id;
   };
 
   // Save new draft version
@@ -318,17 +319,9 @@ export function App() {
     showToast('Gambar disimpan ke draf dan tampil di Penjadwalan Konten.');
   };
 
-  // User confirms the brief is final; Visual Studio unlocks immediately.
-  const handleSelfApprove = async (draftId: string) => {
-    const draft = drafts.find(item => item.id === draftId);
-    if (!activeUser || !draft || !canTransitionDraft(activeUser.role, draft.status, 'disetujui')) {
-      showToast('Transisi status tidak diizinkan untuk peran ini.');
-      return;
-    }
-    await apiService.saveDraft({ ...draft, status: 'disetujui', approvalInfo: undefined, updatedAt: new Date().toISOString() });
-    if (activeWorkspace) await loadData(activeWorkspace.id);
+  const handleContinueToVisual = (draftId: string) => {
+    setSelectedDraftId(draftId);
     setCurrentTab('visual_studio');
-    showToast('Brief disetujui. Studio Visual kini tersedia.');
   };
 
   // Add review comment
@@ -345,7 +338,7 @@ export function App() {
   const handleSaveBrandProfile = async (newProfile: BrandProfile) => {
     await apiService.saveBrand(newProfile);
     setBrandProfile(newProfile);
-    showToast('Panduan merek dan profil BUMD berhasil diperbarui.');
+    showToast('Panduan merek dan profil  berhasil diperbarui.');
   };
 
   // Persist company-wide grounding/privacy settings; the server derives company from workspace.
@@ -399,7 +392,7 @@ export function App() {
               <div className="brand-icon-gem">V</div>
               <div className="brand-title-group">
                 <h1>VibeContent</h1>
-                <span className="brand-tagline">Holding Korporat BUMD</span>
+                <span className="brand-tagline">Holding Korporat </span>
               </div>
             </div>
           </div>
@@ -488,7 +481,7 @@ export function App() {
     targetAudiences: baseBrand.targetAudiences?.length ? baseBrand.targetAudiences : ['Pelanggan / Masyarakat Umum', 'Instansi Pemerintah', 'Media / Pers', 'Karyawan Internal'],
     toneOfVoice: baseBrand.toneOfVoice?.length ? baseBrand.toneOfVoice : ['Ramah & Solutif', 'Korporat Formal', 'Informatif & Edukatif', 'Tegas & Jelas'],
     officialCTAs: baseBrand.officialCTAs?.length ? baseBrand.officialCTAs : [{ id: 'cta-default', channel: 'Call Center', label: 'Call Center', text: 'Info lebih lanjut hubungi Call Center 1500-xxx' }],
-    approvedChannels: baseBrand.approvedChannels?.length ? baseBrand.approvedChannels : ['Instagram Feed & Reels', 'X / Twitter', 'LinkedIn Page', 'Facebook Fanpage', 'Website Portal BUMD', 'Aplikasi Mobile (Push Notif)', 'WhatsApp Blast']
+    approvedChannels: baseBrand.approvedChannels?.length ? baseBrand.approvedChannels : ['Instagram Feed & Reels', 'X / Twitter', 'LinkedIn Page', 'Facebook Fanpage', 'Website Portal ', 'Aplikasi Mobile (Push Notif)', 'WhatsApp Blast']
   };
   const selectedDraft = drafts.find(d => d.id === selectedDraftId) || drafts[0];
 
@@ -505,21 +498,24 @@ export function App() {
         onSelectWorkspace={handleSelectWorkspace}
         users={filterUsersForWorkspace(users, activeWorkspace.id)}
         activeUser={activeUser}
+        currentTab={currentTab}
+        onSelectTab={setCurrentTab}
+        onLogout={handleLogout}
       />
 
-      <div className="main-layout">
+      <div className={`main-layout ${authUser.role === 'creator' ? 'creator-layout' : ''}`}>
         {/* Navigation Sidebar */}
-        <Sidebar 
+        {authUser.role !== 'creator' && <Sidebar
           currentTab={currentTab}
           onSelectTab={setCurrentTab}
 
           userRole={activeUser.role}
           activeWorkspace={activeWorkspace}
           onLogout={handleLogout}
-        />
+        />}
 
         {/* Dynamic Viewport */}
-        <main className="content-viewport">
+        <main className={`content-viewport ${authUser.role === 'creator' ? 'creator-content' : ''}`}>
           {safeTab === 'dashboard' && authUser.role === 'corporate' && <CorporateDashboardView onNavigate={setCurrentTab} onOpenWorkspace={id => { void handleSelectWorkspace(id).then(() => setCurrentTab('user_management')).catch(e => showToast(e.message)); }} />}
                     {safeTab === 'dashboard' && authUser.role !== 'corporate' && (
                       <DashboardView
@@ -567,7 +563,7 @@ export function App() {
                   brandProfile={effectiveBrandProfile}
                   activeUser={activeUser}
                   onSaveNewVersionon={handleSaveNewVersionon}
-                  onApproveDraft={handleSelfApprove}
+                  onContinueToVisual={handleContinueToVisual}
                   onOpenExportModal={handleOpenExport}
                 />
               </div>
@@ -587,7 +583,7 @@ export function App() {
 
           {safeTab === 'visual_studio' && (
             <VisualStudioView 
-              draft={selectedDraft?.status === 'disetujui' ? selectedDraft : undefined}
+              draft={selectedDraft?.status !== 'diarsipkan' ? selectedDraft : undefined}
               drafts={drafts}
               onSelectDraft={setSelectedDraftId}
               brandProfile={effectiveBrandProfile}
@@ -602,6 +598,9 @@ export function App() {
               drafts={drafts}
               documents={documents}
               activeWorkspace={activeWorkspace}
+              workspaces={workspaces}
+              activeUser={activeUser!}
+              readOnly={authUser?.role === 'corporate'}
               onOpenEditorDraft={(id) => { setSelectedDraftId(id); setCurrentTab('editor'); }}
             />
           )}

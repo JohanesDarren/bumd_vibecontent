@@ -98,12 +98,12 @@ export const SuperadminView: React.FC = () => {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
             <span style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--accent-cyan)' }}>
-              DATA MASTER • ENTITAS INDUK BUMD
+              DATA MASTER • ENTITAS INDUK 
             </span>
           </div>
           <h2 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <Building2 size={28} style={{ color: 'var(--primary)' }} />
-            Data Master BUMD
+            Data Master 
           </h2>
           <p className="page-subtitle">
             Daftar instansi holding induk yang menaungi berbagai unit kerja dan akun kreator pada platform.
@@ -127,7 +127,7 @@ export const SuperadminView: React.FC = () => {
           style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
         >
           {showForm ? <X size={18} /> : <Plus size={18} />}
-          <span>{showForm ? 'Tutup Formulir' : 'Tambah Entitas BUMD'}</span>
+          <span>{showForm ? 'Tutup Formulir' : 'Tambah Entitas '}</span>
         </button>
 
         <div className="filter-group" style={{ minWidth: '260px' }}>
@@ -179,7 +179,7 @@ export const SuperadminView: React.FC = () => {
               </div>
               <div>
                 <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                  {form.id ? `Ubah Entitas: ${form.name}` : 'Tambah Entitas Induk BUMD Baru'}
+                  {form.id ? `Ubah Entitas: ${form.name}` : 'Tambah Entitas Induk  Baru'}
                 </h3>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                   Entitas induk menaungi satu atau beberapa workspace unit kerja daerah.
@@ -193,7 +193,7 @@ export const SuperadminView: React.FC = () => {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '14px', marginBottom: '18px' }}>
             <div>
-              <label className="form-label" style={{ marginBottom: '6px' }}>Nama Perusahaan Induk / BUMD *</label>
+              <label className="form-label" style={{ marginBottom: '6px' }}>Nama Perusahaan Induk /  *</label>
               <input 
                 required 
                 className="form-input"
@@ -206,7 +206,7 @@ export const SuperadminView: React.FC = () => {
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <button type="submit" disabled={busy} className="btn btn-primary">
-              {busy ? 'Menyimpan…' : form.id ? 'Simpan Perubahan' : 'Simpan Entitas BUMD'}
+              {busy ? 'Menyimpan…' : form.id ? 'Simpan Perubahan' : 'Simpan Entitas '}
             </button>
             <button type="button" className="btn btn-secondary" onClick={() => { setShowForm(false); setForm({ id: '', name: '' }); }}>
               Batal

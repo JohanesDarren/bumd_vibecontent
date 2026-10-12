@@ -1,4 +1,4 @@
-import type { ActiveTab, DraftStatus, User, UserRole } from '../types/index.ts';
+import type { ActiveTab, User, UserRole } from '../types/index.ts';
 
 const access: Record<UserRole, ActiveTab[]> = {
   creator: ['dashboard', 'brief_studio', 'editor', 'visual_studio', 'content_scheduling', 'library'],
@@ -9,12 +9,6 @@ const access: Record<UserRole, ActiveTab[]> = {
 export function canAccessTab(role: UserRole, tab: ActiveTab): boolean {
   if (!access[role]) return false;
   return access[role].includes(tab);
-}
-
-export function canTransitionDraft(role: UserRole, current: DraftStatus, next: DraftStatus): boolean {
-  return (role === 'creator' || role === 'superadmin')
-    && (current === 'draft' || current === 'revisi_diminta' || current === 'menunggu_review')
-    && next === 'disetujui';
 }
 
 export function filterUsersForWorkspace<T extends Pick<User, 'workspaceId'>>(users: T[], workspaceId: string): T[] {

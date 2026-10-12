@@ -62,6 +62,8 @@ export async function runMigrations() {
     await pool.query(companySettingsKnowledge);
     await pool.query("INSERT INTO schema_migrations(name) VALUES ('009_company_settings_workspace_knowledge') ON CONFLICT DO NOTHING");
   }
+  const scheduleComments = await readFile(join(here, 'migrations', '010_schedule_comments.sql'), 'utf8');
+  if (!(await pool.query("SELECT 1 FROM schema_migrations WHERE name='010_schedule_comments'")).rowCount) await pool.query(scheduleComments);
 }
 
 const scrypt = promisify(nodeCrypto.scrypt);
@@ -293,7 +295,13 @@ export async function getUserWorkspaces(userId:string) {
 }
 
 const scheduleColumns=`id,organization_id AS "workspaceId",draft_id AS "draftId",title,platform,status,to_char(publish_date,'YYYY-MM-DD') AS date,to_char(publish_time,'HH24:MI') AS time,notes,caption,campaign,pillar,post_url AS "postUrl",post_image AS "postImage",custom_image AS "customImage",custom_image_source AS "customImageSource"`;
-export async function listSchedules(workspaceId:string){const result=await pool.query(`SELECT ${scheduleColumns} FROM content_schedules WHERE organization_id=$1 ORDER BY publish_date,publish_time`,[workspaceId]);return result.rows;}
+export async function listSchedules(workspaceId:string){const result=await pool.query(`SELECT ${scheduleColumns},COALESCE(c.comments,'[]'::jsonb) AS comments FROM content_schedules LEFT JOIN LATERAL (SELECT jsonb_agg(jsonb_build_object('id',sc.id,'authorName',sc.author_name,'authorRole',sc.author_role,'text',sc.text,'createdAt',sc.created_at) ORDER BY sc.created_at) AS comments FROM schedule_comments sc WHERE sc.schedule_id=content_schedules.id) c ON true WHERE organization_id=$1 ORDER BY publish_date,publish_time`,[workspaceId]);return result.rows;}
+
+export async function addScheduleComment(scheduleId:string, text:string, actor:{id:string;name:string;role:string;companyId?:string|null}){
+  const result=await pool.query(`INSERT INTO schedule_comments(id,schedule_id,author_id,author_name,author_role,text) SELECT $1,s.id,$2,$3,$4,$5 FROM content_schedules s JOIN organizations o ON o.id=s.organization_id WHERE s.id=$6 AND (($4='superadmin') OR ($4='corporate' AND o.company_id=$7)) RETURNING id,author_name AS "authorName",author_role AS "authorRole",text,created_at AS "createdAt"`,[nodeCrypto.randomUUID(),actor.id,actor.name,actor.role,text,scheduleId,actor.companyId||null]);
+  if(!result.rowCount) throw new Error('Schedule not available to this company');
+  return result.rows[0];
+}
 /** A scheduling rule the user can fix (mapped to HTTP 400, message shown as-is). */
 export class ScheduleRuleError extends Error {}
 
@@ -318,13 +326,7 @@ export async function saveSchedule(item:any,actorId:string){
       const past=await client.query('SELECT $1::date < current_date AS past',[item.date]);
       if(past.rows[0].past) throw new ScheduleRuleError('Tanggal publikasi tidak boleh di masa lalu.');
     }
-    // Governance: only an approved draft may be scheduled or published. Checked
-    // when status or linked draft changes, so later draft revisions don't lock old entries.
-    const statusOrDraftChanged=!previous||previous.status!==item.status||(previous.draftId||null)!==(item.draftId||null);
-    if(item.status!=='draft'&&statusOrDraftChanged){
-      const draft=item.draftId?await client.query('SELECT status FROM content_drafts WHERE id=$1 AND organization_id=$2',[item.draftId,item.workspaceId]):null;
-      if(!draft?.rowCount||draft.rows[0].status!=='disetujui') throw new ScheduleRuleError('Status Terjadwal/Terbit hanya untuk jadwal yang ditautkan ke draf berstatus Disetujui.');
-    }
+
     // Upsert scoped to the workspace: an id owned by another organization is never overwritten.
     const result=await client.query(`INSERT INTO content_schedules(id,organization_id,draft_id,title,platform,status,publish_date,publish_time,notes,caption,campaign,pillar,post_url) VALUES($1,$2,(SELECT id FROM content_drafts WHERE id=$3 AND organization_id=$2),$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) ON CONFLICT(id) DO UPDATE SET draft_id=EXCLUDED.draft_id,title=EXCLUDED.title,platform=EXCLUDED.platform,status=EXCLUDED.status,publish_date=EXCLUDED.publish_date,publish_time=EXCLUDED.publish_time,notes=EXCLUDED.notes,caption=EXCLUDED.caption,campaign=EXCLUDED.campaign,pillar=EXCLUDED.pillar,post_url=EXCLUDED.post_url,post_image=CASE WHEN content_schedules.post_url IS DISTINCT FROM EXCLUDED.post_url THEN NULL ELSE content_schedules.post_image END,updated_at=now() WHERE content_schedules.organization_id=EXCLUDED.organization_id RETURNING ${scheduleColumns}`,[item.id,item.workspaceId,item.draftId||null,item.title,item.platform,item.status,item.date,item.time||'09:00',item.notes||null,item.caption||null,item.campaign?.trim()||null,item.pillar||null,item.postUrl?.trim()||null]);
     if(!result.rowCount) throw new Error('Schedule ID already belongs to another workspace');

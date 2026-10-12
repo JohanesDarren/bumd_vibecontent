@@ -36,8 +36,7 @@ import {
 
   AlertCircle, 
   CheckCircle2, 
-  Send,
-
+  Save,
   Type,
   Minus,
   Plus,
@@ -63,7 +62,7 @@ interface BriefStudioViewProps {
   documents: KnowledgeDocument[];
   settings: AppSettings;
   onOpenEditor: (draftId: string) => void;
-  onGenerateDraft: (brief: ContentBrief, output: GeneratedOutput) => Promise<void> | void;
+  onGenerateDraft: (brief: ContentBrief, output: GeneratedOutput) => Promise<string> | string;
   onNavigate?: (tab: ActiveTab) => void;
   onDeleteDraft?: (draftId: string) => void;
 }
@@ -111,8 +110,8 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
-
-
+  const [savedBrief, setSavedBrief] = useState<{ id: string; key: string } | null>(null);
+  const briefKey = JSON.stringify([title, campaign, targetAudience, format, channel, tone, keyMessage, selectedCta, limitations]);
 
   // Editor & Streaming state
   const [editorContent, setEditorContent] = useState('');
@@ -186,10 +185,14 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
     };
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent, continueToEditor = false) => {
+    e?.preventDefault();
     if (!title.trim() || !keyMessage.trim()) {
       alert('Judul konten dan pesan kunci wajib diisi.');
+      return;
+    }
+    if (savedBrief?.key === briefKey) {
+      if (continueToEditor) onOpenEditor(savedBrief.id);
       return;
     }
 
@@ -373,20 +376,29 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
       setGenerationError(`AI belum berhasil menyusun naskah yang layak${output.qualityCheck.briefCompliance.details ? ` (${output.qualityCheck.briefCompliance.details})` : ''}. Draf sementara berisi isi brief dan perlu dicek dulu.`);
     }
 
-    setIsGenerating(false);
     streamText(output.content);
 
     if (!shouldPersistDraft(settings)) {
+      setIsGenerating(false);
       setPrivacyNotice('Mode privasi: draf tidak disimpan ke database. Salin hasilnya sebelum meninggalkan halaman ini.');
       return;
     }
 
     try {
-      await onGenerateDraft(brief, output);
+      const id = await onGenerateDraft(brief, output);
+      setSavedBrief({ id, key: briefKey });
+      if (continueToEditor) onOpenEditor(id);
     } catch (error) {
       console.error('Failed to save generated draft', error);
       setGenerationError(`Draf tidak berhasil disimpan: ${error instanceof Error ? error.message : 'kesalahan tidak diketahui'}. Salin teks dari editor sebelum meninggalkan halaman.`);
+    } finally {
+      setIsGenerating(false);
     }
+  };
+
+  const handleContinueToEditor = () => {
+    if (savedBrief?.key === briefKey) onOpenEditor(savedBrief.id);
+    else void handleSubmit(undefined, true);
   };
 
 
@@ -416,7 +428,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-          <span className={`status-pill ${privacyHigh ? 'revisi_diminta' : (usedRemoteRag ? 'disetujui' : 'draft')}`} style={{ fontSize: '0.66rem' }}>
+          <span className="status-pill draft" style={{ fontSize: '0.66rem' }}>
             {privacyHigh ? 'Privasi Tinggi' : usedRemoteRag ? 'Grounded live' : 'Siap Digunakan'}
           </span>
           {onNavigate && (
@@ -504,7 +516,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
         {/* ─── Left: Brief Form (preserved) ─── */}
         <form onSubmit={handleSubmit} className="card-panel" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '14px' }}>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Parameter Brief Konten BUMD</h3>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Parameter Brief Konten </h3>
           </div>
 
           {/* Title & Campaign */}
@@ -664,23 +676,24 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
 
           {/* Submit Action */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '10px' }}>
-            <button 
-              type="submit" 
-              className="btn btn-primary"
+            <button
+              type="submit"
+              className="btn btn-secondary"
               disabled={isGenerating || isStreaming}
               style={{ padding: '12px 24px', fontSize: '0.95rem' }}
             >
-              {isGenerating ? (
-                <>
-                  <ClipLoader size={18} color="currentColor" speedMultiplier={0.8} />
-                  <span>Memproses RAG & Membuat Draf...</span>
-                </>
-              ) : (
-                <>
-                  <Send size={18} />
-                  <span>Jalankan Generasi Berbasis RAG</span>
-                </>
-              )}
+              <Save size={18} />
+              <span>Simpan Draf Brief</span>
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={isGenerating}
+              style={{ padding: '12px 24px', fontSize: '0.95rem' }}
+              onClick={handleContinueToEditor}
+            >
+              {isGenerating ? <ClipLoader size={18} color="currentColor" speedMultiplier={0.8} /> : <ExternalLink size={18} />}
+              <span>{isGenerating ? 'Menyimpan Draf…' : 'Lanjut ke Editor'}</span>
             </button>
           </div>
         </form>
@@ -713,15 +726,15 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
                     <span>Generasi selesai</span>
                   </span>
                 )}
-                {streamingDone && onNavigate && (
+                {streamingDone && savedBrief?.key === briefKey && (
                   <button
                     type="button"
                     className="btn btn-secondary"
                     style={{ padding: '4px 10px', fontSize: '0.72rem', marginLeft: '6px' }}
-                    onClick={() => onNavigate('editor')}
+                    onClick={() => onOpenEditor(savedBrief.id)}
                   >
                     <ExternalLink size={12} />
-                    <span>Buka di Editor</span>
+                    <span>Lanjut ke Editor</span>
                   </button>
                 )}
                 {editorContent && (

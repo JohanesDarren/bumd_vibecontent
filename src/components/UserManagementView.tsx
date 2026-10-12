@@ -270,7 +270,7 @@ export const UserManagementView: React.FC<Props> = ({ users, activeWorkspace, on
                             {u.name}
                           </span>
                           <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                            {u.title || 'Staf BUMD'}
+                            {u.title || 'Staf '}
                           </span>
                         </div>
                       </div>

@@ -27,10 +27,9 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   onClose
 }) => {
   const [copiedType, setCopiedType] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'disposition' | 'markdown' | 'plaintext' | 'json'>('disposition');
+  const [activeTab, setActiveTab] = useState<'content' | 'markdown' | 'plaintext' | 'json'>('content');
 
   const currentVer = draft.versions[0];
-  const isApproved = draft.status === 'disetujui';
 
   const handleCopy = (text: string, type: string) => {
     navigator.clipboard.writeText(text);
@@ -61,8 +60,6 @@ export const ExportModal: React.FC<ExportModalProps> = ({
 **Versi:** v${draft.currentVersionon}  
 **Tanggal:** ${new Date(draft.updatedAt).toLocaleDateString('id-ID')}  
 **Dibuat oleh:** ${draft.creatorName}  
-${draft.approvalInfo ? `**Nomor Disposisi:** ${draft.approvalInfo.dispositionNumber}  
-**Disetujui oleh:** ${draft.approvalInfo.approvedBy} (${new Date(draft.approvalInfo.approvedAt).toLocaleDateString('id-ID')})` : ''}
 
 ---
 
@@ -84,7 +81,7 @@ ${currentVer?.citations.map(c => `- **${c.documentTitle}** (${c.section}) - Rele
         <div className="modal-header">
           <div>
             <span style={{ fontSize: '0.72rem', color: 'var(--accent-cyan)', fontWeight: 700, textTransform: 'uppercase' }}>
-              Ekspor Draf & Disposisi BUMD (PRD F-11)
+              Ekspor Draf & Disposisi  (PRD F-11)
             </span>
             <h3 style={{ fontSize: '1.2rem', fontWeight: 800 }}>
               {draft.title}
@@ -96,10 +93,10 @@ ${currentVer?.citations.map(c => `- **${c.documentTitle}** (${c.section}) - Rele
         {/* Tab Selection */}
         <div style={{ padding: '0 24px', paddingTop: '16px', display: 'flex', gap: '8px', borderBottom: '1px solid var(--border-subtle)' }}>
           <button 
-            className={`btn btn-sm ${activeTab === 'disposition' ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setActiveTab('disposition')}
+            className={`btn btn-sm ${activeTab === 'content' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setActiveTab('content')}
           >
-            <Building size={14} style={{ marginRight: '4px' }} /> Lembar Pengiriman Resmi
+            <FileText size={14} style={{ marginRight: '4px' }} /> Pratinjau Konten
           </button>
           <button 
             className={`btn btn-sm ${activeTab === 'markdown' ? 'btn-primary' : 'btn-secondary'}`}
@@ -122,8 +119,8 @@ ${currentVer?.citations.map(c => `- **${c.documentTitle}** (${c.section}) - Rele
         </div>
 
         <div className="modal-body" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
-          {/* TAB 1: Official BUMD Disposition Print-Ready Sheet */}
-          {activeTab === 'disposition' && (
+          {/* TAB 1: Official  Disposition Print-Ready Sheet */}
+          {activeTab === 'content' && (
             <div 
               style={{
                 background: '#ffffff',
@@ -136,7 +133,7 @@ ${currentVer?.citations.map(c => `- **${c.documentTitle}** (${c.section}) - Rele
                 lineHeight: 1.6
               }}
             >
-              {/* Kop Surat BUMD Resmi */}
+              {/* Kop Surat  Resmi */}
               <div style={{ textAlign: 'center', borderBottom: '3px double #0f172a', paddingBottom: '14px', marginBottom: '20px' }}>
                 <h4 style={{ fontSize: '1.15rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', margin: 0 }}>
                   {activeWorkspace.name}
@@ -174,30 +171,9 @@ ${currentVer?.citations.map(c => `- **${c.documentTitle}** (${c.section}) - Rele
                 </ul>
               </div>
 
-              {/* Approval Disposition Box */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', paddingTop: '14px', borderTop: '2px solid #0f172a' }}>
-                <div style={{ fontSize: '0.78rem', fontFamily: 'sans-serif' }}>
-                  <div>Disiapkan oleh: <strong>{draft.creatorName}</strong></div>
-                  <div style={{ color: '#64748b' }}>Staf Komunikasi & Konten Kreatif</div>
-                </div>
-
-                <div style={{ textAlign: 'center', fontSize: '0.78rem', fontFamily: 'sans-serif' }}>
-                  <div>Disetujui oleh:</div>
-                  <div style={{ height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {isApproved ? (
-                      <span style={{ border: '2px solid #059669', color: '#059669', padding: '3px 8px', borderRadius: '4px', fontWeight: 800, fontSize: '0.7rem', transform: 'rotate(-4deg)' }}>
-                        Status: DISETUJUI RESMI<br/>
-                        {draft.approvalInfo?.dispositionNumber}
-                      </span>
-                    ) : (
-                      <span style={{ color: '#d97706', fontWeight: 700, fontStyle: 'italic' }}>
-                        [MENUNGGU PERSETUJUAN]
-                      </span>
-                    )}
-                  </div>
-                  <div><strong>{draft.approvalInfo?.approvedBy || 'Kepala Humas'}</strong></div>
-                </div>
-              </div>
+              <div style={{ paddingTop: '14px', borderTop: '2px solid #0f172a', fontSize: '0.78rem', fontFamily: 'sans-serif' }}>
+            Disiapkan oleh: <strong>{draft.creatorName}</strong>
+          </div>
             </div>
           )}
 

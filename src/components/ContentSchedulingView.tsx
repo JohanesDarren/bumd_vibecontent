@@ -27,7 +27,11 @@ import {
   RefreshCw,
   Upload,
   ImageOff,
-  Wand2
+  Wand2,
+  MessageSquare,
+  Building2,
+  Sidebar,
+  CalendarCheck2
 } from 'lucide-react';
 import type {
   ContentDraft,
@@ -36,12 +40,12 @@ import type {
   ScheduleStatus,
   SchedulePlatform as Platform,
   SchedulePillar,
-  ScheduledContent
+  ScheduledContent,
+  User
 } from '../types';
 import { apiService, type PlanSlot } from '../services/apiService';
 import { ContentPlanModal } from './ContentPlanModal';
 import { ScheduleCover } from './ScheduleCover';
-import { STATUS_LABELS as DRAFT_STATUS_LABELS } from '../services/labels';
 import { sanitizeRagAnswer } from '../services/ragEngine';
 import { normalizeHexColor } from '../services/visualScene';
 import {
@@ -65,6 +69,8 @@ interface ContentSchedulingViewProps {
   drafts: ContentDraft[];
   documents: KnowledgeDocument[];
   activeWorkspace: Workspace;
+  workspaces: Workspace[];
+  activeUser: User;
   onOpenEditorDraft?: (draftId: string) => void;
   readOnly?: boolean;
 }
@@ -188,11 +194,26 @@ type Dragged = { kind: 'card' | 'draft'; id: string } | null;
 /* ─── Component ─── */
 export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
   activeWorkspace,
+  workspaces,
+  activeUser,
   drafts,
   documents,
   onOpenEditorDraft,
-  readOnly = false
+  readOnly = activeUser.role === 'corporate'
 }) => {
+  const isCorporate = activeUser.role === 'corporate';
+  const scheduleWorkspaces = useMemo(() => isCorporate ? workspaces : [activeWorkspace], [isCorporate, workspaces, activeWorkspace]);
+  const workspaceColors = useMemo(() => new Map([...workspaces].sort((a,b)=>a.id.localeCompare(b.id)).map((workspace,index)=>[workspace.id, `hsl(${(index * 137.508) % 360} 68% 42%)`] as const)), [workspaces]);
+  const [scheduleWorkspaceId, setScheduleWorkspaceId] = useState<'all' | string>('all');
+  const [commentText, setCommentText] = useState('');
+  const [commentBusy, setCommentBusy] = useState(false);
+  const workspaceFor = (item: ScheduledContent) => scheduleWorkspaces.find(workspace => workspace.id === item.workspaceId) || activeWorkspace;
+  const workspaceBadge = (item: ScheduledContent) => {
+    if (!isCorporate) return null;
+    const workspace = workspaceFor(item);
+    const color = workspaceColors.get(workspace.id) || '#475569';
+    return <span className="status-pill" style={{ color, background: `${color}18`, border: `1px solid ${color}66`, fontSize: '0.68rem' }}>{workspace.name}</span>;
+  };
   const today = new Date();
   const todayStr = toDateStr(today);
   const nowTime = `${pad2(today.getHours())}:${pad2(today.getMinutes())}`;
@@ -219,6 +240,7 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
     try { return localStorage.getItem('vc-schedule-notify') === '1' && typeof Notification !== 'undefined' && Notification.permission === 'granted'; }
     catch { return false; }
   });
+  const [corporateSidebarOpen, setCorporateSidebarOpen] = useState(true);
 
   // Form state (create and edit share one modal).
   const [editing, setEditing] = useState<ScheduledContent | null>(null);
@@ -246,12 +268,27 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
 
   useEffect(() => {
     let cancelled = false;
-    setSchedule([]);
-    apiService.listSchedules(activeWorkspace.id)
-      .then(rows => { if (!cancelled) setSchedule(rows); })
+    Promise.all(scheduleWorkspaces.map(workspace => apiService.listSchedules(workspace.id)))
+      .then(groups => { if (!cancelled) setSchedule(groups.flat()); })
       .catch(error => { if (!cancelled) setNotice(`Gagal memuat jadwal: ${error instanceof Error ? error.message : error}`); });
     return () => { cancelled = true; };
-  }, [activeWorkspace.id]);
+  }, [scheduleWorkspaces]);
+
+  const handleAddComment = async () => {
+    if (!selectedCard || !commentText.trim() || commentBusy) return;
+    setCommentBusy(true);
+    try {
+      const comment = await apiService.addScheduleComment(selectedCard.id, commentText.trim());
+      const updated = { ...selectedCard, comments: [...(selectedCard.comments || []), comment] };
+      setSchedule(current => current.map(item => item.id === updated.id ? updated : item));
+      setSelectedCard(updated);
+      setCommentText('');
+    } catch (error) {
+      setNotice(`Gagal mengirim komentar: ${error instanceof Error ? error.message : error}`);
+    } finally {
+      setCommentBusy(false);
+    }
+  };
 
   const draftOf = (item: { draftId?: string | null }) => drafts.find(d => d.id === item.draftId);
   // Image priority: published post > team replacement (upload/AI) > draft (Studio Visual) > branded cover.
@@ -260,9 +297,10 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
     item.postImage ? `Dari post ${PLATFORM_LABELS[item.platform]}`
       : item.customImage ? (item.customImageSource === 'ai' ? 'Gambar AI' : 'Gambar unggahan')
         : 'Dari draf (Studio Visual)';
-  const coverFor = (item: ScheduledContent, size: 'thumb' | 'tile' | 'hero') => (
-    <ScheduleCover title={item.title} platform={item.platform} pillar={item.pillar} primaryColor={activeWorkspace.primaryColor} accentColor={activeWorkspace.accentColor} orgCode={activeWorkspace.code} size={size} />
-  );
+  const coverFor = (item: ScheduledContent, size: 'thumb' | 'tile' | 'hero') => {
+    const workspace = workspaceFor(item);
+    return <ScheduleCover title={item.title} platform={item.platform} pillar={item.pillar} primaryColor={workspace.primaryColor} accentColor={workspace.accentColor} orgCode={workspace.code} size={size} />;
+  };
   const conflictsOf = (item: ScheduledContent) => factConflicts(item, draftOf(item), documents);
 
   // Optimistic update; rolls back if the API rejects it.
@@ -341,11 +379,7 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
     if (!formPlatforms.length) return setFormError('Pilih minimal satu platform.');
     // Mirrors the server rules so the user gets the reason before the round trip.
     if (formDate < todayStr && formDate !== editing?.date) return setFormError('Tanggal publikasi tidak boleh di masa lalu.');
-    const linkedDraft = drafts.find(d => d.id === formDraftId);
-    const statusOrDraftChanged = !editing || editing.status !== formStatus || (editing.draftId || '') !== formDraftId;
-    if (formStatus !== 'draft' && statusOrDraftChanged && linkedDraft?.status !== 'disetujui') {
-      return setFormError('Status Terjadwal/Terbit hanya untuk jadwal yang ditautkan ke draf berstatus Disetujui. Simpan sebagai Draf, atau tautkan draf yang sudah disetujui.');
-    }
+
     if (formStatus === 'published' && formPostUrl.trim() && !isPostUrl(formPostUrl)) {
       return setFormError('Link post harus diawali http:// atau https://.');
     }
@@ -459,7 +493,7 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
       // No text in the image: FLUX renders letters unreliably; the caption carries the words.
       const result = await apiService.generateVisual({
         workspaceId: activeWorkspace.id,
-        prompt: `Professional social media visual for ${activeWorkspace.name}, an Indonesian regional public company (BUMD). Topic: ${item.title}.${pillarHint} Clean, modern, trustworthy corporate photography or illustration, Indonesian context, natural light. Absolutely no text, letters, numbers, or logos.`,
+        prompt: `Professional social media visual for ${activeWorkspace.name}, an Indonesian regional public company (). Topic: ${item.title}.${pillarHint} Clean, modern, trustworthy corporate photography or illustration, Indonesian context, natural light. Absolutely no text, letters, numbers, or logos.`,
         aspectRatio: item.platform === 'youtube' ? '16:9' : '1:1',
         primaryColor: normalizeHexColor(activeWorkspace.primaryColor),
         accentColor: normalizeHexColor(activeWorkspace.accentColor)
@@ -491,7 +525,7 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
     }
   };
 
-  // AI proposals enter the calendar as Draf: they still need a content draft and approval.
+  // AI proposals enter the calendar as Draf and can be edited before scheduling.
   const handlePlanAdd = async (slots: PlanSlot[], campaign: string) => {
     const created: ScheduledContent[] = [];
     try {
@@ -582,16 +616,17 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
   const calendarDays = useMemo(() => getCalendarDays(viewYear, viewMonth), [viewYear, viewMonth]);
   const weekDates = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
 
+  const workspaceSchedule = useMemo(() => schedule.filter(item => scheduleWorkspaces.some(workspace => workspace.id === item.workspaceId) && (scheduleWorkspaceId === 'all' || item.workspaceId === scheduleWorkspaceId)), [schedule, scheduleWorkspaces, scheduleWorkspaceId]);
   const campaigns = useMemo(
-    () => [...new Set(schedule.map(item => item.campaign).filter((c): c is string => Boolean(c)))].sort(),
-    [schedule]
+    () => [...new Set(workspaceSchedule.map(item => item.campaign).filter((c): c is string => Boolean(c)))].sort(),
+    [workspaceSchedule]
   );
 
-  const filteredSchedule = useMemo(() => schedule.filter(item =>
+  const filteredSchedule = useMemo(() => workspaceSchedule.filter(item =>
     (filterPlatform === 'all' || item.platform === filterPlatform) &&
     (filterStatus === 'all' || item.status === filterStatus) &&
     (filterCampaign === 'all' || item.campaign === filterCampaign)
-  ), [schedule, filterPlatform, filterStatus, filterCampaign]);
+  ), [workspaceSchedule, filterPlatform, filterStatus, filterCampaign]);
 
   const contentByDate = useMemo(() => {
     const map: Record<string, ScheduledContent[]> = {};
@@ -612,11 +647,11 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
 
   const monthMoments = momentsInMonth(viewYear, viewMonth, activeWorkspace.sector || '');
   const monthMomentList = Object.entries(monthMoments).sort().map(([date, names]) => `${formatShortDate(date)}: ${names.join(', ')}`);
-  const monthItemsAll = schedule.filter(item => item.date.startsWith(monthPrefix));
+  const monthItemsAll = workspaceSchedule.filter(item => item.date.startsWith(monthPrefix));
   const gapDates = emptyFutureDates(viewYear, viewMonth, todayStr, new Set(monthItemsAll.map(i => i.date)));
   const futureMonthDates = emptyFutureDates(viewYear, viewMonth, todayStr, new Set());
   const lowPillars = weakPillars(monthItemsAll);
-  const upcoming = schedule
+  const upcoming = workspaceSchedule
     .filter(item => item.status === 'scheduled' && !isOverdue(item))
     .filter(item => {
       const at = parseDateStr(item.date);
@@ -626,37 +661,34 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
     })
     .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
 
-  // "Siap Dijadwalkan": only approved drafts can enter the calendar as scheduled.
-  const approvedDrafts = drafts
-    .filter(d => d.status === 'disetujui')
+  const activeDrafts = drafts
+    .filter(d => d.status !== 'diarsipkan')
     .map(d => {
-      const slots = schedule.filter(s => s.draftId === d.id);
-      // A draft "has an image" if Studio Visual saved one or any of its schedules got one.
+      const slots = workspaceSchedule.filter(s => s.draftId === d.id);
       const image = d.visualAsset?.generatedImageUrl || slots.map(s => s.postImage || s.customImage).find(Boolean) || undefined;
       return { draft: d, slots, image, platforms: [...new Set(slots.map(s => s.platform))] };
     });
-  const readyQueue = approvedDrafts.filter(entry => !entry.slots.length);
-  const scheduledDrafts = approvedDrafts.filter(entry => entry.slots.length);
-  const awaitingReviewCount = drafts.filter(d => d.status === 'menunggu_review' || d.status === 'revisi_diminta').length;
+  const readyQueue = activeDrafts.filter(entry => !entry.slots.length);
+  const scheduledDrafts = activeDrafts.filter(entry => entry.slots.length);
 
   /** Other entries of the same draft on the same platform: a likely double post. */
   const duplicatesOf = (draftId: string | null | undefined, platforms: Platform[], exceptId?: string) =>
-    draftId ? schedule.filter(s => s.draftId === draftId && s.id !== exceptId && platforms.includes(s.platform)) : [];
+    draftId ? workspaceSchedule.filter(s => s.draftId === draftId && s.id !== exceptId && platforms.includes(s.platform)) : [];
 
   // Feed preview: newest first, like a profile grid; "all" mixes every platform.
-  const feedGrid = useMemo(() => schedule
+  const feedGrid = useMemo(() => workspaceSchedule
     .filter(item => (gridPlatform === 'all' || item.platform === gridPlatform) && (item.status === 'scheduled' || item.status === 'published'))
     .sort((a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time))
-    .slice(0, 9), [schedule, gridPlatform]);
+    .slice(0, 9), [workspaceSchedule, gridPlatform]);
   const feedCounts = useMemo(() => {
     const counts: Partial<Record<Platform | 'all', number>> = {};
-    for (const item of schedule) {
+    for (const item of workspaceSchedule) {
       if (item.status !== 'scheduled' && item.status !== 'published') continue;
       counts.all = (counts.all || 0) + 1;
       counts[item.platform] = (counts[item.platform] || 0) + 1;
     }
     return counts;
-  }, [schedule]);
+  }, [workspaceSchedule]);
 
   /* ── Drag & drop ── */
   const startDrag = (e: React.DragEvent, next: NonNullable<Dragged>) => {
@@ -664,9 +696,10 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
     setDragged(next);
   };
   const dropProps = (dateStr: string) => ({
-    onDragOver: (e: React.DragEvent) => { e.preventDefault(); setDragOverDate(dateStr); },
+    onDragOver: (e: React.DragEvent) => { if (!readOnly) { e.preventDefault(); setDragOverDate(dateStr); } },
     onDragLeave: () => setDragOverDate(null),
     onDrop: (e: React.DragEvent) => {
+      if (readOnly) return;
       e.preventDefault();
       setDragOverDate(null);
       const current = dragged;
@@ -696,7 +729,7 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
           ...(overdue ? { borderColor: 'rgba(239, 68, 68, 0.6)' } : {}),
           ...(item.pillar ? { borderLeft: `3px solid ${PILLARS[item.pillar].color}` } : {})
         }}
-        draggable
+        draggable={!readOnly}
         onDragStart={e => startDrag(e, { kind: 'card', id: item.id })}
         onDragEnd={() => setDragged(null)}
         onClick={() => { setPublishUrl(''); setSelectedCard(item); }}
@@ -711,6 +744,8 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
           <div className="content-card-meta">
             <span style={{ fontSize: '0.6rem', color: overdue ? DANGER : 'var(--text-muted)', fontWeight: 600 }}>{item.time}</span>
             <span className="content-card-platform" style={{ color: PLATFORM_COLORS[item.platform] }}>{PLATFORM_ICONS[item.platform]}</span>
+            {workspaceBadge(item)}
+            {(item.comments?.length || 0) > 0 && <span title={`${item.comments!.length} komentar`}><MessageSquare size={11} /></span>}
             {conflicts.length > 0 && <FileWarning size={10} style={{ color: WARN }} aria-label="Konflik fakta" />}
             <span className="content-card-status-dot" style={{ background: STATUS_COLORS[item.status].text }} />
           </div>
@@ -719,7 +754,7 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
     );
   };
 
-  const queueItem = ({ draft, slots, image, platforms }: (typeof approvedDrafts)[number]) => (
+  const queueItem = ({ draft, slots, image, platforms }: (typeof activeDrafts)[number]) => (
     <div
       key={draft.id}
       draggable
@@ -758,7 +793,7 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
     </button>
   ));
 
-  const addButton = (dateStr: string) => dateStr >= todayStr && (
+  const addButton = (dateStr: string) => !readOnly && dateStr >= todayStr && (
     <button className="cal-cell-add-hint" onClick={() => openAddModal(dateStr)} title="Tambah jadwal di tanggal ini" aria-label={`Tambah jadwal ${formatLongDate(dateStr)}`}>+</button>
   );
 
@@ -777,29 +812,38 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
             <span style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--accent-cyan)' }}>
-              {activeWorkspace.code} • Penjadwalan
+              {isCorporate ? 'Jadwal Perusahaan' : `${activeWorkspace.code} • Penjadwalan`}
             </span>
           </div>
           <h2 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <CalendarDays size={28} style={{ color: 'var(--primary)' }} />
-            Penjadwalan Konten
+            {isCorporate ? 'Kalender Konten Perusahaan' : 'Penjadwalan Konten'}
           </h2>
           <p className="page-subtitle">
-            Seret draf yang sudah disetujui dari antrian ke kalender, atur platform dan caption, lalu tandai terbit setelah dipublikasikan.
+            {isCorporate ? 'Lihat jadwal seluruh workspace atau pilih satu workspace. Buka item untuk membaca detail dan memberi komentar.' : 'Pilih draf hasil edit dari antrian, jadwalkan ke kalender, lalu tandai terbit setelah dipublikasikan.'}
           </p>
         </div>
       </div>
 
       {/* ── Action Bar ── */}
       <div className="scheduling-action-bar">
-        {!readOnly && (
-          <button className="btn btn-primary scheduling-add-btn" onClick={() => openAddModal()}>
-            <Plus size={18} />
-            <span>Tambah Jadwal Baru</span>
-          </button>
-        )}
-
         <div className="scheduling-filters">
+          {isCorporate && (
+            <div className="filter-group">
+              <Building2 size={15} style={{ color: 'var(--primary)' }} />
+              <select className="scheduling-filter-select" value={scheduleWorkspaceId} onChange={event => setScheduleWorkspaceId(event.target.value)} aria-label="Filter workspace">
+                <option value="all">Semua Workspace ({workspaces.length})</option>
+                {workspaces.map(workspace => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
+              </select>
+            </div>
+          )}
+          {!readOnly && (
+            <button className="btn btn-primary scheduling-add-btn" onClick={() => openAddModal()}>
+              <Plus size={18} />
+              <span>Tambah Jadwal Baru</span>
+            </button>
+          )}
+
           <div className="filter-group">
             <Filter size={14} style={{ color: 'var(--text-muted)' }} />
             <select className="scheduling-filter-select" value={filterPlatform} onChange={e => setFilterPlatform(e.target.value as Platform | 'all')} aria-label="Filter platform">
@@ -826,6 +870,12 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
         </div>
 
         <div className="scheduling-stats">
+          {isCorporate && (
+            <div className="stat-pill" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-subtle)', color: 'var(--text-primary)' }}>
+              <span style={{ fontWeight: 800 }}>{periodItems.length}</span>
+              <span>Total Konten</span>
+            </div>
+          )}
           {(['draft', 'scheduled', 'published'] as ScheduleStatus[]).map(status => (
             <div key={status} className="stat-pill" style={{ background: STATUS_COLORS[status].bg, borderColor: STATUS_COLORS[status].border }}>
               <span className="stat-dot" style={{ background: STATUS_COLORS[status].text }} />
@@ -842,7 +892,7 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
       </div>
 
       {/* ── Main Grid: Calendar + Sidebar ── */}
-      <div className="scheduling-main-grid">
+      <div className={`scheduling-main-grid ${readOnly ? 'corporate-scheduling-readonly' : ''} ${isCorporate && !corporateSidebarOpen ? 'corporate-full-width' : ''}`}>
         <div className="scheduling-calendar-section">
           <div className="calendar-header-bar">
             <button className="cal-nav-btn" onClick={() => goPeriod(-1)} aria-label="Periode sebelumnya"><ChevronLeft size={20} /></button>
@@ -853,6 +903,18 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
             </div>
             <button className="cal-nav-btn" onClick={() => goPeriod(1)} aria-label="Periode berikutnya"><ChevronRight size={20} /></button>
             <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px', alignItems: 'center' }}>
+              {isCorporate && (
+                <button
+                  type="button"
+                  className={`btn btn-sm ${corporateSidebarOpen ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '5px 12px', fontSize: '0.78rem', fontWeight: 600 }}
+                  onClick={() => setCorporateSidebarOpen(!corporateSidebarOpen)}
+                  title={corporateSidebarOpen ? 'Perluas Kalender (Sembunyikan Panel)' : 'Tampilkan Panel Ringkasan'}
+                >
+                  <Sidebar size={14} />
+                  <span>{corporateSidebarOpen ? 'Ringkasan' : 'Kalender Penuh'}</span>
+                </button>
+              )}
               <div role="tablist" aria-label="Tampilan kalender" style={{ display: 'flex', gap: '2px', padding: '2px', borderRadius: '8px', background: 'var(--bg-secondary, rgba(0,0,0,0.04))' }}>
                 {([['month', 'Bulan'], ['week', 'Minggu'], ['list', 'Daftar']] as [ViewMode, string][]).map(([mode, label]) => (
                   <button
@@ -886,11 +948,27 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
             </div>
           )}
           {viewMode !== 'list' && (
-            <div className="drag-hint-bar">
-              <Move size={14} />
-              <span>{schedule.length === 0
-                ? 'Belum ada jadwal — seret draf dari antrian "Siap Dijadwalkan" atau klik "Tambah Jadwal Baru"'
-                : 'Geser kartu ke tanggal lain untuk menjadwalkan ulang; seret draf dari antrian untuk menambah jadwal'}</span>
+            <div className={`drag-hint-bar ${isCorporate ? 'corporate-hint-bar' : ''}`}>
+              {isCorporate ? (
+                <>
+                  <Building2 size={16} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                  <span style={{ flex: 1 }}>
+                    {periodItems.length === 0
+                      ? 'Belum ada jadwal konten untuk workspace dan filter yang dipilih. Silakan pilih workspace lain atau periksa filter platform/status.'
+                      : 'Mode Pemantauan Korporat — Pantau jadwal publikasi seluruh entitas . Klik kartu konten untuk melihat detail brief dan memberikan catatan arahan direksi.'}
+                  </span>
+                  <span className="corporate-period-tag" style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--primary)', background: 'rgba(13, 12, 189, 0.08)', padding: '3px 8px', borderRadius: '6px' }}>
+                    {scheduleWorkspaceId === 'all' ? `${workspaces.length} Workspace Aktif` : (workspaces.find(w => w.id === scheduleWorkspaceId)?.name || 'Workspace Terpilih')}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Move size={14} />
+                  <span>{schedule.length === 0
+                    ? 'Belum ada jadwal — seret draf dari antrian "Siap Dijadwalkan" atau klik "Tambah Jadwal Baru"'
+                    : 'Geser kartu ke tanggal lain untuk menjadwalkan ulang; seret draf dari antrian untuk menambah jadwal'}</span>
+                </>
+              )}
             </div>
           )}
 
@@ -1015,7 +1093,158 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
         </div>
 
         {/* ── Sidebar ── */}
-        <div className="scheduling-sidebar">
+        {isCorporate ? (
+          corporateSidebarOpen ? (
+            <div className="scheduling-sidebar corporate-sidebar">
+              {/* 1. Ringkasan & Distribusi Workspace */}
+              <div className="sidebar-preview-panel">
+                <div className="sidebar-preview-header">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Building2 size={18} style={{ color: 'var(--primary)' }} />
+                    <span className="sidebar-preview-title">Distribusi Workspace</span>
+                  </div>
+                  <span className="sidebar-preview-badge" style={{ background: 'rgba(13, 12, 189, 0.08)', color: 'var(--primary)', borderColor: 'rgba(13, 12, 189, 0.2)' }}>
+                    {workspaces.length} Entitas
+                  </span>
+                </div>
+                <p className="sidebar-preview-desc" style={{ marginBottom: '10px' }}>
+                  Pilih workspace untuk memfilter tampilan kalender secara instan:
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <button
+                    type="button"
+                    className={`corporate-ws-item ${scheduleWorkspaceId === 'all' ? 'active' : ''}`}
+                    onClick={() => setScheduleWorkspaceId('all')}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                      <span className="ws-dot" style={{ background: 'var(--primary)' }} />
+                      <span style={{ fontWeight: 600, fontSize: '0.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Semua Workspace</span>
+                    </div>
+                    <span className="ws-count-badge">{periodItems.length} konten</span>
+                  </button>
+                  {workspaces.map(ws => {
+                    const wsItems = schedule.filter(s => s.workspaceId === ws.id && (viewMode === 'week' ? weekDates.includes(s.date) : s.date.startsWith(monthPrefix)));
+                    const color = workspaceColors.get(ws.id) || 'var(--primary)';
+                    const isSelected = scheduleWorkspaceId === ws.id;
+                    return (
+                      <button
+                        key={ws.id}
+                        type="button"
+                        className={`corporate-ws-item ${isSelected ? 'active' : ''}`}
+                        onClick={() => setScheduleWorkspaceId(isSelected ? 'all' : ws.id)}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                          <span className="ws-dot" style={{ background: color }} />
+                          <span style={{ fontWeight: 600, fontSize: '0.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ws.name}</span>
+                        </div>
+                        <span className="ws-count-badge" style={{ color: wsItems.length ? color : 'var(--text-muted)' }}>
+                          {wsItems.length} konten
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 2. Segera Tayang (24 Jam) */}
+              <div className="sidebar-preview-panel">
+                <div className="sidebar-preview-header">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Bell size={18} style={{ color: 'var(--accent-cyan)' }} />
+                    <span className="sidebar-preview-title">Segera Tayang (24 Jam)</span>
+                  </div>
+                  <button
+                    className={`btn btn-sm ${notifyEnabled ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ fontSize: '0.7rem', padding: '3px 8px' }}
+                    onClick={toggleNotifications}
+                    title="Notifikasi browser 10 menit sebelum jam tayang"
+                  >
+                    {notifyEnabled ? 'Pengingat aktif' : 'Aktifkan pengingat'}
+                  </button>
+                </div>
+                {upcoming.length === 0 ? (
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '4px 0 0' }}>Tidak ada konten terjadwal dalam 24 jam ke depan.</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {upcoming.map(item => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => { setPublishUrl(''); setSelectedCard(item); }}
+                        style={{
+                          display: 'flex', flexDirection: 'column', gap: '4px', textAlign: 'left',
+                          padding: '8px 10px', borderRadius: '10px',
+                          border: '1px solid var(--border-subtle)', background: 'var(--bg-tertiary)',
+                          cursor: 'pointer', transition: 'all var(--transition-fast)'
+                        }}
+                        className="upcoming-item-card"
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', fontSize: '0.72rem' }}>
+                          <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{item.date === todayStr ? item.time : `Besok ${item.time}`}</span>
+                          <span style={{ color: PLATFORM_COLORS[item.platform], display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            {PLATFORM_ICONS[item.platform]} {PLATFORM_LABELS[item.platform]}
+                          </span>
+                        </div>
+                        <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {item.title}
+                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          {workspaceBadge(item)}
+                          {item.campaign && <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>• {item.campaign}</span>}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 3. Momen Penting & Legenda Platform */}
+              <div className="sidebar-preview-panel">
+                <div className="sidebar-preview-header">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <CalendarCheck2 size={18} style={{ color: '#059669' }} />
+                    <span className="sidebar-preview-title">Momen Penting</span>
+                  </div>
+                  <span className="sidebar-preview-badge" style={{ background: 'rgba(16, 185, 129, 0.08)', color: '#059669', borderColor: 'rgba(16, 185, 129, 0.2)' }}>
+                    {MONTHS[viewMonth]}
+                  </span>
+                </div>
+                {monthMomentList.length === 0 ? (
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0 }}>Tidak ada momen khusus bulan ini.</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {monthMomentList.map((m, idx) => (
+                      <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem', padding: '6px 8px', borderRadius: '8px', background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
+                        <Star size={12} style={{ color: '#f59e0b', flexShrink: 0 }} />
+                        <span style={{ fontWeight: 600 }}>{m}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid var(--border-subtle)' }}>
+                  <div style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '8px' }}>
+                    Distribusi Platform
+                  </div>
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    {ALL_PLATFORMS.map(p => {
+                      const count = periodItems.filter(i => i.platform === p).length;
+                      if (count === 0) return null;
+                      return (
+                        <div key={p} className="status-pill" style={{ fontSize: '0.7rem', padding: '3px 8px', color: PLATFORM_COLORS[p], background: `${PLATFORM_COLORS[p]}14`, border: `1px solid ${PLATFORM_COLORS[p]}40` }}>
+                          {PLATFORM_ICONS[p]} {PLATFORM_LABELS[p]}: <strong>{count}</strong>
+                        </div>
+                      );
+                    })}
+                    {periodItems.length === 0 && <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Belum ada konten aktif.</span>}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null
+        ) : (
+          !readOnly ? (
+            <div className="scheduling-sidebar">
           {/* AI assistant */}
           <div className="sidebar-preview-panel">
             <div className="sidebar-preview-header">
@@ -1081,13 +1310,13 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
               </div>
               <span className="sidebar-preview-badge">{readyQueue.length} belum dijadwalkan</span>
             </div>
-            <p className="sidebar-preview-desc">Hanya draf berstatus Disetujui. Seret ke tanggal di kalender, atau klik untuk menjadwalkan.</p>
-            {approvedDrafts.length === 0 ? (
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Belum ada draf yang disetujui. Setujui draf di Editor & Versi terlebih dahulu.</p>
+            <p className="sidebar-preview-desc">Pilih draf aktif hasil edit untuk menjadwalkan. Seret ke tanggal di kalender, atau klik untuk menjadwalkan.</p>
+            {activeDrafts.length === 0 ? (
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Belum ada draf aktif. Buat brief dan hasilkan konten terlebih dahulu.</p>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '320px', overflowY: 'auto' }}>
                 {readyQueue.length === 0 && (
-                  <p style={{ fontSize: '0.8rem', color: '#059669', display: 'flex', gap: '6px', alignItems: 'center' }}><CheckCircle2 size={14} /> Semua draf yang disetujui sudah dijadwalkan.</p>
+                  <p style={{ fontSize: '0.8rem', color: '#059669', display: 'flex', gap: '6px', alignItems: 'center' }}><CheckCircle2 size={14} /> Semua draf aktif sudah dijadwalkan.</p>
                 )}
                 {readyQueue.map(entry => queueItem(entry))}
                 {scheduledDrafts.length > 0 && (
@@ -1102,11 +1331,7 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
                 )}
               </div>
             )}
-            {awaitingReviewCount > 0 && (
-              <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '6px' }}>
-                {awaitingReviewCount} draf masih menunggu review/revisi dan belum bisa dijadwalkan.
-              </p>
-            )}
+
           </div>
 
           {/* Instagram grid preview */}
@@ -1232,7 +1457,8 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
             </div>
           </div>
         </div>
-      </div>
+      ) : null)}
+    </div>
 
       {/* ── Add / Edit Modal ── */}
       {showAddModal && (
@@ -1259,9 +1485,9 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
                   if (draft && !formTitle.trim()) setFormTitle(draft.title);
                 }}>
                   <option value="">— Tidak ada —</option>
-                  {drafts.map(d => <option key={d.id} value={d.id}>{d.title} · {DRAFT_STATUS_LABELS[d.status]}</option>)}
+                  {drafts.map(d => <option key={d.id} value={d.id}>{d.title} · {d.status === 'diarsipkan' ? 'Diarsipkan' : 'Draf'}</option>)}
                 </select>
-                <small style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Status Terjadwal/Terbit hanya untuk draf berstatus Disetujui.</small>
+                <small style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Status jadwal tidak memerlukan persetujuan draf.</small>
               </div>
 
               <div className="form-group">
@@ -1413,7 +1639,7 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
                 <div style={{ width: '100%', aspectRatio: '16 / 9', borderRadius: '20px 20px 0 0', overflow: 'hidden' }}>{coverFor(selectedCard, 'hero')}</div>
               )}
             </div>
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', padding: '10px 20px 0' }}>
+            {!readOnly && <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', padding: '10px 20px 0' }}>
               <input ref={uploadInput} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={e => handleUploadImage(selectedCard, e.target.files?.[0])} />
               <button className="btn btn-sm btn-secondary" disabled={imageBusy !== null} onClick={() => uploadInput.current?.click()} style={{ fontSize: '0.75rem' }}>
                 <Upload size={12} /> {imageBusy === 'upload' ? 'Mengunggah…' : 'Unggah gambar'}
@@ -1429,7 +1655,7 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
               {selectedCard.postImage && selectedCard.customImage && (
                 <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', alignSelf: 'center' }}>Gambar dari post tetap diutamakan.</span>
               )}
-            </div>
+            </div>}
             <div className="modal-body">
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
                 <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>{selectedCard.title}</h3>
@@ -1442,31 +1668,15 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
                 <span className="status-pill" style={{ background: 'rgba(255,255,255,0.05)', color: PLATFORM_COLORS[selectedCard.platform], border: `1px solid ${PLATFORM_COLORS[selectedCard.platform]}40`, gap: '4px' }}>
                   {PLATFORM_ICONS[selectedCard.platform]} {PLATFORM_LABELS[selectedCard.platform]}
                 </span>
+                {workspaceBadge(selectedCard)}
                 {selectedCard.campaign && <span className="status-pill" style={{ color: 'var(--text-secondary)', border: '1px solid var(--border-color, rgba(0,0,0,0.12))' }}>{selectedCard.campaign}</span>}
               </div>
-              {/* Pillar is saved straight to content_schedules.pillar; clicking the active one clears it. */}
-              <div role="group" aria-label="Pilar konten" style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+              {/* Corporate sees schedule metadata; only content roles can change it. */}
+              {readOnly ? <div style={{ fontSize: '0.8rem' }}><strong>Pilar:</strong> {selectedCard.pillar ? PILLARS[selectedCard.pillar].label : 'Belum ditentukan'}</div> : <div role="group" aria-label="Pilar konten" style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Pilar</span>
-                {(Object.keys(PILLARS) as SchedulePillar[]).map(key => {
-                  const active = selectedCard.pillar === key;
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      aria-pressed={active}
-                      onClick={async () => {
-                        const saved = await persistSchedule({ ...selectedCard, pillar: active ? null : key });
-                        if (saved) setSelectedCard(saved);
-                      }}
-                      className="status-pill"
-                      style={{ cursor: 'pointer', color: active ? '#fff' : PILLARS[key].color, background: active ? PILLARS[key].color : 'transparent', border: `1px solid ${PILLARS[key].color}${active ? '' : '66'}` }}
-                    >
-                      {PILLARS[key].label}
-                    </button>
-                  );
-                })}
+                {(Object.keys(PILLARS) as SchedulePillar[]).map(key => { const active = selectedCard.pillar === key; return <button key={key} type="button" aria-pressed={active} onClick={async () => { const saved = await persistSchedule({ ...selectedCard, pillar: active ? null : key }); if (saved) setSelectedCard(saved); }} className="status-pill" style={{ cursor: 'pointer', color: active ? '#fff' : PILLARS[key].color, background: active ? PILLARS[key].color : 'transparent', border: `1px solid ${PILLARS[key].color}${active ? '' : '66'}` }}>{PILLARS[key].label}</button>; })}
                 {!selectedCard.pillar && <span style={{ fontSize: '0.72rem', color: WARN }}>Belum diberi pilar</span>}
-              </div>
+              </div>}
               <div style={{ display: 'flex', gap: '16px', color: 'var(--text-secondary)', fontSize: '0.85rem', flexWrap: 'wrap' }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><CalendarDays size={14} /> {formatLongDate(selectedCard.date)}</span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Clock size={14} /> {selectedCard.time} WIB</span>
@@ -1505,10 +1715,8 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
                 <p style={{ color: WARN, fontSize: '0.8rem' }}>Draf yang ditautkan tidak ditemukan.</p>
               ) : (
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                  Draf: <strong>{selectedDraft.title}</strong> · {DRAFT_STATUS_LABELS[selectedDraft.status]}
-                  {selectedCard.status !== 'draft' && selectedDraft.status !== 'disetujui' && (
-                    <span style={{ display: 'block', color: WARN, marginTop: '4px' }}>Draf ini tidak lagi berstatus Disetujui. Tinjau ulang sebelum dipublikasikan.</span>
-                  )}
+                  Draf: <strong>{selectedDraft.title}</strong> · {selectedDraft.status === 'diarsipkan' ? 'Diarsipkan' : 'Draf'}
+
                 </p>
               )}
 
@@ -1527,28 +1735,37 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', whiteSpace: 'pre-wrap' }}><strong>Catatan:</strong> {selectedCard.notes}</p>
               )}
 
+              <section aria-label="Komentar jadwal" style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
+                <h4 style={{ display: 'flex', alignItems: 'center', gap: '7px', margin: '0 0 10px', fontSize: '0.9rem' }}><MessageSquare size={16} /> Komentar ({selectedCard.comments?.length || 0})</h4>
+                <div style={{ display: 'grid', gap: '8px', marginBottom: '10px' }}>
+                  {(selectedCard.comments || []).map(comment => <article key={comment.id} style={{ padding: '9px 11px', borderRadius: '10px', background: 'var(--bg-secondary, rgba(0,0,0,0.035))' }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', fontSize: '0.72rem', color: 'var(--text-muted)' }}><strong>{comment.authorName}</strong><time>{new Date(comment.createdAt).toLocaleString()}</time></div><p style={{ margin: '5px 0 0', fontSize: '0.82rem', whiteSpace: 'pre-wrap' }}>{comment.text}</p></article>)}
+                  {!selectedCard.comments?.length && <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Belum ada komentar.</span>}
+                </div>
+                {isCorporate && <div style={{ display: 'grid', gap: '8px' }}><textarea className="form-textarea" aria-label="Tulis komentar" placeholder="Tambahkan komentar pada jadwal ini…" maxLength={2000} rows={2} value={commentText} onChange={event => setCommentText(event.target.value)} /><button type="button" className="btn btn-primary btn-sm" disabled={commentBusy || !commentText.trim()} onClick={handleAddComment}><MessageSquare size={14} /> {commentBusy ? 'Mengirim…' : 'Kirim komentar'}</button></div>}
+              </section>
+
               {selectedCard.status === 'published' && selectedCard.postUrl && isPostUrl(selectedCard.postUrl) && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                   <a href={selectedCard.postUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem' }}>
                     <ExternalLink size={14} /> Lihat post
                   </a>
-                  <button className="btn btn-sm btn-secondary" disabled={postImageBusy} onClick={() => refreshPostImage(selectedCard)} style={{ fontSize: '0.75rem' }}>
+                  {!readOnly && <button className="btn btn-sm btn-secondary" disabled={postImageBusy} onClick={() => refreshPostImage(selectedCard)} style={{ fontSize: '0.75rem' }}>
                     <RefreshCw size={12} /> {postImageBusy ? 'Mengambil gambar…' : selectedCard.postImage ? 'Ambil ulang gambar post' : 'Ambil gambar dari post'}
-                  </button>
+                  </button>}
                 </div>
               )}
-              {selectedCard.status === 'published' && !selectedCard.postUrl && (
+              {!readOnly && selectedCard.status === 'published' && !selectedCard.postUrl && (
                 <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Tambahkan link post lewat tombol Ubah untuk menampilkan gambar dari {PLATFORM_LABELS[selectedCard.platform]}.</p>
               )}
 
-              {selectedCard.status === 'scheduled' && (
+              {!readOnly && selectedCard.status === 'scheduled' && (
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center', padding: '10px', borderRadius: '10px', border: '1px dashed var(--border-color, rgba(0,0,0,0.15))' }}>
                   <input className="form-input" type="url" placeholder="Tempel link post (opsional)" value={publishUrl} onChange={e => setPublishUrl(e.target.value)} style={{ flex: 1 }} aria-label="Link post" />
                   <button className="btn btn-primary btn-sm" onClick={() => handleMarkPublished(selectedCard)}><Check size={14} /> Tandai Terbit</button>
                 </div>
               )}
             </div>
-            <div className="modal-footer">
+            {!readOnly && <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => handleDeleteSchedule(selectedCard)} style={{ marginRight: 'auto', color: DANGER }}>
                 <Trash2 size={16} /> Hapus
               </button>
@@ -1560,7 +1777,7 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
                   <ArrowUpRight size={16} /> Buka di Editor
                 </button>
               )}
-            </div>
+            </div>}
           </div>
         </div>
       )}
