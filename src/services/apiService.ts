@@ -6,8 +6,8 @@ export type PlanRequestBody={workspaceId:string;mode:'plan'|'gap';monthLabel:str
 
 const configuredApiUrl = import.meta.env.VITE_API_URL;
 const API_URL = typeof window === 'undefined' ? configuredApiUrl || 'http://127.0.0.1:3005'
-  : configuredApiUrl && !/^http:\/\/(127\.0\.0\.1|localhost):3005$/.test(configuredApiUrl) ? configuredApiUrl
-  : `${window.location.protocol}//${window.location.hostname}:3005`;
+  : configuredApiUrl && !/^https?:\/\/(127\.0\.0\.1|localhost):\d+$/.test(configuredApiUrl) ? configuredApiUrl
+  : `${window.location.protocol}//${window.location.host}`;
 
 let authToken = typeof localStorage !== 'undefined' ? (localStorage.getItem('vibecontent_token') || '') : '';
 

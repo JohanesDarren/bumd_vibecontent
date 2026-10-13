@@ -20,7 +20,8 @@ import { PostImageError, fetchPostImage, validateImageDataUrl } from './postImag
 import { buildPlanPrompt, cleanPlanRequest, parsePlanSlots } from './plan.ts';
 
 const app = express();
-const allowedOrigins=(process.env.API_ALLOWED_ORIGIN||'http://localhost:5173,http://127.0.0.1:5173').split(',');
+const allowedOrigins=(process.env.API_ALLOWED_ORIGIN || (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5173,http://127.0.0.1:5173')).split(',').map(origin=>origin.trim()).filter(Boolean);
+if(process.env.NODE_ENV === 'production' && !allowedOrigins.length) throw new Error('API_ALLOWED_ORIGIN is required in production');
 app.use(cors({ origin: (origin, callback) => callback(null, !origin || allowedOrigins.includes(origin)), credentials: true, exposedHeaders: ['X-Session-Idle-Seconds'] }));
 app.use(express.json({ limit: '8mb' }));
 // ponytail: same-site cookie requires an Origin check on writes; configure API_ALLOWED_ORIGIN for deployments.
@@ -243,11 +244,11 @@ app.post('/api/rag/prune', knowledgeManager, requireWorkspace(req => req.body?.w
 app.use('/api',(_req,res)=>{res.status(404).json({error:'Endpoint not found'});});
 app.use((error:unknown,_req:express.Request,res:express.Response,_next:express.NextFunction)=>{console.error(error);if((error as {code?:string}).code==='23505')return res.status(409).json({error:'A record with these unique values already exists (duplicate email or code)'});res.status(500).json({error:error instanceof Error?error.message:'Internal server error'});});
 
-const port=Number(process.env.API_PORT||3005);
+const port=Number(process.env.PORT||process.env.API_PORT||3005);
 if(process.env.NODE_ENV!=='test') {
   runMigrations()
     .then(provisionSuperadmin)
-    .then(() => app.listen(port, () => console.log(`VibeContent API http://127.0.0.1:${port}`)))
+    .then(() => app.listen(port, '0.0.0.0', () => console.log(`VibeContent API listening on 0.0.0.0:${port}`)))
     .catch(async error => {
       console.error('Database migrations failed; API server was not started.', error);
       await pool.end();
