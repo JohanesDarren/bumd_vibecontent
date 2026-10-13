@@ -8,7 +8,6 @@ import {
   Workspace,
   User,
   GroundedCitation,
-  KnowledgeDocument,
   ActiveTab
 } from '../types';
 import { 
@@ -59,7 +58,6 @@ interface BriefStudioViewProps {
   activeWorkspace: Workspace;
   activeUser: User;
   drafts: ContentDraft[];
-  documents: KnowledgeDocument[];
   settings: AppSettings;
   onOpenEditor: (draftId: string) => void;
   onGenerateDraft: (brief: ContentBrief, output: GeneratedOutput) => Promise<string> | string;
@@ -91,7 +89,6 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
   activeWorkspace,
   activeUser,
   drafts,
-  documents,
   settings,
   onOpenEditor,
   onGenerateDraft,
@@ -254,15 +251,16 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
     if (!usedRemoteService) {
       setUsedRemoteRag(false);
       setRagModel(null);
-      output = generateContentFromBrief(brief, brandProfile, documents, activeWorkspace.id);
-      setPrivacyNotice('Mode privasi tinggi aktif — konten dibuat lokal dari dokumen aktif tanpa memanggil layanan RAG eksternal.');
+      setGenerationError('Mode privasi lokal aktif. Aktifkan RAG untuk membuat draf AI; draf tidak dibuat.');
+      setIsGenerating(false);
+      return;
     } else {
-      if (ragService && (!ragService.configured || !ragService.ready)) {
-        const reason = ragService.error || 'Layanan RAG belum siap.';
-        remote.unsupportedClaims = [`${reason} Isi brief disimpan sebagai draf yang perlu dicek dulu.`];
+      if (!ragService || !ragService.configured) {
         setUsedRemoteRag(false);
         setRagModel(null);
-        setGenerationError('Layanan pencari dokumen belum siap. Draf sementara tetap dibuat dari brief dan ditandai perlu dicek dulu.');
+        setGenerationError('RAG_API_KEY belum terkonfigurasi. Draf AI tidak dibuat; periksa .env.local lalu mulai ulang server.');
+        setIsGenerating(false);
+        return;
       } else {
         const retrievalQuery = buildRetrievalQuery(settings, { title, keyMessage, targetAudience, tone, channel, format });
         const queryForRag = settings.privacy.includeBrandContextInQuery
@@ -330,6 +328,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
             unsupported.push(`Sistem belum menemukan dokumen resmi yang mendukung klaim ini (alasan: ${rag.no_answer_reason}).`);
           }
           remote = { answer, citations, unsupportedClaims: unsupported, grounded: guarded.grounded, model: responseModel };
+          setRagService(current => current ? { ...current, ready: true } : current);
           setRagModel(responseModel || null);
           setUsedRemoteRag(true);
           setRagNotice(
@@ -343,37 +342,20 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
         } catch (error) {
           console.error('ragQuery failed:', error);
           const reason = error instanceof Error ? error.message : 'Layanan RAG tidak dapat dihubungi.';
-          remote.unsupportedClaims = [`${reason} Isi brief disimpan sebagai draf yang perlu dicek dulu.`];
           setUsedRemoteRag(false);
           setRagModel(null);
-          setGenerationError('Layanan pencari dokumen gagal dihubungi. Draf sementara dibuat dari brief tanpa mengarang fakta, dan perlu dicek dulu sebelum dipublikasikan.');
-        }
-      }
-      const groundedUsable = remote.grounded && Boolean(remote.answer)
-        && reviewRagCopy(sanitizeRagAnswer(remote.answer), brief, brandProfile, remote.citations).blocking.length === 0;
-      if (!groundedUsable) {
-        // No usable grounded answer: have the model analyse and rewrite the brief
-        // instead of echoing it. The draft stays flagged as needing verification.
-        try {
-          let composed = await apiService.ragCompose(activeWorkspace.id, structuredQuery);
-          const composedIssues = reviewRagCopy(sanitizeRagAnswer(composed.answer || ''), brief, brandProfile, remote.citations).blocking;
-          if (composedIssues.length) {
-            try {
-              composed = await apiService.ragCompose(activeWorkspace.id, structuredQuery, composedIssues.join(' '));
-            } catch (error) {
-              console.warn('ragCompose retry failed:', error);
-            }
-          }
-          remote = { ...remote, composedCopy: composed.answer, model: remote.model || composed.model };
-        } catch (error) {
-          console.warn('ragCompose failed, falling back to brief text:', error);
+          setGenerationError(`Generasi RAG gagal: ${reason}. Draf tidak dibuat.`);
+          setIsGenerating(false);
+          return;
         }
       }
       output = generateContentFromBrief(brief, brandProfile, [], activeWorkspace.id, remote);
     }
 
     if (usedRemoteService && !output.aiCopyUsed) {
-      setGenerationError(`AI belum berhasil menyusun naskah yang layak${output.qualityCheck.briefCompliance.details ? ` (${output.qualityCheck.briefCompliance.details})` : ''}. Draf sementara berisi isi brief dan perlu dicek dulu.`);
+      setGenerationError(`AI belum berhasil menyusun naskah yang layak${output.qualityCheck.briefCompliance.details ? ` (${output.qualityCheck.briefCompliance.details})` : ''}. Draf tidak dibuat.`);
+      setIsGenerating(false);
+      return;
     }
 
     streamText(output.content);
@@ -767,7 +749,6 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
                       // Highlight grounding markers
                       .replace(/\[References:([^\]]+)\]/g, '<span class="brief-citation-tag">[References:$1]</span>')
                       .replace(/\[(?:Perlu Verifikasi|Needs Verification)([^\]]*)\]/g, '<span class="brief-warning-tag">[Needs Verification$1]</span>')
-                      .replace(/\[DRAFT[^\]]*\]/g, '<span class="brief-draft-tag">[CORPORATE DRAFT - NOT YET APPROVED]</span>')
                       + (isStreaming ? '<span class="brief-cursor-blink">▊</span>' : '')
                   : ''
               }}

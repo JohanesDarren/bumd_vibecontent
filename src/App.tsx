@@ -16,7 +16,7 @@ import {
 } from './types';
 import { apiService, onUnauthorized, sessionIdleMs, setAuthToken } from './services/apiService';
 import { useRealtimeSignal } from './services/realtime';
-import { generateContentFromBrief, GeneratedOutput } from './services/ragEngine';
+import { GeneratedOutput } from './services/ragEngine';
 import { AppSettings, DEFAULT_SETTINGS, normalizeSettings } from './services/appSettings';
 
 // Components
@@ -45,7 +45,7 @@ import { CorporateUsersView } from './components/CorporateUsersView';
 
 import { AdminDashboard } from './components/AdminDashboard';
 
-import { canAccessTab, filterUsersForWorkspace } from './services/policies';
+import { canAccessTab, filterUsersForWorkspace, resolveDraftActor } from './services/policies';
 
 export function App() {
   const [authenticated, setAuthenticated] = useState(false);
@@ -131,10 +131,9 @@ export function App() {
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => { reloadRef.current = () => { void loadData().catch(() => {}); }; });
   useRealtimeSignal(() => {
-    if (!authenticated) return;
     if (refreshTimer.current) clearTimeout(refreshTimer.current);
     refreshTimer.current = setTimeout(() => reloadRef.current(), 250);
-  });
+  }, authenticated);
 
   // After email login: activate workspace by id and set the authenticated user as active
   // `user` is passed explicitly because React state (authUser) is not yet updated in the same tick.
@@ -254,15 +253,14 @@ export function App() {
   };
 
 
-
+  const draftActor = activeWorkspace ? resolveDraftActor(activeUser, authUser, activeWorkspace.id) : null;
 
   // Content Generation from Brief
-  // `output` is supplied by the Brief Studio (grounded live against the RAG service);
-  // otherwise we fall back to the local engine for callers that only pass a brief.
   const handleGenerateDraft = async (brief: ContentBrief, output?: GeneratedOutput): Promise<string> => {
-    if (!brandProfile || !activeWorkspace || !activeUser) throw new Error('Workspace or user is unavailable.');
+    if (!activeWorkspace || !draftActor) throw new Error('Akun aktif tidak memiliki akses ke workspace ini. Muat ulang sesi lalu coba lagi.');
+    if (!output?.aiCopyUsed) throw new Error('Draf tidak disimpan: salinan AI RAG yang layak belum tersedia.');
 
-    const generated = output ?? generateContentFromBrief(brief, brandProfile, documents, activeWorkspace.id);
+    const generated = output;
 
     const initialVersionon: DraftVersionon = {
       versionNumber: 1,
@@ -272,8 +270,8 @@ export function App() {
       unsupportedClaims: generated.unsupportedClaims,
       qualityCheck: generated.qualityCheck,
       createdAt: new Date().toISOString(),
-      createdBy: activeUser.name,
-      changeSummary: 'Initial RAG-grounded draft generated from official documents.'
+      createdBy: draftActor.name,
+      changeSummary: 'Initial draft generated from the content brief.'
     };
 
     const newDraft: ContentDraft = {
@@ -289,8 +287,8 @@ export function App() {
       visualAsset: generated.visualAsset,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      createdBy: activeUser.id,
-      creatorName: activeUser.name
+      createdBy: draftActor.id,
+      creatorName: draftActor.name
     };
 
     await apiService.saveDraft(newDraft, brief);
@@ -528,13 +526,12 @@ export function App() {
             />
           )}
 
-          {safeTab === 'brief_studio' && (
+          {safeTab === 'brief_studio' && draftActor && (
             <BriefStudioView 
               brandProfile={effectiveBrandProfile}
               activeWorkspace={activeWorkspace}
-              activeUser={activeUser}
+              activeUser={draftActor}
               drafts={drafts}
-              documents={documents}
               settings={appSettings}
               onOpenEditor={(id) => { setSelectedDraftId(id); setCurrentTab('editor'); }}
               onGenerateDraft={handleGenerateDraft}

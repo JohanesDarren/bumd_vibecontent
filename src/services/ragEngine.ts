@@ -453,20 +453,10 @@ export function generateContentFromBrief(
     } else {
       groundedKeyMessage = brief.keyMessage;
       validationIssues = groundedReview ? [...groundedReview.blocking, ...groundedReview.warnings] : [];
-      // Brief-only rewrite: the draft stays flagged for verification either way.
-      const composed = sanitizeRagAnswer(remote.composedCopy || '');
-      const composedReview = composed ? reviewRagCopy(composed, brief, brandProfile, citations) : null;
-      if (composedReview && !composedReview.blocking.length) {
-        groundedKeyMessage = composed;
-        aiCopyUsed = true;
-        validationIssues = composedReview.warnings;
-      } else if (remote.grounded && !unsupported.length) {
+      if (!unsupported.length) {
         unsupported.push(groundedReview
-          ? 'Jawaban dari dokumen resmi tidak dipakai; draf ini disusun dari brief dan masih perlu dicek dulu.'
-          : 'Tidak ada jawaban dari dokumen resmi; isi brief masih perlu dicek dulu.');
-      }
-      if (aiCopyUsed && !unsupported.length) {
-        unsupported.push('Naskah disusun AI dari brief tanpa dukungan dokumen resmi; mohon dicek dulu.');
+          ? 'Jawaban dari dokumen resmi tidak lolos pemeriksaan; draf berbasis brief tidak disimpan.'
+          : 'Tidak ada jawaban dari dokumen resmi; draf berbasis brief tidak disimpan.');
       }
     }
   } else {
@@ -518,7 +508,7 @@ export function generateContentFromBrief(
       '#PelayananPublik',
       '#InfoResmi'
     ].filter(Boolean).join(' ');
-    generatedText = `${ungroundedNotice ? `${ungroundedNotice}\n\n` : ''}[DRAF KORPORAT - BELUM DISETUJUI]
+    generatedText = `${ungroundedNotice ? `${ungroundedNotice}\n\n` : ''}[DRAF KORPORAT]
 
 ${brief.title.toUpperCase()}
 

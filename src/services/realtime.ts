@@ -12,14 +12,15 @@ import { subscribeToEvents, type ChangeSignal } from './apiService';
  * `onChange` is kept in a ref so a new function identity each render does not
  * tear down and re-open the SSE stream.
  */
-export function useRealtimeSignal(onChange: (signal: ChangeSignal | null) => void) {
+export function useRealtimeSignal(onChange: (signal: ChangeSignal | null) => void, enabled = true) {
   const handler = useRef(onChange);
   handler.current = onChange;
 
   useEffect(() => {
+    if (!enabled) return;
     const off = subscribeToEvents(signal => handler.current(signal));
     const onVisible = () => { if (document.visibilityState === 'visible') handler.current(null); };
     document.addEventListener('visibilitychange', onVisible);
     return () => { off(); document.removeEventListener('visibilitychange', onVisible); };
-  }, []);
+  }, [enabled]);
 }

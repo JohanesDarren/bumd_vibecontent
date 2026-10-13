@@ -1,11 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { canAccessTab, filterUsersForWorkspace } from './policies.ts';
+import { canAccessTab, filterUsersForWorkspace, resolveDraftActor } from './policies.ts';
 
 const creator = { role: 'creator' as const, workspaceId: 'ws-a' };
 const corporate = { role: 'corporate' as const, workspaceId: 'ws-a' };
 const superadmin = { role: 'superadmin' as const, workspaceId: 'ws-a' };
+
+test('draft actor falls back to authenticated identity only for a workspace membership', () => {
+  const account = { id: 'u1', name: 'Creator', email: 'creator@example.test', role: 'creator' as const, workspaces: [{ id: 'ws-a', name: 'A', code: 'A', role: 'creator' as const }] };
+  assert.equal(resolveDraftActor(null, account, 'ws-a')?.id, account.id);
+  assert.equal(resolveDraftActor(null, account, 'ws-b'), null);
+  assert.equal(resolveDraftActor({ id: 'u2', name: 'Active', email: '', role: 'creator', workspaceId: 'ws-a', avatar: '', title: '', department: '' }, account, 'ws-a')?.id, 'u2');
+});
 
 test('roles expose only their permitted menus', () => {
   assert.equal(canAccessTab(creator.role, 'brief_studio'), true);

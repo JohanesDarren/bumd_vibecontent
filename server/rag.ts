@@ -20,7 +20,7 @@ export const knowledgeBaseIdFor = workspaceKnowledgeBaseId;
 
 async function call<T>(path: string, init: RequestInit = {}, options: { ignoreNotFound?: boolean } = {}): Promise<T> {
   if (!ragConfigured()) throw new RagNotConfiguredError();
-  const response = await fetch(`${baseUrl()}${path}`, {
+  const request = () => fetch(`${baseUrl()}${path}`, {
     ...init,
     headers: {
       Authorization: `Bearer ${env.ragApiKey}`,
@@ -29,13 +29,27 @@ async function call<T>(path: string, init: RequestInit = {}, options: { ignoreNo
     },
     signal: AbortSignal.timeout(TIMEOUT_MS)
   });
+  let response = await request();
+  let raw = await response.text();
+  let body = raw ? (() => { try { return JSON.parse(raw); } catch { return null; } })() : null;
+
+  // A single retry handles transient LLM gateway failures without repeating policy refusals.
+  if (path === '/query' && [502, 503, 504].includes(response.status) && !/(invalid prompt|flagged as potentially violating|policy violation)/i.test(raw)) {
+    await new Promise(resolve => setTimeout(resolve, 250));
+    response = await request();
+    raw = await response.text();
+    body = raw ? (() => { try { return JSON.parse(raw); } catch { return null; } })() : null;
+  }
 
   // A 404 on a delete means "already gone" — treat it as success for idempotent syncs.
   if (options.ignoreNotFound && response.status === 404) return undefined as T;
-
-  const body = await response.json().catch(() => null);
   if (!response.ok || (body && body.success === false)) {
-    const message = body?.error?.message || body?.detail || body?.error || `RAG service responded ${response.status}`;
+    const message = body?.error?.message || body?.detail || body?.error || raw.trim() || `RAG service responded ${response.status}`;
+    if (typeof message === 'string' && /<html|<!doctype html/i.test(message)) {
+      const title = message.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]*>/g, '').trim();
+      const code = message.match(/Error code (\d{3})/i)?.[1] || response.status;
+      throw new Error(`${title || 'RAG gateway error'} (HTTP ${code})`);
+    }
     throw new Error(typeof message === 'string' ? message : JSON.stringify(message));
   }
   return (body && 'data' in body ? body.data : body) as T;

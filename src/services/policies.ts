@@ -1,4 +1,10 @@
-import type { ActiveTab, User, UserRole } from '../types/index.ts';
+import type { ActiveTab, AuthUser, User, UserRole } from '../types/index.ts';
+
+export function resolveDraftActor(activeUser: User | null, authUser: AuthUser | null, workspaceId: string): User | null {
+  if (activeUser?.workspaceId === workspaceId) return activeUser;
+  if (!authUser?.workspaces.some(workspace => workspace.id === workspaceId)) return null;
+  return { id: authUser.id, name: authUser.name, email: authUser.email, role: authUser.role, workspaceId, avatar: '', title: '', department: '' };
+}
 
 const access: Record<UserRole, ActiveTab[]> = {
   creator: ['dashboard', 'brief_studio', 'editor', 'visual_studio', 'content_scheduling', 'library'],

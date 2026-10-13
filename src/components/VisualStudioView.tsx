@@ -118,7 +118,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
       const result=await apiService.generateVisual({workspaceId:activeWorkspace.id,prompt:visual.visualPrompt,aspectRatio:visual.aspectRatio,headline:visual.headline,subheadline:visual.subheadline,badgeText:visual.badgeText,ctaText:visual.ctaText,disclaimer:visual.disclaimer,primaryColor:visual.primaryColor,accentColor:visual.accentColor});
       if(requestVersion!==version.current)return;
       setGeneratedImageUrl(result.imageUrl);
-      setMetadata(`${result.provider} · ${result.model} · JPEG`);
+      setMetadata(`${result.provider} · ${result.llmModel} → ${result.model} · JPEG`);
     } catch(error) {if(requestVersion===version.current)setGenerationError(error instanceof Error?error.message:'Visual design failed');}
     finally {setIsGenerating(false);}
   };
@@ -227,7 +227,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
               placeholder="Jelaskan visual yang Anda inginkan: suasana, komposisi, subjek, pencahayaan, arah seni, sudut kamera, dan warna…"
             />
             <div style={{ marginTop: '6px', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-              Cloudflare FLUX.1 schnell: Maksimal 2048 karakter. Akurasi teks pada gambar tidak dijamin; periksa kembali sebelum dipublikasikan.
+              Llama 3.2 3B menyusun arahan visual; FLUX.1 schnell membuat gambar. Maksimal arahan 4000 karakter. Teks pada gambar tidak dijamin akurat; periksa sebelum dipublikasikan.
             </div>
           </div>
 

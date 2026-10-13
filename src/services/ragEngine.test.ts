@@ -150,7 +150,7 @@ const refineBrand = {
 } satisfies BrandProfile;
 
 const fullDraft = [
-  '[CORPORATE DRAFT - NOT YET APPROVED]',
+  '[DRAF KORPORAT]',
   '',
   'JUDUL PENGUMUMAN',
   '',
@@ -226,7 +226,7 @@ test('amounts written as "juta" satisfy key-message numbers', () => {
   assert.ok(!review.warnings.some(issue => issue.includes('angka penting')));
 });
 
-test('brief-only composed copy is used when no official document matches', () => {
+test('brief-only composed copy is rejected when no official document matches', () => {
   const composed = 'Kabar gembira untuk warga! Pasang sambungan air baru kini hemat 30%: dari Rp1.250.000 cukup Rp875.000, berlaku sampai 31 Desember 2026 dan bisa dicicil hingga 3 kali.';
   const generated = generateContentFromBrief(copyBrief, copyBrand, [], 'ws-a', {
     answer: '',
@@ -235,9 +235,9 @@ test('brief-only composed copy is used when no official document matches', () =>
     grounded: false,
     composedCopy: composed
   });
-  assert.equal(generated.aiCopyUsed, true);
-  assert.ok(generated.content.includes('Kabar gembira untuk warga!'));
-  assert.ok(!generated.content.includes(copyBrief.keyMessage));
+  assert.equal(generated.aiCopyUsed, false);
+  assert.ok(!generated.content.includes('Kabar gembira untuk warga!'));
+  assert.ok(generated.content.includes(copyBrief.keyMessage));
   assert.match(generated.content, /DRAF PERLU VERIFIKASI/);
 });
 
@@ -263,7 +263,8 @@ test('writing instructions in Batasan are guidance, not published terms', () => 
     answer: '', citations: [], unsupportedClaims: ['Sumber resmi belum ditemukan.'], grounded: false,
     composedCopy: 'Mulai 1 Oktober 2026, pelanggan rumah tangga Perumda Tirta Demo membayar Rp 2.800 per meter kubik untuk pemakaian 10 meter kubik pertama, sesuai SK Direksi No. 55/2026. Layanan kami tetap siaga 24 jam.'
   });
-  assert.equal(generated.aiCopyUsed, true);
+  assert.equal(generated.aiCopyUsed, false);
+  assert.doesNotMatch(generated.content, /Mulai 1 Oktober 2026, pelanggan rumah tangga Perumda Tirta Demo/);
   assert.doesNotMatch(generated.content, /Syarat dan ketentuan|Tulis sepenuhnya|Dilarang keras/);
 });
 
