@@ -22,6 +22,11 @@ export const pool = new Pool({ connectionString });
 const here = dirname(fileURLToPath(import.meta.url));
 
 export async function runMigrations() {
+  const migrationLock = await pool.connect();
+  let locked = false;
+  try {
+    await migrationLock.query('SELECT pg_advisory_lock($1, $2)', [19031, 1]);
+    locked = true;
   const sql = await readFile(join(here, 'migrations', '001_initial.sql'), 'utf8');
   await pool.query(sql);
   await pool.query(`INSERT INTO schema_migrations(name) VALUES ('001_initial') ON CONFLICT DO NOTHING`);
@@ -64,6 +69,12 @@ export async function runMigrations() {
   }
   const scheduleComments = await readFile(join(here, 'migrations', '010_schedule_comments.sql'), 'utf8');
   if (!(await pool.query("SELECT 1 FROM schema_migrations WHERE name='010_schedule_comments'")).rowCount) await pool.query(scheduleComments);
+  } finally {
+    if (locked) {
+      try { await migrationLock.query('SELECT pg_advisory_unlock($1, $2)', [19031, 1]); }
+      finally { migrationLock.release(); }
+    } else migrationLock.release();
+  }
 }
 
 const scrypt = promisify(nodeCrypto.scrypt);
