@@ -4,6 +4,9 @@ import { ragConfigured } from './env.ts';
 import { knowledgeBaseIdFor, RagNotConfiguredError, ragDeleteDocument, ragIndexDocument, ragListDocuments, ragCompose, ragPlan, ragQuery, ragRefine, ragSearch, ragStatus } from './rag.ts';
 import express from 'express';
 import cors from 'cors';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { dirname } from 'node:path';
 import { 
   createDraft, createUserMembership, deleteBrand, deleteDraft, deleteKnowledgeSource, getKnowledgeAssignments,
   addScheduleComment, deleteSchedule, deleteUserMembership, getWorkspaceSettings,
@@ -24,6 +27,9 @@ const allowedOrigins=(process.env.API_ALLOWED_ORIGIN || (process.env.NODE_ENV ==
 if(process.env.NODE_ENV === 'production' && !allowedOrigins.length) throw new Error('API_ALLOWED_ORIGIN is required in production');
 app.use(cors({ origin: (origin, callback) => callback(null, !origin || allowedOrigins.includes(origin)), credentials: true, exposedHeaders: ['X-Session-Idle-Seconds'] }));
 app.use(express.json({ limit: '8mb' }));
+const distDir = resolve(dirname(fileURLToPath(import.meta.url)), '../dist');
+app.use(express.static(distDir));
+app.get(/.*/, (req, res, next) => req.path.startsWith('/api/') ? next() : res.sendFile(resolve(distDir, 'index.html')));
 // ponytail: same-site cookie requires an Origin check on writes; configure API_ALLOWED_ORIGIN for deployments.
 app.use('/api',(req,res,next)=>{if(['GET','HEAD','OPTIONS'].includes(req.method))return next();const origin=req.headers.origin;if(origin&&!allowedOrigins.includes(origin))return res.status(403).json({error:'Origin denied'});next();});
 
