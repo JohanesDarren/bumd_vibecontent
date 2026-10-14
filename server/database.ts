@@ -1,5 +1,8 @@
 import dotenv from 'dotenv';
-dotenv.config({ override: process.env.NODE_ENV === 'production' });
+const loadedEnv = dotenv.config();
+if (process.env.NODE_ENV === 'production' && loadedEnv.parsed?.DATABASE_URL) {
+  process.env.DATABASE_URL = loadedEnv.parsed.DATABASE_URL;
+}
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
