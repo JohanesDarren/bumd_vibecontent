@@ -84,7 +84,12 @@ async function removeKnowledgeDocFromRag(scopeId: string, documentId: string): P
   }
 }
 
-app.get('/api/health', async (_req,res,next) => { try { const result=await pool.query('SELECT current_database() database, now() time'); res.json({ok:true,...result.rows[0],liveListeners:subscriberCount()}); } catch(error){next(error);} });
+app.get('/api/health', async (_req,res,next) => { try {
+  const result=await pool.query("SELECT current_database() database, now() time, to_regclass('public.users') IS NOT NULL AS schema_ready");
+  const admin=result.rows[0].schema_ready ? await pool.query("SELECT EXISTS(SELECT 1 FROM users WHERE global_role='superadmin') AS provisioned") : {rows:[{provisioned:false}]};
+  const ready=result.rows[0].schema_ready && admin.rows[0].provisioned;
+  res.status(ready?200:503).json({ok:ready,...result.rows[0],superadmin_provisioned:admin.rows[0].provisioned,liveListeners:subscriberCount()});
+} catch(error){next(error);} });
 const isEmail=(v:unknown):v is string=>typeof v==='string'&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 app.post('/api/auth/login',async(req,res,next)=>{try{const {email,password}=req.body||{};if(!isEmail(email)||typeof password!=='string')return res.status(400).json({error:'Valid email and password are required'});res.json(await login(email,password,req,res));}catch(error){if(error instanceof Error&&/Invalid email or password|LEGACY_CLAIM/.test(error.message))return res.status(401).json({error:'Invalid email or password'});next(error);}});
 app.get('/api/auth/me',authenticate,(req,res)=>res.json(res.locals.user));
