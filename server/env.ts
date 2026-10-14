@@ -4,7 +4,7 @@ import 'dotenv/config';
 import dotenv from 'dotenv';
 import nodeCrypto from 'node:crypto';
 
-if (!['test', 'production'].includes(process.env.NODE_ENV || '')) dotenv.config({ path: '.env.local', override: true });
+if (process.env.NODE_ENV !== 'test') dotenv.config({ path: '.env.local', override: process.env.NODE_ENV !== 'production' });
 
 export const env = {
   ragApiUrl: process.env.RAG_API_URL || '',
