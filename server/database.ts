@@ -1,7 +1,10 @@
 import dotenv from 'dotenv';
 const loadedEnv = dotenv.config();
-if (process.env.NODE_ENV === 'production' && loadedEnv.parsed?.DATABASE_URL) {
-  process.env.DATABASE_URL = loadedEnv.parsed.DATABASE_URL;
+if (process.env.NODE_ENV === 'production' && loadedEnv.parsed) {
+  for (const key of ['DATABASE_URL', 'SUPERADMIN_EMAIL', 'SUPERADMIN_NAME', 'SUPERADMIN_PASSWORD']) {
+    const value = loadedEnv.parsed[key];
+    if (value) process.env[key] = value;
+  }
 }
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
