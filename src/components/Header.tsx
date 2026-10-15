@@ -48,13 +48,9 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className={`top-header ${activeUser.role === 'creator' ? 'creator-top-header' : ''}`}>
       <div className="header-left">
-        <div className="brand-logo-wrap" onClick={() => window.location.reload()}>
-          <div className="brand-title-group">
-            <h1>VibeContent</h1>
-            <div className="brand-tagline">AI Workspace • Knowledge Base Resmi</div>
-            <div className="brand-tagline" style={{ marginTop: '2px', opacity: 0.8, fontSize: '0.7rem' }}>Mesin Konten Korporat</div>
-          </div>
-        </div>
+        <button type="button" className="brand-logo-wrap" aria-label="VibeContent — muat ulang" title="VibeContent" onClick={() => window.location.reload()}>
+          <img className="brand-mark" src="/favicon.svg?v=2" alt="" width="38" height="38" />
+        </button>
 
         {activeUser.role === 'creator' && <nav className="creator-top-menu" aria-label="Menu kreator">
           {creatorMenu.map(({ tab, label }) => <button

@@ -276,7 +276,14 @@ body {
   gap: 12px;
   text-decoration: none;
   cursor: pointer;
+  padding: 0;
+  border: 0;
+  background: none;
 }
+.brand-logo-wrap:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; border-radius: 10px; }
+.brand-mark { display: block; flex: none; width: 38px; height: 38px; border-radius: 10px; }
+.creator-top-header .brand-logo-wrap:focus-visible { outline-color: #fff; }
+.creator-top-header .brand-mark { width: 32px; height: 32px; border-radius: 8px; }
 
 .brand-icon-gem {
   width: 40px;

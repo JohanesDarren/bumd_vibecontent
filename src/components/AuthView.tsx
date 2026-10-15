@@ -44,6 +44,10 @@ export const AuthView: React.FC<AuthViewProps> = ({ onAuthed }) => {
         <IsometricContentMotherboard className="w-full h-full" />
       </div>
 
+      <div className="absolute top-6 left-6 sm:top-9 sm:left-10 z-20" title="VibeContent">
+        <img src="/favicon.svg?v=2" alt="VibeContent" width="42" height="42" />
+      </div>
+
       {/* Left empty spacer to allow the 3D isometric processor chip to shine freely */}
       <div className="hidden lg:block lg:flex-1 h-full pointer-events-none" />
 
