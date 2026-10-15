@@ -2867,3 +2867,25 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   font-weight: 700;
   flex-shrink: 0;
 }
+
+/* KMS upload: native inputs stay keyboard-accessible; selection gets a clear target. */
+.kms-workspaces { border: 0; padding: 0; margin: 0; min-width: 0; }
+.kms-workspaces legend, .kms-file-field > label:first-child { font-weight: 600; color: var(--text-primary); }
+.kms-help { margin: 4px 0 10px; color: var(--text-secondary); font-size: .82rem; }
+.kms-workspace-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 10px; }
+.kms-workspace-option { position: relative; display: flex; align-items: center; gap: 12px; min-height: 54px; padding: 12px 14px; border: 1px solid var(--border-subtle); border-radius: 12px; background: var(--bg-primary); cursor: pointer; transition: border-color .15s, background-color .15s; }
+.kms-workspace-option:hover { border-color: var(--border-focus); }
+.kms-workspace-option:has(input:checked) { border-color: var(--border-focus); background: rgba(13, 12, 189, .07); }
+.kms-workspace-option:has(input:focus-visible) { outline: 3px solid var(--border-focus); outline-offset: 2px; }
+.kms-workspace-option:has(input:disabled) { opacity: .6; cursor: not-allowed; }
+.kms-workspace-option input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.kms-workspace-check { display: grid; place-items: center; flex: 0 0 21px; height: 21px; border: 1.5px solid var(--border-focus); border-radius: 6px; color: transparent; }
+.kms-workspace-option:has(input:checked) .kms-workspace-check { background: var(--border-focus); color: #fff; }
+.kms-file-field { position: relative; min-width: 0; }
+.kms-file-input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.kms-file-picker { display: flex; align-items: center; gap: 14px; min-height: 78px; padding: 15px 18px; border: 1.5px dashed var(--border-focus); border-radius: 12px; background: var(--bg-primary); cursor: pointer; }
+.kms-file-picker:hover, .kms-file-input:focus-visible + .kms-file-picker { outline: 3px solid rgba(13, 12, 189, .2); outline-offset: 2px; }
+.kms-file-picker.is-disabled { opacity: .6; cursor: not-allowed; }
+.kms-file-picker span { display: grid; gap: 3px; min-width: 0; }
+.kms-file-picker strong { overflow-wrap: anywhere; }
+.kms-file-picker small { color: var(--text-secondary); }
