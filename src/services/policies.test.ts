@@ -89,13 +89,14 @@ test('corporate schedule is company-wide, read-only, color-labeled, and supports
   assert.match(server, /app\.post\('\/api\/schedules\/:id\/comments',corporateOnly/);
 });
 
-test('knowledge documents show their workspace placement and support general placement for every workspace', async () => {
+test('corporate uploads to shared KMS without claiming workspace isolation', async () => {
   const view = await readFile(new URL('../components/KnowledgeBaseView.tsx', import.meta.url), 'utf8');
-  assert.match(view, /Penempatan/);
-  assert.match(view, /Umum · Semua workspace/);
-  assert.match(view, /workspaces\.every/);
-  assert.match(view, /workspaceAssignments/);
-  assert.match(view, /Pilih Umum untuk semua workspace/);
+  assert.match(view, /Knowledge Base Bersama/);
+  assert.match(view, /Aplikasi membatasi penggunaannya ke workspace terpilih/);
+  assert.match(view, /uploadKmsDocument/);
+  assert.match(view, /Digunakan di workspace/);
+  assert.match(view, /workspaceIds/);
+  assert.doesNotMatch(view, /Kategori <input/);
 });
 
 test('knowledge-base management is scoped to corporate and superadmin, not creators', async () => {

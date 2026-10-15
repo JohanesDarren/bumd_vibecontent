@@ -280,7 +280,9 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
             maxChars: 1800,
             allowedNumericClaims: extractNumericClaims(`${title} ${keyMessage} ${limitations} ${selectedCta}`)
           });
-          let citationHits = guarded.sources.filter(hit => typeof hit.content === 'string' && hit.content.trim());
+          // KMS supplies source metadata without excerpt text. Preserve real citations;
+          // numeric claims remain flagged until source text can corroborate them.
+          let citationHits = guarded.sources;
           if (!citationHits.length) {
             try {
               const retrieval = await apiService.ragSearch(activeWorkspace.id, retrievalQuery, toRagOptions(grounding));

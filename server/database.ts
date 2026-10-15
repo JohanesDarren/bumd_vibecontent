@@ -76,6 +76,8 @@ export async function runMigrations() {
   }
   const scheduleComments = await readFile(join(here, 'migrations', '010_schedule_comments.sql'), 'utf8');
   if (!(await pool.query("SELECT 1 FROM schema_migrations WHERE name='010_schedule_comments'")).rowCount) await pool.query(scheduleComments);
+  await pool.query(await readFile(join(here, 'migrations', '011_kms_documents.sql'), 'utf8'));
+  if (!(await pool.query("SELECT 1 FROM schema_migrations WHERE name='012_kms_document_workspaces'")).rowCount) await pool.query(await readFile(join(here, 'migrations', '012_kms_document_workspaces.sql'), 'utf8'));
   } finally {
     if (locked) {
       try { await migrationLock.query('SELECT pg_advisory_unlock($1, $2)', [19031, 1]); }

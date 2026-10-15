@@ -1,342 +1,56 @@
-import React, { useState, useMemo } from 'react';
-import { KnowledgeDocument, Workspace, User, DocumentCategory, DocumentStatus, KnowledgeChunk } from '../types';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+// ponytail: reset native file input after success so the same file can be selected again.
+import { UploadCloud, Trash2 } from 'lucide-react';
 import { apiService } from '../services/apiService';
-import { BookOpen, Plus, Search, Trash2, Edit, RefreshCw, AlertTriangle, ArrowLeft, Save, UploadCloud, Eye } from 'lucide-react';
+import type { KnowledgeDocument, Workspace, User } from '../types';
 
-interface Props {
-  documents: KnowledgeDocument[];
-  workspaces: Workspace[];
-  activeWorkspace: Workspace;
-  activeUser: User;
-  onNotify: (msg: string) => void;
-  onReload: () => Promise<void>;
-}
+type KmsDocument = { id:string; workspaceIds:string[]; title:string; filename:string; indexed:boolean };
+type Props = { documents:KnowledgeDocument[]; workspaces:Workspace[]; activeWorkspace:Workspace; activeUser:User; onNotify:(message:string)=>void; onReload:()=>Promise<void> };
 
-const hasGeneralPlacement = (assignments: KnowledgeDocument['workspaceAssignments'], workspaces: Workspace[]) =>
-  workspaces.length > 0 && workspaces.every(workspace => assignments?.some(item => item.workspaceId === workspace.id && item.enabled));
-
-export const KnowledgeBaseView: React.FC<Props> = ({ documents, workspaces, activeWorkspace, activeUser, onNotify, onReload }) => {
-  const [search, setSearch] = useState('');
-  const [editingDoc, setEditingDoc] = useState<KnowledgeDocument | null>(null);
-  const [isCreating, setIsCreating] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [rawText, setRawText] = useState('');
-
-  const filteredDocs = useMemo(() => {
-    if (!search) return documents;
-    const lower = search.toLowerCase();
-    return documents.filter(d => 
-      d.title.toLowerCase().includes(lower) || 
-      d.summary.toLowerCase().includes(lower) ||
-      d.category.toLowerCase().includes(lower)
-    );
-  }, [documents, search]);
-
-  const handleSync = async () => {
-    if (!window.confirm('Mulai sinkronisasi paksa ke RAG untuk workspace ini?')) return;
-    setBusy(true);
+export function KnowledgeBaseView({activeWorkspace,workspaces,onNotify}:Props) {
+  const [docs,setDocs]=useState<KmsDocument[]>([]);
+  const [file,setFile]=useState<File|null>(null);
+  const fileInput=useRef<HTMLInputElement>(null);
+  const [title,setTitle]=useState('');
+  const [workspaceIds,setWorkspaceIds]=useState<string[]>([activeWorkspace.id]);
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState('');
+  useEffect(()=>{apiService.listKmsDocuments().then(setDocs).catch(()=>setError('Daftar dokumen KMS gagal dimuat'));},[activeWorkspace.id]);
+  async function refresh(){try{setDocs(await apiService.listKmsDocuments());}catch{setError('Dokumen tersimpan, tetapi daftar gagal dimuat ulang. Muat ulang halaman untuk melihatnya.');}}
+  async function upload(event:FormEvent) {
+    event.preventDefault();
+    if(!file||!file.size||file.size>50*1024*1024||!/\.(md|pdf|docx)$/i.test(file.name)) return setError('Pilih MD, PDF, atau DOCX valid (maksimum 50 MB)');
+    if(!workspaceIds.length)return setError('Pilih minimal satu workspace');
+    setBusy(true);setError('');
     try {
-      const res = await apiService.ragSync(activeWorkspace.id);
-      onNotify(`Sinkronisasi selesai: ${res.indexed} berhasil, ${res.failed} gagal dari total ${res.total} dokumen.`);
-      await onReload();
-    } catch (err) {
-      onNotify(`Gagal sinkronisasi: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handlePrune = async () => {
-    if (!window.confirm('Bersihkan dokumen yang tidak valid/usang di RAG?')) return;
-    setBusy(true);
-    try {
-      const res = await apiService.ragPrune(activeWorkspace.id);
-      onNotify(`Pembersihan selesai: ${res.removed} dihapus, ${res.failed} gagal.`);
-    } catch (err) {
-      onNotify(`Gagal prune: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleDelete = async (doc: KnowledgeDocument) => {
-    if (!window.confirm(`Hapus dokumen "${doc.title}"? Ini akan menghapusnya dari database dan RAG.`)) return;
-    setBusy(true);
-    try {
-      const res = await apiService.deleteKnowledgeSource(activeWorkspace.id, doc.id);
-      onNotify(`Dokumen dihapus. Sinkronisasi RAG: ${res.ragSynced ? 'Berhasil' : 'Gagal'}`);
-      await onReload();
-    } catch (err) {
-      onNotify(`Gagal menghapus: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const openEditor = (doc?: KnowledgeDocument) => {
-    if (doc) {
-      setEditingDoc(JSON.parse(JSON.stringify(doc))); // deep copy
-      const text = (doc.chunks || []).map(c => `${c.section ? `[${c.section}]\n` : ''}${c.content}`).join('\n\n');
-      setRawText(text);
-      setIsCreating(false);
-    } else {
-      const newDoc: KnowledgeDocument = {
-        id: `doc-${activeWorkspace.code.toLowerCase()}-${Date.now()}`,
-        workspaceId: activeWorkspace.id,
-        workspaceAssignments: workspaces.map(workspace => ({ workspaceId: workspace.id, enabled: workspace.id === activeWorkspace.id })),
-        title: '',
-        category: 'sk_direksi',
-        owner: activeUser.name,
-        version: '1.0',
-        effectiveDate: new Date().toISOString().split('T')[0],
-        status: 'menunggu_persetujuan',
-        uploadDate: new Date().toISOString(),
-        fileSize: '0 KB',
-        summary: '',
-        chunks: []
-      };
-      setEditingDoc(newDoc);
-      setRawText('');
-      setIsCreating(true);
-    }
-  };
-
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingDoc) return;
-    
-    setBusy(true);
-    try {
-      // Very naive chunking strategy for text input.
-      // In a real scenario we'd use PDF parsing or NLP chunking.
-      const rawChunks = rawText.split('\n\n').filter(t => t.trim());
-      const updatedChunks: KnowledgeChunk[] = rawChunks.map((content, idx) => ({
-        id: `chk-${editingDoc.id}-${idx}`,
-        documentId: editingDoc.id,
-        section: `Bagian ${idx + 1}`,
-        page: 1,
-        content: content.trim(),
-        keywords: []
-      }));
-
-      const docToSave = {
-        ...editingDoc,
-        chunks: updatedChunks,
-        fileSize: `${Math.ceil(new Blob([rawText]).size / 1024)} KB`
-      };
-
-      const res = await apiService.saveKnowledgeSource(docToSave);
-      onNotify(`Dokumen disimpan. Sinkronisasi RAG: ${res.ragSynced ? 'Berhasil' : 'Gagal'}`);
-      setEditingDoc(null);
-      await onReload();
-    } catch (err) {
-      onNotify(`Gagal menyimpan: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  if (editingDoc) {
-    return (
-      <div className="card-panel" style={{ padding: '24px' }}>
-        <button className="btn btn-secondary btn-sm" onClick={() => setEditingDoc(null)} style={{ marginBottom: '16px' }} disabled={busy}>
-          <ArrowLeft size={16} /> Kembali
-        </button>
-        <h2 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Edit size={20} /> {isCreating ? 'Tambah Dokumen Pengetahuan' : 'Edit Dokumen'}
-        </h2>
-        
-        <form onSubmit={handleSave} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-          <div style={{ gridColumn: '1 / -1' }}>
-            <label className="form-group">
-              <span className="form-label">Judul Dokumen</span>
-              <input className="form-input" value={editingDoc.title} onChange={e => setEditingDoc({...editingDoc, title: e.target.value})} required disabled={busy}/>
-            </label>
-          </div>
-          
-          <label className="form-group">
-            <span className="form-label">Kategori</span>
-            <select className="form-select" value={editingDoc.category} onChange={e => setEditingDoc({...editingDoc, category: e.target.value as DocumentCategory})} disabled={busy}>
-              <option value="sk_direksi">SK Direksi</option>
-              <option value="sop_layanan">SOP Layanan</option>
-              <option value="tarif_resmi">Tarif Resmi</option>
-              <option value="laporan_tahunan">Laporan Tahunan</option>
-              <option value="panduan_merek">Panduan Merek</option>
-              <option value="siaran_pers">Siaran Pers</option>
-            </select>
-          </label>
-
-          <label className="form-group">
-            <span className="form-label">Status (Hanya Aktif yang diindeks RAG)</span>
-            <select className="form-select" value={editingDoc.status} onChange={e => setEditingDoc({...editingDoc, status: e.target.value as DocumentStatus})} disabled={busy}>
-              <option value="aktif">Aktif</option>
-              <option value="menunggu_persetujuan">Menunggu Persetujuan</option>
-              <option value="usang">Usang</option>
-              <option value="gagal_diproses">Gagal Diproses</option>
-            </select>
-          </label>
-
-          <label className="form-group">
-            <span className="form-label">Versi</span>
-            <input className="form-input" value={editingDoc.version} onChange={e => setEditingDoc({...editingDoc, version: e.target.value})} disabled={busy}/>
-          </label>
-          
-          <label className="form-group">
-            <span className="form-label">Tanggal Berlaku</span>
-            <input type="date" className="form-input" value={editingDoc.effectiveDate} onChange={e => setEditingDoc({...editingDoc, effectiveDate: e.target.value})} disabled={busy}/>
-          </label>
-
-          <div style={{ gridColumn: '1 / -1' }}>
-            <label className="form-group">
-              <span className="form-label">Ringkasan Dokumen</span>
-              <textarea className="form-input" rows={2} value={editingDoc.summary} onChange={e => setEditingDoc({...editingDoc, summary: e.target.value})} required disabled={busy}/>
-            </label>
-          </div>
-
-          <fieldset style={{ gridColumn: '1 / -1', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '14px' }}>
-            <legend style={{ padding: '0 6px', fontWeight: 700 }}>Penempatan Dokumen</legend>
-            <p className="settings-hint">Pilih Umum untuk semua workspace, atau tentukan workspace tertentu.</p>
-            <label style={{ display: 'flex', gap: '8px', alignItems: 'center', padding: '8px', marginBottom: '8px' }}>
-              <input type="checkbox" checked={hasGeneralPlacement(editingDoc.workspaceAssignments, workspaces)} disabled={busy || workspaces.length === 0} onChange={event => {
-                const selected = new Set(editingDoc.workspaceAssignments?.filter(item => item.enabled).map(item => item.workspaceId) || []);
-                const next = workspaces.map(workspace => ({ workspaceId: workspace.id, enabled: event.target.checked ? true : workspace.id === activeWorkspace.id && selected.has(workspace.id) }));
-                setEditingDoc({ ...editingDoc, workspaceId: activeWorkspace.id, workspaceAssignments: next });
-              }} />
-              <span>Umum · Semua workspace</span>
-            </label>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: '8px' }}>
-              {workspaces.map(workspace => {
-                const assigned = editingDoc.workspaceAssignments?.find(item => item.workspaceId === workspace.id);
-                return <label key={workspace.id} style={{ display: 'flex', gap: '8px', alignItems: 'center', padding: '8px', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
-                  <input type="checkbox" checked={Boolean(assigned?.enabled)} disabled={busy} onChange={event => {
-                    const current = editingDoc.workspaceAssignments || [];
-                    const next = current.some(item => item.workspaceId === workspace.id)
-                      ? current.map(item => item.workspaceId === workspace.id ? { ...item, enabled: event.target.checked } : item)
-                      : [...current, { workspaceId: workspace.id, enabled: event.target.checked }];
-                    setEditingDoc({ ...editingDoc, workspaceAssignments: next });
-                  }} />
-                  <span>{workspace.name} <small style={{ color: 'var(--text-muted)' }}>({workspace.code})</small></span>
-                </label>;
-              })}
-            </div>
-          </fieldset>
-
-          <div style={{ gridColumn: '1 / -1' }}>
-            <label className="form-group">
-              <span className="form-label">Teks Dokumen (Pisahkan antar paragraf/bab dengan baris kosong untuk pemecahan chunk)</span>
-              <textarea className="form-input" rows={12} value={rawText} onChange={e => setRawText(e.target.value)} required disabled={busy} placeholder="Masukkan teks dokumen mentah di sini..."/>
-            </label>
-          </div>
-
-          <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-            <button type="button" className="btn btn-secondary" onClick={() => setEditingDoc(null)} disabled={busy}>Batal</button>
-            <button type="submit" className="btn btn-primary" disabled={busy}>
-              <Save size={16} /> {busy ? 'Menyimpan...' : 'Simpan Dokumen'}
-            </button>
-          </div>
-        </form>
-      </div>
-    );
+      await apiService.uploadKmsDocument(file,title,workspaceIds);
+      setFile(null);setTitle('');if(fileInput.current)fileInput.current.value='';
+      onNotify('File diterima KMS. Pengindeksan belum terkonfirmasi.');
+      await refresh();
+    } catch(e){setError(e instanceof Error?e.message:'Upload gagal');}
+    finally{setBusy(false);}
   }
-
-  return (
-    <div style={{ padding: '0 8px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <div>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <BookOpen size={20} /> Knowledge Base Workspace
-          </h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>
-            Kelola sumber kebenaran (Source of Truth) untuk RAG  Anda.
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button className="btn btn-secondary btn-sm" onClick={handlePrune} disabled={busy} title="Bersihkan dokumen tak terdaftar dari remote RAG">
-            <AlertTriangle size={16} /> Prune
-          </button>
-          <button className="btn btn-secondary btn-sm" onClick={handleSync} disabled={busy} title="Sinkronkan ulang semua dokumen ke RAG">
-            <RefreshCw size={16} className={busy ? 'spin' : ''} /> Sync RAG
-          </button>
-          <button className="btn btn-primary btn-sm" onClick={() => openEditor()} disabled={busy}>
-            <Plus size={16} /> Tambah Dokumen
-          </button>
-        </div>
-      </div>
-
-      <div className="card-panel" style={{ padding: '0', overflow: 'hidden' }}>
-        <div style={{ padding: '16px', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-card)' }}>
-          <Search size={18} style={{ color: 'var(--text-muted)' }} />
-          <input 
-            type="text" 
-            placeholder="Cari dokumen..." 
-            value={search} 
-            onChange={e => setSearch(e.target.value)} 
-            style={{ border: 'none', background: 'transparent', outline: 'none', flex: 1, fontSize: '0.95rem', color: 'var(--text-color)' }}
-          />
-        </div>
-
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-            <thead>
-              <tr style={{ background: 'rgba(0,0,0,0.02)', borderBottom: '1px solid var(--border-color)', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                <th style={{ padding: '12px 16px', fontWeight: 600 }}>Judul</th>
-                <th style={{ padding: '12px 16px', fontWeight: 600 }}>Kategori</th>
-                <th style={{ padding: '12px 16px', fontWeight: 600 }}>Status</th>
-                <th style={{ padding: '12px 16px', fontWeight: 600 }}>Versi</th>
-                <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>Aksi</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredDocs.length === 0 ? (
-                <tr>
-                  <td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                    Tidak ada dokumen yang ditemukan.
-                  </td>
-                </tr>
-              ) : (
-                filteredDocs.map(doc => (
-                  <tr key={doc.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                    <td style={{ padding: '12px 16px' }}>
-                      <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{doc.title}</div>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '2px' }}>{doc.summary.substring(0, 60)}...</div>
-                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                        {hasGeneralPlacement(doc.workspaceAssignments, workspaces)
-                          ? 'Umum · Semua workspace'
-                          : workspaces.filter(workspace => doc.workspaceAssignments?.some(item => item.workspaceId === workspace.id && item.enabled)).map(workspace => workspace.name).join(', ') || 'Tidak ditempatkan'}
-                      </div>
-                    </td>
-                    <td style={{ padding: '12px 16px', fontSize: '0.88rem' }}>{doc.category.replace('_', ' ')}</td>
-                    <td style={{ padding: '12px 16px' }}>
-                      <span style={{ 
-                        padding: '4px 8px', 
-                        borderRadius: '4px', 
-                        fontSize: '0.75rem', 
-                        fontWeight: 600,
-                        textTransform: 'uppercase',
-                        background: doc.status === 'aktif' ? 'rgba(34,197,94,0.15)' : 'rgba(245,158,11,0.15)',
-                        color: doc.status === 'aktif' ? '#22c55e' : '#f59e0b' 
-                      }}>
-                        {doc.status.replace('_', ' ')}
-                      </span>
-                    </td>
-                    <td style={{ padding: '12px 16px', fontSize: '0.88rem', color: 'var(--text-muted)' }}>v{doc.version}</td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                      <div style={{ display: 'inline-flex', gap: '4px' }}>
-                        <button className="btn btn-secondary btn-sm" style={{ padding: '6px' }} onClick={() => openEditor(doc)} title="Edit">
-                          <Edit size={16} />
-                        </button>
-                        <button className="btn btn-secondary btn-sm" style={{ padding: '6px', color: '#ef4444' }} onClick={() => handleDelete(doc)} title="Hapus">
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-};
+  async function remove(doc:KmsDocument){
+    if(!confirm(`Hapus "${doc.title}" dari KMS bersama?`))return;
+    setBusy(true);setError('');
+    try{await apiService.deleteKmsDocument(doc.id);setDocs(current=>current.filter(x=>x.id!==doc.id));onNotify('Dokumen KMS dihapus');}
+    catch(e){setError(e instanceof Error?e.message:'Penghapusan gagal');}
+    finally{setBusy(false);}
+  }
+  return <section className="card-panel" style={{padding:24}}>
+    <h2>Knowledge Base Bersama</h2>
+    <p>File otomatis masuk satu project KMS. Aplikasi membatasi penggunaannya ke workspace terpilih.</p>
+    <form onSubmit={upload} style={{display:'grid',gap:12,marginTop:16}}>
+      <label>Judul dokumen <input className="form-input" required maxLength={200} value={title} onChange={e=>setTitle(e.target.value)} disabled={busy}/></label>
+      <fieldset><legend>Digunakan di workspace</legend>{workspaces.map(workspace=><label key={workspace.id} style={{display:'block'}}><input type="checkbox" checked={workspaceIds.includes(workspace.id)} disabled={busy} onChange={e=>setWorkspaceIds(current=>e.target.checked?[...current,workspace.id]:current.filter(id=>id!==workspace.id))}/> {workspace.name}</label>)}</fieldset>
+      <label>File MD, PDF, DOCX <input ref={fileInput} type="file" accept=".md,.pdf,.docx" required onChange={e=>setFile(e.target.files?.[0]||null)} disabled={busy}/></label>
+      <button className="btn btn-primary" disabled={busy||!file||!workspaceIds.length}><UploadCloud size={16}/>{busy?' Mengunggah...':' Unggah ke KMS'}</button>
+    </form>
+    {error&&<p role="alert" style={{color:'var(--danger-color,red)'}}>{error}</p>}
+    <h3 style={{marginTop:20}}>Dokumen perusahaan ini</h3>
+    {docs.map(doc=><div key={doc.id} style={{display:'flex',justifyContent:'space-between',padding:'8px 0'}}>
+      <span>{doc.title} ({doc.filename}) · {doc.workspaceIds.map(id=>workspaces.find(w=>w.id===id)?.name||id).join(', ')} · {doc.indexed?'Terindeks':'Indeks belum terkonfirmasi'}</span>
+      <button className="btn btn-secondary btn-sm" disabled={busy} aria-label={`Hapus ${doc.title}`} onClick={()=>remove(doc)}><Trash2 size={16}/></button>
+    </div>)}
+  </section>;
+}

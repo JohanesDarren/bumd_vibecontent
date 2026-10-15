@@ -9,6 +9,11 @@ test('production API URL preserves HTTPS host and any non-default port', async (
   assert.ok(source.includes('configuredApiUrl && !/^https?:\\/\\/(127\\.0\\.0\\.1|localhost):\\d+$/.test(configuredApiUrl)'));
 });
 
+test('Vite development server forwards API routes to the local backend', async () => {
+  const source = await readFile(new URL('../../vite.config.ts', import.meta.url), 'utf8');
+  assert.match(source, /proxy:\s*\{\s*['"]\/api['"]:\s*\{\s*target:\s*['"]http:\/\/127\.0\.0\.1:3005['"]/);
+});
+
 test('production API listener honors platform PORT and binds externally', async () => {
   const source = await readFile(new URL('../../server/index.ts', import.meta.url), 'utf8');
   assert.match(source, /process\.env\.PORT\s*\|\|\s*process\.env\.API_PORT/);

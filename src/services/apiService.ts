@@ -36,7 +36,7 @@ const captureIdle = (response: Response) => {
 export const sessionIdleMs = () => idleMs;
 
 async function request<T>(path:string, init?:RequestInit):Promise<T>{
-  const headers: Record<string, string> = { 'Content-Type':'application/json', ...(init?.headers as any || {}) };
+  const headers: Record<string, string> = { ...(init?.body instanceof FormData ? {} : {'Content-Type':'application/json'}), ...(init?.headers as any || {}) };
   if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
   const response=await fetch(`${API_URL}${path}`,{...init,credentials:'include',headers});
   captureIdle(response);
@@ -146,6 +146,12 @@ export const apiService={
   deleteSchedule:(workspaceId:string,id:string)=>request<{ok:boolean}>(`/api/organizations/${workspaceId}/schedules/${id}`,{method:'DELETE'}),
   deleteDraft:(workspaceId:string,id:string)=>request<{ok:boolean}>(`/api/organizations/${workspaceId}/drafts/${id}`,{method:'DELETE'}),
 
+  listKmsDocuments: () => request<Array<{id:string;workspaceIds:string[];title:string;filename:string;indexed:boolean}>>('/api/kms/documents'),
+  uploadKmsDocument: (file: File, title: string, workspaceIds: string[]) => {
+    const form = new FormData(); form.set('file',file); form.set('title',title); form.set('workspaceIds',JSON.stringify(workspaceIds));
+    return request<{id:string;indexed:boolean}>('/api/kms/documents',{method:'POST',body:form});
+  },
+  deleteKmsDocument: (id:string) => request<{ok:boolean}>(`/api/kms/documents/${encodeURIComponent(id)}`,{method:'DELETE'}),
   saveKnowledgeSource: (source: KnowledgeDocument) => request<KnowledgeDocument & {ragSynced?: boolean}>(`/api/knowledge-sources/${source.id}`, { method: 'PUT', body: JSON.stringify(source) }),
   deleteKnowledgeSource: (workspaceId: string, id: string) => request<{ok: boolean, ragSynced?: boolean}>(`/api/organizations/${workspaceId}/knowledge-sources/${id}`, { method: 'DELETE' })
 };
