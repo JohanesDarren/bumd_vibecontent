@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 // ponytail: reset native file input after success so the same file can be selected again.
-import { UploadCloud, Trash2, FileUp, Check } from 'lucide-react';
+import { UploadCloud, Trash2, Check } from 'lucide-react';
 import { apiService } from '../services/apiService';
 import type { KnowledgeDocument, Workspace, User } from '../types';
 
@@ -44,17 +44,14 @@ export function KnowledgeBaseView({activeWorkspace,workspaces,onNotify}:Props) {
       <label>Judul dokumen <input className="form-input" required maxLength={200} value={title} onChange={e=>setTitle(e.target.value)} disabled={busy}/></label>
       <fieldset className="kms-workspaces"><legend>Digunakan di workspace</legend>
         <p className="kms-help">Pilih workspace yang boleh menggunakan dokumen ini.</p>
-        <div className="kms-workspace-grid">{workspaces.map(workspace=><label key={workspace.id} className="kms-workspace-option">
-          <input type="checkbox" checked={workspaceIds.includes(workspace.id)} disabled={busy} onChange={e=>setWorkspaceIds(current=>e.target.checked?[...current,workspace.id]:current.filter(id=>id!==workspace.id))}/>
-          <span className="kms-workspace-check" aria-hidden="true"><Check size={14}/></span><span>{workspace.name}</span>
-        </label>)}</div>
+        <div className="kms-workspace-grid">{workspaces.map(workspace=><button key={workspace.id} type="button" className="kms-workspace-option" aria-pressed={workspaceIds.includes(workspace.id)} disabled={busy} onClick={()=>setWorkspaceIds(current=>current.includes(workspace.id)?current.filter(id=>id!==workspace.id):[...current,workspace.id])}>
+                  <span className="kms-workspace-check" aria-hidden="true"><Check size={14}/></span><span>{workspace.name}</span>
+                </button>)}</div>
       </fieldset>
       <div className="kms-file-field"><label htmlFor="kms-file">Dokumen</label>
         <p id="kms-file-help" className="kms-help">MD, PDF, atau DOCX · maksimal 50 MB</p>
         <input id="kms-file" className="kms-file-input" ref={fileInput} type="file" accept=".md,.pdf,.docx" required aria-describedby="kms-file-help" onChange={e=>{setFile(e.target.files?.[0]||null);setError('');}} disabled={busy}/>
-        <label htmlFor="kms-file" className={`kms-file-picker${busy?' is-disabled':''}`}><FileUp size={20} aria-hidden="true"/>
-          <span><strong>{file?file.name:'Pilih dokumen'}</strong><small>{file?`${(file.size/1024/1024).toFixed(2)} MB · klik untuk mengganti`:'Klik di sini untuk memilih file dari perangkat'}</small></span>
-        </label>
+        {file&&<p className="kms-file-selected" role="status">Terpilih: {file.name} · {(file.size/1024/1024).toFixed(2)} MB</p>}
       </div>
       <button className="btn btn-primary" disabled={busy||!file||!workspaceIds.length}><UploadCloud size={16}/>{busy?' Mengunggah...':' Unggah ke KMS'}</button>
     </form>
