@@ -48,6 +48,22 @@ test('rejects unsupported and spoofed files before provider call', () => {
   assert.throws(() => validateKnowledgeUpload('bad.docx', Buffer.from('PK\x03\x04')));
   assert.throws(() => validateKnowledgeUpload('bad.md', Buffer.from([0xff,0xfe])));
   assert.equal(validateKnowledgeUpload('notes.md', Buffer.from('# Valid notes')), 'text/markdown');
+  assert.equal(validateKnowledgeUpload('photo.jpg', Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAACAAIDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDp6KKK8Q+tP//Z','base64')), 'image/jpeg');
+  assert.equal(validateKnowledgeUpload('photo.png', Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEklEQVR4nGN831vEwMDAxAAGABfPAfJjif7XAAAAAElFTkSuQmCC','base64')), 'image/png');
+  assert.equal(validateKnowledgeUpload('photo.webp', Buffer.from('UklGRjoAAABXRUJQVlA4IC4AAADwAQCdASoCAAIAAUAmJaACdLoB+AAETAAA/u+sV/vvQG8n//Qk/BJ+CT+AYAAA','base64')), 'image/webp');
+  assert.throws(() => validateKnowledgeUpload('fake.jpg', Buffer.from('not an image')));
+  assert.throws(() => validateKnowledgeUpload('fake.mp4', Buffer.from('not a video')));
+});
+
+test('photo upload uses KMS photo repository and shared project', async () => {
+  const fetcher:typeof fetch=async (_url,init) => {
+    const form=init?.body as FormData;
+    assert.equal(form.get('repositoryType'),'photo');
+    assert.equal(form.get('organizationId'),'org-shared');
+    assert.equal((form.get('file') as File).type,'image/jpeg');
+    return new Response(JSON.stringify({success:true,document:{id:'photo-1'}}),{status:201});
+  };
+  await uploadKnowledgeFile({name:'photo.jpg',data:Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAACAAIDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDp6KKK8Q+tP//Z','base64'),title:'Style',category:'Foto'}, {url:'https://kms.test',key:'secret',organizationId:'org-shared'},fetcher);
 });
 
 test('uploads to fixed shared project with server-only key', async () => {

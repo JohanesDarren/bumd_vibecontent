@@ -1,4 +1,4 @@
-export type VisualInput = { workspaceId: string; prompt: string; aspectRatio: '1:1'|'9:16'|'16:9'; headline?: string; subheadline?: string; badgeText?: string; ctaText?: string; disclaimer?: string; primaryColor?: string; accentColor?: string };
+export type VisualInput = { workspaceId: string; prompt: string; referenceId?: string; aspectRatio: '1:1'|'9:16'|'16:9'; headline?: string; subheadline?: string; badgeText?: string; ctaText?: string; disclaimer?: string; primaryColor?: string; accentColor?: string };
 export type Scene = { width:number; height:number; background:string; concept:string; shapes:{path:string;fill:string;motion:'none'|'float'|'sway'|'pulse'}[]; copy:string[] };
 const color = (v:unknown):string => { if(typeof v !== 'string' || !/^#[0-9a-f]{6}$/i.test(v)) throw new Error('Invalid scene color'); return v; };
 export function normalizeHexColor(value: unknown): string | undefined {
@@ -14,7 +14,8 @@ export function validateVisualInput(value:unknown):VisualInput {
   if(typeof v.workspaceId !== 'string' || !/^[\w-]{1,180}$/.test(v.workspaceId)) throw new Error('workspaceId is required');
   if(typeof v.prompt !== 'string' || !v.prompt.trim() || v.prompt.length>4000) throw new Error('Creative direction must contain 1–4000 characters (not truncated)');
   if(!['1:1','9:16','16:9'].includes(String(v.aspectRatio))) throw new Error('Invalid aspect ratio');
-  const result:VisualInput={workspaceId:v.workspaceId,prompt:v.prompt,aspectRatio:v.aspectRatio as VisualInput['aspectRatio']};
+  if(v.referenceId!==undefined && (typeof v.referenceId!=='string'||!/^[A-Za-z0-9_-]{1,190}$/.test(v.referenceId)))throw new Error('Invalid reference ID');
+  const result:VisualInput={workspaceId:v.workspaceId,prompt:v.prompt,aspectRatio:v.aspectRatio as VisualInput['aspectRatio'],referenceId:v.referenceId as string|undefined};
   for(const key of ['headline','subheadline','badgeText','ctaText','disclaimer'] as const){
     if(v[key]!==undefined && (typeof v[key] !== 'string' || v[key].length>500)) throw new Error(`${key} must be at most 500 characters (not truncated)`);
     result[key]=(v[key] as string|undefined)||'';

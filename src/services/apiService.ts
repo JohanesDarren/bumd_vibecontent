@@ -125,7 +125,7 @@ export const apiService={
   ragSearch:(workspaceId:string,query:string,options?:RagOptionsPayload|number)=>request<{results:RagHit[]}>(`/api/rag/search`,{method:'POST',body:JSON.stringify({workspaceId,query,...(typeof options === 'number' ? {topK:options} : {options})})}),
   ragQuery:(workspaceId:string,query:string,options?:RagOptionsPayload|number)=>request<RagAnswer>(`/api/rag/query`,{method:'POST',body:JSON.stringify({workspaceId,query,...(typeof options === 'number' ? {topK:options} : {options})})}),
   ragRefine:(workspaceId:string,draftContent:string,promptAction:string)=>request<{answer:string;model?:string}>(`/api/rag/refine`,{method:'POST',body:JSON.stringify({workspaceId,draftContent,promptAction})}),
-  generateVisual:(input:import('./visualScene').VisualInput)=>request<{imageUrl:string;provider:string;model:string;llmModel:string;fallback:boolean;format:string;prompt:string;imagePrompt:string;dimensions:string}>('/api/visual/generate',{method:'POST',body:JSON.stringify(input)}),
+  generateVisual:(input:import('./visualScene').VisualInput)=>request<{imageUrl:string;provider:string;model:string;llmModel:string;fallback:boolean;format:string;prompt:string;imagePrompt:string;dimensions:string;referenceUsed:boolean;referenceTitle?:string;referenceId?:string}>('/api/visual/generate',{method:'POST',body:JSON.stringify(input)}),
   saveDraft:(draft:ContentDraft,brief?:ContentBrief)=>request<ContentDraft>(`/api/drafts/${draft.id}`,{method:'PUT',body:JSON.stringify({...draft,brief})}),
   fetchPostImage:(workspaceId:string,id:string)=>request<ScheduledContent>(`/api/organizations/${workspaceId}/schedules/${id}/post-image`,{method:'POST'}),
   setScheduleImage:(workspaceId:string,id:string,image:string|null,source?:'upload'|'ai')=>request<ScheduledContent>(`/api/organizations/${workspaceId}/schedules/${id}/custom-image`,{method:'PUT',body:JSON.stringify({image,source})}),
@@ -146,11 +146,13 @@ export const apiService={
   deleteSchedule:(workspaceId:string,id:string)=>request<{ok:boolean}>(`/api/organizations/${workspaceId}/schedules/${id}`,{method:'DELETE'}),
   deleteDraft:(workspaceId:string,id:string)=>request<{ok:boolean}>(`/api/organizations/${workspaceId}/drafts/${id}`,{method:'DELETE'}),
 
-  listKmsDocuments: () => request<Array<{id:string;workspaceIds:string[];title:string;filename:string;indexed:boolean}>>('/api/kms/documents'),
-  uploadKmsDocument: (file: File, title: string, workspaceIds: string[]) => {
-    const form = new FormData(); form.set('file',file); form.set('title',title); form.set('workspaceIds',JSON.stringify(workspaceIds));
+  listKmsDocuments: () => request<Array<{id:string;workspaceIds:string[];title:string;filename:string;indexed:boolean;mediaType:'document'|'photo'|'video'}>>('/api/kms/documents'),
+  uploadKmsDocument: (file: File, title: string, workspaceIds: string[], styleFrame?:Blob) => {
+      const form = new FormData(); form.set('file',file); form.set('title',title); form.set('workspaceIds',JSON.stringify(workspaceIds));
+      if(styleFrame)form.set('styleFrame',styleFrame,'style.jpg');
     return request<{id:string;indexed:boolean}>('/api/kms/documents',{method:'POST',body:form});
   },
+  listVisualReferences: (workspaceId:string) => request<Array<{id:string;title:string;mediaType:'photo'|'video'}>>(`/api/visual/references?workspaceId=${encodeURIComponent(workspaceId)}`),
   deleteKmsDocument: (id:string) => request<{ok:boolean}>(`/api/kms/documents/${encodeURIComponent(id)}`,{method:'DELETE'}),
   saveKnowledgeSource: (source: KnowledgeDocument) => request<KnowledgeDocument & {ragSynced?: boolean}>(`/api/knowledge-sources/${source.id}`, { method: 'PUT', body: JSON.stringify(source) }),
   deleteKnowledgeSource: (workspaceId: string, id: string) => request<{ok: boolean, ragSynced?: boolean}>(`/api/organizations/${workspaceId}/knowledge-sources/${id}`, { method: 'DELETE' })

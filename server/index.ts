@@ -1,5 +1,6 @@
 import './env.ts';
-import { generateVisual, VisualError } from './visual.ts';
+import { describeStyle, generateVisual, VisualError } from './visual.ts';
+import { chooseVisualReference } from './visualReferenceSelection.ts';
 import { env, ragConfigured } from './env.ts';
 import { knowledgeBaseIdFor, RagNotConfiguredError, ragDeleteDocument, ragIndexDocument, ragListDocuments, ragCompose, ragPlan, ragQuery, ragRefine, ragSearch, ragStatus } from './rag.ts';
 import express from 'express';
@@ -22,7 +23,7 @@ import { publish, subscribe, unsubscribe, subscriberCount, resolveScope } from '
 import { PostImageError, fetchPostImage, validateImageDataUrl } from './postImage.ts';
 import { buildPlanPrompt, cleanPlanRequest, parsePlanSlots } from './plan.ts';
 import Busboy from 'busboy';
-import { kmsConfig, uploadKnowledgeFile, deleteKnowledgeFile, queryKnowledge, searchKnowledge } from './kms.ts';
+import { kmsConfig, uploadKnowledgeFile, deleteKnowledgeFile, queryKnowledge, searchKnowledge, validateKnowledgeUpload } from './kms.ts';
 
 const app = express();
 const allowedOrigins=(process.env.API_ALLOWED_ORIGIN || (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5173,http://127.0.0.1:5173')).split(',').map(origin=>origin.trim()).filter(Boolean);
@@ -41,10 +42,27 @@ const contentOnly=(req:express.Request<any>,res:express.Response,next:express.Ne
 const knowledgeManager=(req:express.Request<any>,res:express.Response,next:express.NextFunction)=>['corporate','superadmin'].includes(res.locals.user.role)?next():res.status(403).json({error:'Corporate account required to manage the knowledge base'});
 const workspaceScopeFor=(workspaceId:string)=>workspaceId;
 
+
+
 app.post('/api/visual/generate', authenticate, contentOnly, requireWorkspace(req=>req.body?.workspaceId), async (req, res) => {
-  try { res.json(await generateVisual(req.body)); }
-  catch (error) { const e = error as VisualError; res.status(e.status || 500).json({ error: e.message, code: e.code || 'VISUAL_ERROR' }); }
+  try {
+    const {workspaceId,prompt,referenceId}=req.body||{};
+    if(typeof workspaceId!=='string'||typeof prompt!=='string'||!prompt.trim()||prompt.length>4000||referenceId!==undefined&&(typeof referenceId!=='string'||!/^[A-Za-z0-9_-]{1,190}$/.test(referenceId)))return res.status(400).json({error:'Invalid visual input'});
+    const media=await pool.query(`SELECT k.id,k.title FROM kms_documents k JOIN kms_document_workspaces a ON a.document_id=k.id WHERE a.workspace_id=$1 AND k.media_type IN ('photo','video') ORDER BY k.created_at DESC LIMIT 100`,[workspaceId]);
+    const selected=chooseVisualReference(prompt,media.rows,referenceId);
+    const frame=selected?await pool.query(`SELECT k.style_frame FROM kms_documents k JOIN kms_document_workspaces a ON a.document_id=k.id WHERE a.workspace_id=$1 AND k.id=$2 AND k.media_type IN ('photo','video')`,[workspaceId,selected.id]):null;
+    if(selected&&!frame?.rows[0]?.style_frame)return res.status(404).json({error:'Frame referensi tidak ditemukan'});
+    const style=selected?await describeStyle(frame!.rows[0].style_frame):undefined;
+    res.json({...await generateVisual(req.body,style),referenceId:selected?.id,referenceTitle:selected?.title});
+  }catch(error){
+    if(error instanceof Error&&/not authorized/.test(error.message))return res.status(404).json({error:'Referensi visual tidak ditemukan'});
+    const e=error as VisualError;res.status(e.status||500).json({error:e.status?e.message:'Visual generation failed',code:e.code||'VISUAL_ERROR'});
+  }
 });
+app.get('/api/visual/references',authenticate,contentOnly,requireWorkspace(req=>req.query.workspaceId),async(req,res,next)=>{try{
+  const rows=await pool.query(`SELECT k.id,k.title,k.media_type AS "mediaType" FROM kms_documents k JOIN kms_document_workspaces a ON a.document_id=k.id WHERE a.workspace_id=$1 AND k.media_type IN ('photo','video') ORDER BY k.created_at DESC LIMIT 100`,[req.query.workspaceId]);
+  res.json(rows.rows);
+}catch(error){next(error);}});
 
 // ── RAG service integration (best-effort: the app must keep working when the service is down) ──
 const knowledgeText = (doc: any): string => {
@@ -232,47 +250,53 @@ app.put('/api/brand-profile',contentOnly,requireWorkspace(req=>req.body?.workspa
 // All workspaces upload into the one dedicated KMS project; the workspace is retained only as local provenance.
 app.get('/api/kms/documents',knowledgeManager,async(_req,res,next)=>{try{
   const user=res.locals.user;
-  const rows=await pool.query(`SELECT k.id,k.workspace_id AS "workspaceId",k.title,k.filename,k.indexed,k.created_at AS "createdAt", COALESCE(array_agg(a.workspace_id ORDER BY a.workspace_id) FILTER (WHERE a.workspace_id IS NOT NULL),'{}') AS "workspaceIds" FROM kms_documents k LEFT JOIN kms_document_workspaces a ON a.document_id=k.id WHERE $1='superadmin' OR k.company_id=$2 GROUP BY k.id ORDER BY k.created_at DESC`,[user.role,user.companyId]);
+  const rows=await pool.query(`SELECT k.id,k.workspace_id AS "workspaceId",k.title,k.filename,k.indexed,k.media_type AS "mediaType",k.created_at AS "createdAt", COALESCE(array_agg(a.workspace_id ORDER BY a.workspace_id) FILTER (WHERE a.workspace_id IS NOT NULL),'{}') AS "workspaceIds" FROM kms_documents k LEFT JOIN kms_document_workspaces a ON a.document_id=k.id WHERE $1='superadmin' OR k.company_id=$2 GROUP BY k.id ORDER BY k.created_at DESC`,[user.role,user.companyId]);
   // ponytail: KMS stores one corpus; this list shows only local assignments.
   res.json(rows.rows);
 }catch(e){next(e);}});
 app.post('/api/kms/documents',knowledgeManager,async(req,res,next)=>{
   const user=res.locals.user;
   let form:Busboy.Busboy;
-  try{form=Busboy({headers:req.headers,limits:{files:1,fields:2,fileSize:50*1024*1024,parts:4,fieldSize:4096}});}catch{return res.status(400).json({error:'Multipart form diperlukan'});}
-  const fields:Record<string,string>={};let filename='',fileData:Buffer|undefined,invalid=false;
+  try{form=Busboy({headers:req.headers,limits:{files:2,fields:2,fileSize:50*1024*1024,parts:5,fieldSize:4096}});}catch{return res.status(400).json({error:'Multipart form diperlukan'});}
+  const fields:Record<string,string>={};let filename='',fileData:Buffer|undefined,frame:Buffer|undefined,invalid=false;
   form.on('field',(name,value)=>{if(!['title','workspaceIds'].includes(name)||name in fields)invalid=true;else fields[name]=value;});
   form.on('file',(name,file,info)=>{
-    if(name!=='file'||filename)invalid=true;
-    filename=info.filename||'';const chunks:Buffer[]=[];
-    file.on('data',(chunk:Buffer)=>chunks.push(chunk));
+    if(!['file','styleFrame'].includes(name)||(name==='file'&&filename)||(name==='styleFrame'&&frame))invalid=true;
+    if(name==='file')filename=info.filename||'';
+    let size=0;const chunks:Buffer[]=[];
+    file.on('data',(chunk:Buffer)=>{size+=chunk.length;if(name==='styleFrame'&&size>1024*1024){invalid=true;return;}chunks.push(chunk);});
     file.on('limit',()=>{invalid=true;});
-    file.on('end',()=>{fileData=Buffer.concat(chunks);});
+    file.on('end',()=>{if(name==='file')fileData=Buffer.concat(chunks);else frame=Buffer.concat(chunks);});
   });
   form.on('filesLimit',()=>{invalid=true;});form.on('fieldsLimit',()=>{invalid=true;});form.on('partsLimit',()=>{invalid=true;});
-  // Busboy emits partsLimit even when the count equals the limit; allow the three expected parts plus one sentinel.
+  // Busboy emits partsLimit at the boundary; allow four parts plus one sentinel.
   try{await new Promise<void>((resolve,reject)=>{form.on('close',resolve);form.on('error',reject);req.pipe(form);});
     if(invalid||!fileData||!fields.title?.trim()||!fields.workspaceIds){console.warn('[kms] invalid multipart', {invalid,hasFile:!!fileData,fields:Object.keys(fields)});return res.status(400).json({error:'File, judul, dan workspace wajib diisi (maksimum 50 MB)'});}
     if(fields.title.length>200)return res.status(400).json({error:'Judul terlalu panjang'});
+    const mime=validateKnowledgeUpload(filename,fileData);
+    const mediaType=mime.startsWith('image/')?'photo':mime==='video/mp4'?'video':'document';
+    if(mediaType==='photo'&&fileData.length>5*1024*1024)return res.status(400).json({error:'Foto maksimal 5 MB untuk analisis gaya'});
+    if(mediaType!=='document'&&(!frame||frame.length>1024*1024||validateKnowledgeUpload('style.jpg',frame)!=='image/jpeg'))return res.status(400).json({error:'Foto/video membutuhkan frame referensi JPEG valid maksimal 1 MB'});
+    if(mediaType==='document'&&frame)return res.status(400).json({error:'Frame hanya untuk foto/video'});
     let workspaceIds:unknown;
     try{workspaceIds=JSON.parse(fields.workspaceIds);}catch{return res.status(400).json({error:'Pilihan workspace tidak valid'});}
     if(!Array.isArray(workspaceIds)||!workspaceIds.length||workspaceIds.length>100||workspaceIds.some(id=>typeof id!=='string'||!id)||new Set(workspaceIds).size!==workspaceIds.length)return res.status(400).json({error:'Pilihan workspace tidak valid'});
     const workspaces=await pool.query('SELECT id,company_id FROM organizations WHERE id=ANY($1::text[])',[workspaceIds]);
     if(workspaces.rowCount!==workspaceIds.length||workspaces.rows.some(w=>w.company_id!==workspaces.rows[0].company_id)||user.role==='corporate'&&workspaces.rows[0].company_id!==user.companyId)return res.status(403).json({error:'Workspace tidak diizinkan'});
-    const result=await uploadKnowledgeFile({name:filename,data:fileData,title:fields.title,category:'Dokumen'});
+    const result=await uploadKnowledgeFile({name:filename,data:fileData,title:fields.title,category:mediaType==='document'?'Dokumen':'Referensi Visual'});
     let doc;
     let client:import('pg').PoolClient|undefined;
     try {
       client=await pool.connect();
       await client.query('BEGIN');
-      doc=await client.query(`INSERT INTO kms_documents(id,company_id,workspace_id,title,category,filename) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,title,filename`,[result.document.id,workspaces.rows[0].company_id,workspaceIds[0],fields.title.trim(),'Dokumen',filename]);
+      doc=await client.query(`INSERT INTO kms_documents(id,company_id,workspace_id,title,category,filename,media_type,style_frame) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id,title,filename,media_type AS "mediaType"`,[result.document.id,workspaces.rows[0].company_id,workspaceIds[0],fields.title.trim(),mediaType==='document'?'Dokumen':'Referensi Visual',filename,mediaType,frame||null]);
       for(const id of workspaceIds)await client.query('INSERT INTO kms_document_workspaces(document_id,workspace_id) VALUES($1,$2)',[result.document.id,id]);
       await client.query('COMMIT');
     }catch(error){if(client)await client.query('ROLLBACK').catch(()=>{});try{await deleteKnowledgeFile(result.document.id);}catch{console.warn('[kms] orphan document requires cleanup',result.document.id);}throw error;}
     finally{client?.release();}
     res.status(201).json({...doc.rows[0],workspaceIds,indexed:false});
     // ponytail: provider indexed status is not grounded retrieval; confirmation occurs on a cited query.
-  }catch(e){if(e instanceof Error&&/Hanya file PDF|File harus berisi|Nama file tidak valid|Judul dan kategori wajib/.test(e.message))return res.status(400).json({error:e.message});console.error('[kms] upload failed',e instanceof Error?e.message:e);res.status(502).json({error:'Upload KMS gagal; coba lagi nanti'});}
+  }catch(e){if(e instanceof Error&&/Hanya PDF|File harus berisi|Nama file tidak valid|Judul dan kategori wajib|Frame video|Frame hanya/.test(e.message))return res.status(400).json({error:e.message});console.error('[kms] upload failed',e instanceof Error?e.message:e);res.status(502).json({error:'Upload KMS gagal; coba lagi nanti'});}
 });
 app.delete('/api/kms/documents/:id',knowledgeManager,async(req,res,next)=>{try{
   const u=res.locals.user;

@@ -2,9 +2,10 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 // ponytail: reset native file input after success so the same file can be selected again.
 import { UploadCloud, Trash2, Check } from 'lucide-react';
 import { apiService } from '../services/apiService';
+import { imageFrame, videoFrame } from '../services/videoFrame';
 import type { KnowledgeDocument, Workspace, User } from '../types';
 
-type KmsDocument = { id:string; workspaceIds:string[]; title:string; filename:string; indexed:boolean };
+type KmsDocument = { id:string; workspaceIds:string[]; title:string; filename:string; indexed:boolean; mediaType:'document'|'photo'|'video' };
 type Props = { documents:KnowledgeDocument[]; workspaces:Workspace[]; activeWorkspace:Workspace; activeUser:User; onNotify:(message:string)=>void; onReload:()=>Promise<void> };
 
 export function KnowledgeBaseView({activeWorkspace,workspaces,onNotify}:Props) {
@@ -19,13 +20,15 @@ export function KnowledgeBaseView({activeWorkspace,workspaces,onNotify}:Props) {
   async function refresh(){try{setDocs(await apiService.listKmsDocuments());}catch{setError('Dokumen tersimpan, tetapi daftar gagal dimuat ulang. Muat ulang halaman untuk melihatnya.');}}
   async function upload(event:FormEvent) {
     event.preventDefault();
-    if(!file||!file.size||file.size>50*1024*1024||!/\.(md|pdf|docx)$/i.test(file.name)) return setError('Pilih MD, PDF, atau DOCX valid (maksimum 50 MB)');
+    if(!file||!file.size||file.size>50*1024*1024||!/\.(md|pdf|docx|jpe?g|png|webp|mp4)$/i.test(file.name)) return setError('Pilih MD, PDF, DOCX, JPG, PNG, WebP, atau MP4 (maksimum 50 MB)');
+    if(/\.(jpe?g|png|webp)$/i.test(file.name)&&file.size>5*1024*1024)return setError('Foto maksimal 5 MB agar bisa dianalisis sebagai referensi gaya');
     if(!workspaceIds.length)return setError('Pilih minimal satu workspace');
     setBusy(true);setError('');
     try {
-      await apiService.uploadKmsDocument(file,title,workspaceIds);
+      await apiService.uploadKmsDocument(file,title,workspaceIds,/\.mp4$/i.test(file.name)?await videoFrame(file):/\.(jpe?g|png|webp)$/i.test(file.name)?await imageFrame(file):undefined);
+    // ponytail: one still/frame per media item; multi-frame analysis can be added when videos need temporal context.
       setFile(null);setTitle('');if(fileInput.current)fileInput.current.value='';
-      onNotify('File diterima KMS. Pengindeksan belum terkonfirmasi.');
+      onNotify(/\.(mp4|jpe?g|png|webp)$/i.test(file.name)?'Media tersimpan di KMS; frame referensi siap digunakan di Studio Visual.':'File diterima KMS. Pengindeksan belum terkonfirmasi.');
       await refresh();
     } catch(e){setError(e instanceof Error?e.message:'Upload gagal');}
     finally{setBusy(false);}
@@ -48,9 +51,9 @@ export function KnowledgeBaseView({activeWorkspace,workspaces,onNotify}:Props) {
                   <span className="kms-workspace-check" aria-hidden="true"><Check size={14}/></span><span>{workspace.name}</span>
                 </button>)}</div>
       </fieldset>
-      <div className="kms-file-field"><label htmlFor="kms-file">Dokumen</label>
-        <p id="kms-file-help" className="kms-help">MD, PDF, atau DOCX · maksimal 50 MB</p>
-        <input id="kms-file" className="kms-file-input" ref={fileInput} type="file" accept=".md,.pdf,.docx" required aria-describedby="kms-file-help" onChange={e=>{setFile(e.target.files?.[0]||null);setError('');}} disabled={busy}/>
+      <div className="kms-file-field"><label htmlFor="kms-file">Dokumen atau referensi visual</label>
+        <p id="kms-file-help" className="kms-help">MD, PDF, DOCX, atau MP4 maksimal 50 MB; JPG, PNG, WebP maksimal 5 MB. Video menggunakan satu frame awal sebagai referensi gaya.</p>
+        <input id="kms-file" className="kms-file-input" ref={fileInput} type="file" accept=".md,.pdf,.docx,.jpg,.jpeg,.png,.webp,.mp4" required aria-describedby="kms-file-help" onChange={e=>{setFile(e.target.files?.[0]||null);setError('');}} disabled={busy}/>
         {file&&<p className="kms-file-selected" role="status">Terpilih: {file.name} · {(file.size/1024/1024).toFixed(2)} MB</p>}
       </div>
       <button className="btn btn-primary" disabled={busy||!file||!workspaceIds.length}><UploadCloud size={16}/>{busy?' Mengunggah...':' Unggah ke KMS'}</button>
@@ -58,7 +61,7 @@ export function KnowledgeBaseView({activeWorkspace,workspaces,onNotify}:Props) {
     {error&&<p role="alert" style={{color:'var(--danger-color,red)'}}>{error}</p>}
     <h3 style={{marginTop:20}}>Dokumen perusahaan ini</h3>
     {docs.map(doc=><div key={doc.id} style={{display:'flex',justifyContent:'space-between',padding:'8px 0'}}>
-      <span>{doc.title} ({doc.filename}) · {doc.workspaceIds.map(id=>workspaces.find(w=>w.id===id)?.name||id).join(', ')} · {doc.indexed?'Terindeks':'Indeks belum terkonfirmasi'}</span>
+      <span>{doc.title} ({doc.filename}) · {doc.workspaceIds.map(id=>workspaces.find(w=>w.id===id)?.name||id).join(', ')} · {doc.mediaType==='document'?(doc.indexed?'Terindeks':'Indeks belum terkonfirmasi'):`Referensi ${doc.mediaType==='video'?'video':'foto'}`} </span>
       <button className="btn btn-secondary btn-sm" disabled={busy} aria-label={`Hapus ${doc.title}`} onClick={()=>remove(doc)}><Trash2 size={16}/></button>
     </div>)}
   </section>;

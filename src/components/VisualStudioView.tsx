@@ -64,6 +64,14 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(draft?.visualAsset?.generatedImageUrl || null);
 
   const [metadata, setMetadata] = useState('');
+  const [references, setReferences] = useState<Array<{id:string;title:string;mediaType:'photo'|'video'}>>([]);
+  const [referenceId, setReferenceId] = useState('');
+  const [referenceError, setReferenceError] = useState('');
+  useEffect(()=>{let active=true;setReferences([]);setReferenceId('');setReferenceError('');
+    apiService.listVisualReferences(activeWorkspace.id).then(items=>{if(active)setReferences(items);}).catch(()=>{if(active)setReferenceError('Referensi visual tidak dapat dimuat');});
+    return ()=>{active=false;};
+  },[activeWorkspace.id]);
+  // ponytail: automatic title overlap is server-side; manual choice overrides it when titles are ambiguous.
 
 
 
@@ -115,10 +123,12 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
     const requestVersion=version.current;
     setIsGenerating(true);setGenerationError('');setMediaError('');
     try {
-      const result=await apiService.generateVisual({workspaceId:activeWorkspace.id,prompt:visual.visualPrompt,aspectRatio:visual.aspectRatio,headline:visual.headline,subheadline:visual.subheadline,badgeText:visual.badgeText,ctaText:visual.ctaText,disclaimer:visual.disclaimer,primaryColor:visual.primaryColor,accentColor:visual.accentColor});
+      const result=await apiService.generateVisual({workspaceId:activeWorkspace.id,prompt:visual.visualPrompt,referenceId:referenceId||undefined,aspectRatio:visual.aspectRatio,headline:visual.headline,subheadline:visual.subheadline,badgeText:visual.badgeText,ctaText:visual.ctaText,disclaimer:visual.disclaimer,primaryColor:visual.primaryColor,accentColor:visual.accentColor});
       if(requestVersion!==version.current)return;
       setGeneratedImageUrl(result.imageUrl);
-      setMetadata(`${result.provider} · ${result.llmModel} → ${result.model} · JPEG`);
+      setMetadata(`${result.provider} · ${result.llmModel} → ${result.model} · JPEG${result.referenceUsed?` · gaya: ${result.referenceTitle}`:''}`);
+      if(references.length&&!result.referenceUsed&&!referenceId)setReferenceError('Tidak ada judul referensi yang cocok; pilih foto/video secara manual bila ingin memakai gaya tertentu.');
+      else setReferenceError('');
     } catch(error) {if(requestVersion===version.current)setGenerationError(error instanceof Error?error.message:'Visual design failed');}
     finally {setIsGenerating(false);}
   };
@@ -216,6 +226,14 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
 
 
 
+          <div className="form-group">
+            <label className="form-label" htmlFor="visual-style-reference">Referensi gaya dari KMS</label>
+            <select id="visual-style-reference" className="form-select" value={referenceId} onChange={event=>{setReferenceId(event.target.value);clearOutput();setReferenceError('');}}>
+              <option value="">Otomatis cocokkan judul dengan arahan kreatif</option>
+              {references.map(ref=><option key={ref.id} value={ref.id}>{ref.title} ({ref.mediaType==='video'?'frame video':'foto'})</option>)}
+            </select>
+            {referenceError&&<p role="status" style={{color:'var(--text-muted)'}}>{referenceError}</p>}
+          </div>
           {/* Free-form creative direction */}
           <div className="form-group">
             <label className="form-label">Arahan Kreatif</label>

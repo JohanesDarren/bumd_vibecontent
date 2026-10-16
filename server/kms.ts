@@ -12,7 +12,54 @@ export function validateKnowledgeUpload(name:string,data:Buffer):string {
   if (ext==='.pdf' && data.subarray(0,5).toString()==='%PDF-' && data.includes(Buffer.from('%%EOF'))) return 'application/pdf';
   if (ext==='.md' && !data.includes(0) && new TextDecoder('utf-8',{fatal:true}).decode(data).trim()) return 'text/markdown';
   if (ext==='.docx' && data.subarray(0,4).equals(Buffer.from([0x50,0x4b,0x03,0x04])) && validDocx(data)) return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-  throw new Error('Hanya file PDF, DOCX, atau Markdown yang valid diterima');
+  if ((ext==='.jpg'||ext==='.jpeg')&&validJpeg(data))return 'image/jpeg';
+  if (ext==='.png'&&validPng(data))return 'image/png';
+  if (ext==='.webp'&&validWebp(data))return 'image/webp';
+  if (ext==='.mp4'&&validMp4(data))return 'video/mp4';
+  throw new Error('Hanya PDF, DOCX, MD, JPG, PNG, WebP, atau MP4 yang valid diterima');
+}
+
+// ponytail: check format framing and dimensions; use a dedicated decoder if pixel-level sanitization becomes necessary.
+function validJpeg(data:Buffer):boolean {
+  if(data.length<32||data.readUInt16BE(0)!==0xffd8||data.readUInt16BE(data.length-2)!==0xffd9)return false;
+  let offset=2,frame=false;
+  while(offset+4<data.length){
+    if(data[offset]!==255)return false;
+    const marker=data[offset+1];if(marker===0xda)return frame&&offset+4<data.length-2;
+    const size=data.readUInt16BE(offset+2);
+    if(size<2||offset+size+2>data.length-2)return false;
+    if([0xc0,0xc1,0xc2,0xc3].includes(marker)){if(size<7||!data.readUInt16BE(offset+5)||!data.readUInt16BE(offset+7))return false;frame=true;}
+    offset+=size+2;
+  }
+  return false;
+}
+function validPng(data:Buffer):boolean {
+  if(data.length<57||!data.subarray(0,8).equals(Buffer.from('89504e470d0a1a0a','hex'))||data.readUInt32BE(8)!==13||data.toString('ascii',12,16)!=='IHDR'||!data.readUInt32BE(16)||!data.readUInt32BE(20))return false;
+  let offset=8,hasPixels=false;
+  while(offset+12<=data.length){
+    const size=data.readUInt32BE(offset),kind=data.toString('ascii',offset+4,offset+8);
+    if(size>data.length-offset-12)return false;
+    if(kind==='IDAT'&&size)hasPixels=true;
+    offset+=size+12;
+    if(kind==='IEND')return hasPixels&&size===0&&offset===data.length;
+  }
+  return false;
+}
+function validWebp(data:Buffer):boolean {
+  return data.length>=30&&data.toString('ascii',0,4)==='RIFF'&&data.toString('ascii',8,12)==='WEBP'&&data.readUInt32LE(4)+8===data.length&&['VP8 ','VP8L','VP8X'].includes(data.toString('ascii',12,16))&&data.readUInt32LE(16)>0&&data.readUInt32LE(16)+20<=data.length;
+}
+
+function validMp4(data:Buffer):boolean {
+  if(data.length<32||data.toString('ascii',4,8)!=='ftyp')return false;
+  let offset=0,hasMedia=false,hasMovie=false;
+  while(offset+8<=data.length){
+    const size=data.readUInt32BE(offset),kind=data.toString('ascii',offset+4,offset+8);
+    if(size<8||size>data.length-offset)return false;
+    if(kind==='mdat'&&size>8)hasMedia=true;
+    if(kind==='moov'&&size>8)hasMovie=true;
+    offset+=size;
+  }
+  return offset===data.length&&hasMedia&&hasMovie;
 }
 
 // ponytail: validate Word's core XML through ZIP central directory (incl. data descriptors); full OOXML validation belongs in a dedicated parser if needed.
@@ -54,7 +101,7 @@ export async function uploadKnowledgeFile(file:{name:string;data:Buffer;title:st
   const mime=validateKnowledgeUpload(file.name,file.data);
   if(!file.title.trim() || !file.category.trim()) throw new Error('Judul dan kategori wajib diisi');
   const form=new FormData();
-  form.set('title',file.title.trim());form.set('category',file.category.trim());form.set('repositoryType','document');form.set('organizationId',config.organizationId);
+  form.set('title',file.title.trim());form.set('category',file.category.trim());form.set('repositoryType',mime.startsWith('image/')||mime.startsWith('video/')?'photo':'document');form.set('organizationId',config.organizationId);
   // KMS accepts TXT but does not document MD; preserve Markdown text and send it as .txt for indexing.
   form.set('file',new Blob([new Uint8Array(file.data)],{type:mime==='text/markdown'?'text/plain':mime}),mime==='text/markdown'?file.name.replace(/\.md$/i,'.txt'):file.name);
   const result=await call('/documents/upload',config,{method:'POST',body:form},fetcher);
