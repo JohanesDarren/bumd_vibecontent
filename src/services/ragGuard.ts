@@ -119,7 +119,7 @@ const FALLBACK_ANSWER = 'Informasi yang diminta belum tersedia di dokumen aktif.
 export function guardRagResponse(input: RagGuardInput): RagGuardResult {
   const threshold = normalizeScore(input.threshold);
   const allSources = input.sources || [];
-  const kept = allSources.filter(hit => normalizeScore(hit.score) >= threshold);
+  const kept = allSources.filter(hit => (hit.score == null && input.grounded === true) || normalizeScore(hit.score) >= threshold); // KMS confirms grounding but omits per-citation scores.
   const droppedSources = allSources.length - kept.length;
   const notes: string[] = [];
   if (droppedSources > 0) {

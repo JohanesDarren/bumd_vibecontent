@@ -103,12 +103,15 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
   const [tone, setTone] = useState(brandProfile.toneOfVoice[0] || '');
   const [keyMessage, setKeyMessage] = useState('');
   const [selectedCta, setSelectedCta] = useState(brandProfile.officialCTAs[0]?.text || '');
+  const [ctaMode, setCtaMode] = useState<'official' | 'custom'>(brandProfile.officialCTAs.length ? 'official' : 'custom');
+  const [customCta, setCustomCta] = useState(''); // ponytail: keep one custom value when toggling; no CTA preset history.
   const [limitations, setLimitations] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [savedBrief, setSavedBrief] = useState<{ id: string; key: string } | null>(null);
-  const briefKey = JSON.stringify([title, campaign, targetAudience, format, channel, tone, keyMessage, selectedCta, limitations]);
+  const cta = ctaMode === 'custom' ? customCta : selectedCta;
+  const briefKey = JSON.stringify([title, campaign, targetAudience, format, channel, tone, keyMessage, cta, limitations]);
 
   // Editor & Streaming state
   const [editorContent, setEditorContent] = useState('');
@@ -211,7 +214,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
       channel,
       tone,
       keyMessage,
-      cta: selectedCta,
+      cta,
       limitations,
       language: settings.defaultLanguage || brandProfile.defaultLanguage,
       createdAt: new Date().toISOString(),
@@ -235,7 +238,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
       channel ? `Kanal Distribusi: ${channel}` : '',
       targetAudience ? `Target Audiens: ${targetAudience}` : '',
       tone ? `Nada Suara: ${tone}` : '',
-      selectedCta ? `Call to Action (CTA): ${selectedCta}` : '',
+      cta ? `Call to Action (CTA): ${cta}` : '',
       limitationParts.terms ? `Batasan/Syarat Penting: ${limitationParts.terms}` : '',
       limitationParts.guidance ? `Arahan Penulisan dari Tim (wajib dipatuhi): ${limitationParts.guidance}` : '',
       `Pesan Kunci & Fakta:\n${keyMessage}`
@@ -278,7 +281,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
             // excerpts do not repeat them.
             maxSentences: 12,
             maxChars: 1800,
-            allowedNumericClaims: extractNumericClaims(`${title} ${keyMessage} ${limitations} ${selectedCta}`)
+            allowedNumericClaims: extractNumericClaims(`${title} ${keyMessage} ${limitations} ${cta}`)
           });
           // KMS supplies source metadata without excerpt text. Preserve real citations;
           // numeric claims remain flagged until source text can corroborate them.
@@ -355,7 +358,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
     }
 
     if (usedRemoteService && !output.aiCopyUsed) {
-      setGenerationError(`AI belum berhasil menyusun naskah yang layak${output.qualityCheck.briefCompliance.details ? ` (${output.qualityCheck.briefCompliance.details})` : ''}. Draf tidak dibuat.`);
+      setGenerationError(`AI belum berhasil menyusun naskah yang layak: ${output.failureReason || 'hasil tidak memenuhi pemeriksaan mutu'}. Draf tidak dibuat.`);
       setIsGenerating(false);
       return;
     }
@@ -622,10 +625,11 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
             <label className="form-label">
               <span>Pilihan Call to Action (CTA) Resmi</span>
             </label>
-            <select 
+            <select
+              aria-label="Pilihan CTA"
               className="form-select"
-              value={selectedCta}
-              onChange={e => setSelectedCta(e.target.value)}
+              value={ctaMode === 'custom' ? '' : selectedCta}
+              onChange={e => { if (e.target.value) { setCtaMode('official'); setSelectedCta(e.target.value); setCustomCta(''); } else setCtaMode('custom'); }}
               style={{ marginBottom: '8px' }}
             >
               {brandProfile.officialCTAs.map(c => (
@@ -635,12 +639,14 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
               ))}
               <option value="">-- CTA Kustom --</option>
             </select>
-            <input 
+            <input
               type="text"
               className="form-input"
+              aria-label="CTA kustom"
               placeholder="Atau tulis Call to Action kustom..."
-              value={selectedCta}
-              onChange={e => setSelectedCta(e.target.value)}
+              value={customCta}
+              onFocus={() => setCtaMode('custom')}
+              onChange={e => { setCustomCta(e.target.value); setCtaMode('custom'); }}
             />
           </div>
 

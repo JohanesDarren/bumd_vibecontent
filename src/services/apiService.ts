@@ -65,7 +65,7 @@ export type CompanyDashboard = {
 };
 export type AdminUser={id:string;name:string;email:string;role:string;companyId:string|null;workspaceIds:string[]};
 
-export type RagHit={document_id:string;chunk_id:string;content:string;score:number;page?:number|null;document_name?:string|null;section?:string|null;source_url?:string|null};
+export type RagHit={document_id:string;chunk_id?:string;content?:string;score?:number;page?:number|null;document_name?:string|null;section?:string|null;source_url?:string|null};
 export type RagAnswer={answer:string;grounded:boolean;sources:RagHit[];model?:string;no_answer_reason?:string|null};
 export type RagStatus={configured:boolean;ready:boolean;dependencies?:Record<string,string>;detail?:Record<string,unknown>;error?:string};
 

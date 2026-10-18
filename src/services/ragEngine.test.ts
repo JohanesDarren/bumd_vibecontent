@@ -226,6 +226,19 @@ test('amounts written as "juta" satisfy key-message numbers', () => {
   assert.ok(!review.warnings.some(issue => issue.includes('angka penting')));
 });
 
+test('failed generation reports missing citations or actual copy defects, not a passing CTA check', () => {
+  const noEvidence = generateContentFromBrief(copyBrief, copyBrand, [], 'ws-a', {
+    answer: '', citations: [], unsupportedClaims: ['Sumber resmi belum ditemukan.'], grounded: false
+  });
+  assert.match(noEvidence.failureReason || '', /dokumen resmi/i);
+  assert.doesNotMatch(noEvidence.failureReason || '', /CTA sesuai/i);
+  const broken = generateContentFromBrief(copyBrief, copyBrand, [], 'ws-a', {
+    answer: 'Air bersih 中国.', citations: [copyCitation], unsupportedClaims: [], grounded: true
+  });
+  assert.match(broken.failureReason || '', /aksara non-Latin/i);
+  assert.doesNotMatch(broken.failureReason || '', /CTA sesuai/i);
+});
+
 test('brief-only composed copy is rejected when no official document matches', () => {
   const composed = 'Kabar gembira untuk warga! Pasang sambungan air baru kini hemat 30%: dari Rp1.250.000 cukup Rp875.000, berlaku sampai 31 Desember 2026 dan bisa dicicil hingga 3 kali.';
   const generated = generateContentFromBrief(copyBrief, copyBrand, [], 'ws-a', {

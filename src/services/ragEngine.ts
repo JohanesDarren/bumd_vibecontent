@@ -33,6 +33,7 @@ export interface GeneratedOutput {
   qualityCheck: QualityCheck;
   /** True when the body is AI-written copy rather than the raw brief text. */
   aiCopyUsed?: boolean;
+  failureReason?: string; // why a remote answer was not accepted; never derive it from a passing quality label.
 }
 
 /**
@@ -436,6 +437,7 @@ export function generateContentFromBrief(
   let validationIssues: string[] = [];
   let usedRagAnswer = false;
   let aiCopyUsed = false;
+  let failureReason: string | undefined;
 
   if (remote) {
     citations = remote.citations;
@@ -453,6 +455,7 @@ export function generateContentFromBrief(
     } else {
       groundedKeyMessage = brief.keyMessage;
       validationIssues = groundedReview ? [...groundedReview.blocking, ...groundedReview.warnings] : [];
+      failureReason = groundedReview?.blocking.join(' ') || (remote.grounded ? 'Jawaban AI kosong.' : 'Tidak ada jawaban yang didukung dokumen resmi.');
       if (!unsupported.length) {
         unsupported.push(groundedReview
           ? 'Jawaban dari dokumen resmi tidak lolos pemeriksaan; draf berbasis brief tidak disimpan.'
@@ -613,7 +616,8 @@ CTA: ${cta}`;
     citations,
     unsupportedClaims: unsupported,
     qualityCheck,
-    aiCopyUsed
+    aiCopyUsed,
+    failureReason
   };
 }
 

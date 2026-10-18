@@ -74,6 +74,14 @@ test('guardRagResponse drops sources below the threshold', () => {
   assert.match(result.notes.join(' '), /1 dokumen kurang cocok/i);
 });
 
+test('KMS citation without a score remains valid only when KMS confirms grounding', () => {
+  const citation = {document_id:'doc-1', document_name:'SOP Resmi'} as RagHit;
+  const result = guardRagResponse({answer:'Layanan resmi tersedia.', grounded:true, sources:[citation], threshold:0.35});
+  assert.equal(result.grounded,true);
+  assert.equal(result.sources.length,1);
+  assert.equal(guardRagResponse({answer:'Layanan resmi tersedia.',grounded:false,sources:[citation],threshold:0.35}).grounded,false);
+});
+
 test('guardRagResponse grounds when evidence passes the threshold', () => {
   const result = guardRagResponse({ answer: '## Biaya\nBiaya sambungan baru 1.250.000 rupiah.', grounded: true, sources: [strong], threshold: 0.35 });
   assert.equal(result.grounded, true);
