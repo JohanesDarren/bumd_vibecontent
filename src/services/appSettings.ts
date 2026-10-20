@@ -134,6 +134,7 @@ export interface BriefQueryParts {
   tone?: string;
   channel?: string;
   format?: string;
+  cta?: string;
 }
 
 /**
@@ -141,14 +142,26 @@ export interface BriefQueryParts {
  * title and key message are sent — audience/tone/channel/format stay in the app.
  */
 export function buildRetrievalQuery(settings: AppSettings, parts: BriefQueryParts): string {
-  const base = [parts.title, parts.keyMessage];
-  // Only semantically useful context is added. UI tokens such as the output
-  // format ('copy_caption') or tone pollute vector retrieval and reduce precision,
-  // so they are intentionally excluded even when brand context is enabled.
+  // KMS /chat/query is a chat endpoint, not a keyword-search API: it retrieves
+  // grounded excerpts AND generates the requested copy in one call. Sending a
+  // trimmed keyword blob starves the model of the writing instructions, so it
+  // answers with a document summary and fails the copy-quality gate. The brief
+  // therefore travels as the prompt itself.
+  const base = [
+    `Tulis naskah konten dalam Bahasa Indonesia berdasarkan dokumen resmi workspace.`,
+    `Judul: ${parts.title}`,
+    `Pesan Kunci & Fakta yang wajib dipakai:\n${parts.keyMessage}`
+  ];
   const context = settings.privacy.includeBrandContextInQuery
-    ? [parts.targetAudience, parts.channel]
+    ? [
+        parts.targetAudience ? `Target Audiens: ${parts.targetAudience}` : '',
+        parts.channel ? `Kanal Distribusi: ${parts.channel}` : '',
+        parts.tone ? `Nada Suara: ${parts.tone}` : '',
+        parts.format ? `Format Output: ${parts.format}` : '',
+        parts.cta ? `Call to Action: ${parts.cta}` : ''
+      ]
     : [];
-  return [...base, ...context].filter(Boolean).join(' ');
+  return [...base, ...context].filter(Boolean).join('\n');
 }
 
 /** Whether content generation may contact the remote RAG service. */

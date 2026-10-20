@@ -291,7 +291,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
         return;
       } else {
 
-        const queryForRag = buildRetrievalQuery(settings, { title, keyMessage, targetAudience, channel });
+        const queryForRag = buildRetrievalQuery(settings, { title, keyMessage, targetAudience, channel, tone, format: formatLabel[format], cta });
         try {
           const rag = await apiService.ragQuery(activeWorkspace.id, queryForRag, toRagOptions(grounding));
           const guarded = guardRagResponse({

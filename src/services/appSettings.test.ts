@@ -65,10 +65,12 @@ test('privacy: brand context IS sent when enabled', () => {
   assert.match(query, /Instagram/);
 });
 
-test('privacy: UI-only tokens are never used for retrieval', () => {
+test('brief instructions are sent as the RAG prompt, not stripped to keywords', () => {
   const query = buildRetrievalQuery(withSettings({ privacy: { includeBrandContextInQuery: true } }), parts);
-  assert.doesNotMatch(query, /copy_caption/);
-  assert.doesNotMatch(query, /Formal/);
+  // KMS /chat/query both retrieves and writes; the model needs the brief instructions.
+  assert.match(query, /Tulis naskah/);
+  assert.match(query, /copy_caption/);
+  assert.match(query, /Formal/);
   assert.match(query, /Warga Surabaya/);
 });
 
