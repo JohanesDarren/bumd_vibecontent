@@ -13,6 +13,7 @@ import { promisify } from 'node:util';
 import nodeCrypto from 'node:crypto';
 import pg from 'pg';
 import { normalizeWorkspaceAssignments } from './knowledgeAccess.ts';
+import { citationSourceColumns } from './citationStorage.ts';
 
 const { Pool } = pg;
 const defaultDatabaseUrl = process.env.NODE_ENV === 'test'
@@ -79,6 +80,7 @@ export async function runMigrations() {
   await pool.query(await readFile(join(here, 'migrations', '011_kms_documents.sql'), 'utf8'));
   if (!(await pool.query("SELECT 1 FROM schema_migrations WHERE name='012_kms_document_workspaces'")).rowCount) await pool.query(await readFile(join(here, 'migrations', '012_kms_document_workspaces.sql'), 'utf8'));
   if (!(await pool.query("SELECT 1 FROM schema_migrations WHERE name='013_kms_media'")).rowCount) await pool.query(await readFile(join(here, 'migrations', '013_kms_media.sql'), 'utf8'));
+  if (!(await pool.query("SELECT 1 FROM schema_migrations WHERE name='014_draft_citations_kms'")).rowCount) await pool.query(await readFile(join(here, 'migrations', '014_draft_citations_kms.sql'), 'utf8'));
   } finally {
     if (locked) {
       try { await migrationLock.query('SELECT pg_advisory_unlock($1, $2)', [19031, 1]); }
@@ -181,7 +183,11 @@ export async function replaceDraft(draft:any) {
     await client.query('DELETE FROM draft_versions WHERE draft_id=$1',[draft.id]);
     for(const version of draft.versions){
       await client.query('INSERT INTO draft_versions(draft_id,version_number,content,scenes,unsupported_claims,quality_check,created_at,created_by,change_summary) VALUES($1,$2,$3,$4::jsonb,$5::jsonb,$6::jsonb,$7,$8,$9)',[draft.id,version.versionNumber,version.content,JSON.stringify(version.scenes||null),JSON.stringify(version.unsupportedClaims||[]),JSON.stringify(version.qualityCheck||{}),version.createdAt,version.createdBy,version.changeSummary||'']);
-      for(const citation of version.citations||[]) await client.query('INSERT INTO draft_citations(id,draft_id,version_number,source_id,data) VALUES($1,$2,$3,$4,$5::jsonb)',[`${draft.id}-${version.versionNumber}-${citation.id}`,draft.id,version.versionNumber,citation.documentId,JSON.stringify(citation)]);
+      for(const citation of version.citations||[]){
+        const source=await client.query(`SELECT EXISTS(SELECT 1 FROM knowledge_sources s JOIN knowledge_source_workspaces a ON a.source_id=s.id WHERE s.id=$1 AND a.workspace_id=$2 AND a.enabled AND s.status='aktif') AS legacy,EXISTS(SELECT 1 FROM kms_documents d JOIN kms_document_workspaces a ON a.document_id=d.id WHERE d.id=$1 AND a.workspace_id=$2) AS kms`,[citation.documentId,draft.workspaceId]);
+        const refs=citationSourceColumns(citation.documentId,source.rows[0].legacy,source.rows[0].kms);
+        await client.query('INSERT INTO draft_citations(id,draft_id,version_number,source_id,kms_document_id,data) VALUES($1,$2,$3,$4,$5,$6::jsonb)',[`${draft.id}-${version.versionNumber}-${citation.id}`,draft.id,version.versionNumber,refs.sourceId,refs.kmsDocumentId,JSON.stringify(citation)]);
+      }
     }
     await client.query('DELETE FROM review_comments WHERE draft_id=$1',[draft.id]);
     for(const comment of draft.comments||[]) await client.query('INSERT INTO review_comments(id,draft_id,author_id,author_name,author_role,text,target_snippet,resolved,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)',[comment.id,draft.id,draft.createdBy,comment.authorName,comment.authorRole,comment.text,comment.targetSnippet||null,comment.resolved,comment.createdAt]);
