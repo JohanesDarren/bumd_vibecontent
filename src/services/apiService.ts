@@ -123,7 +123,17 @@ export const apiService={
   userWorkspaces:(userId:string)=>request<{id:string;name:string;code:string;role:string}[]>(`/api/users/${userId}/workspaces`),
   ragStatus:()=>request<RagStatus>('/api/rag/status'),
   ragSearch:(workspaceId:string,query:string,options?:RagOptionsPayload|number)=>request<{results:RagHit[]}>(`/api/rag/search`,{method:'POST',body:JSON.stringify({workspaceId,query,...(typeof options === 'number' ? {topK:options} : {options})})}),
-  ragQuery:(workspaceId:string,query:string,options?:RagOptionsPayload|number)=>request<RagAnswer>(`/api/rag/query`,{method:'POST',body:JSON.stringify({workspaceId,query,...(typeof options === 'number' ? {topK:options} : {options})})}),
+  ragQuery:async(workspaceId:string,query:string,options?:RagOptionsPayload|number):Promise<RagAnswer>=>{
+    const started=await request<{jobId:string;status:string}>(`/api/rag/jobs`,{method:'POST',body:JSON.stringify({workspaceId,query,...(typeof options === 'number' ? {topK:options} : {options})})});
+    const deadline=Date.now()+10*60*1000;
+    while(Date.now()<deadline){
+      await new Promise(resolve=>setTimeout(resolve,2000));
+      const job=await request<{status:'running'|'done'|'error';answer?:RagAnswer;error?:string}>(`/api/rag/jobs/${encodeURIComponent(started.jobId)}`);
+      if(job.status==='done'&&job.answer)return job.answer;
+      if(job.status==='error')throw new Error(job.error||'KMS gagal memproses permintaan');
+    }
+    throw new Error('KMS belum selesai memproses permintaan setelah 10 menit');
+  },
   ragRefine:(workspaceId:string,draftContent:string,promptAction:string)=>request<{answer:string;model?:string}>(`/api/rag/refine`,{method:'POST',body:JSON.stringify({workspaceId,draftContent,promptAction})}),
   generateVisual:(input:import('./visualScene').VisualInput)=>request<{imageUrl:string;provider:string;model:string;llmModel:string;fallback:boolean;format:string;prompt:string;imagePrompt:string;dimensions:string;referenceUsed:boolean;referenceTitle?:string;referenceId?:string}>('/api/visual/generate',{method:'POST',body:JSON.stringify(input)}),
   saveDraft:(draft:ContentDraft,brief?:ContentBrief)=>request<ContentDraft>(`/api/drafts/${draft.id}`,{method:'PUT',body:JSON.stringify({...draft,brief})}),
