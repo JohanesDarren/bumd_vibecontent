@@ -513,7 +513,7 @@ export function App() {
         />}
 
         {/* Dynamic Viewport */}
-        <main className={`content-viewport ${authUser.role === 'creator' ? 'creator-content' : ''}`}>
+        <main key={activeWorkspace.id} className={`content-viewport ${authUser.role === 'creator' ? 'creator-content' : ''}`}>
           {safeTab === 'dashboard' && authUser.role === 'corporate' && <CorporateDashboardView onNavigate={setCurrentTab} onOpenWorkspace={id => { void handleSelectWorkspace(id).then(() => setCurrentTab('user_management')).catch(e => showToast(e.message)); }} />}
                     {safeTab === 'dashboard' && authUser.role !== 'corporate' && (
                       <DashboardView
@@ -625,7 +625,7 @@ export function App() {
 
 
           {safeTab === 'brand_profile' && (
-            <BrandProfileView 
+            <BrandProfileView
               brandProfile={effectiveBrandProfile}
               activeWorkspace={activeWorkspace}
               activeUser={activeUser}
