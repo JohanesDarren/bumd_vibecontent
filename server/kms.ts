@@ -140,3 +140,11 @@ export async function listKnowledgeFiles(config=kmsConfig(),fetcher:typeof fetch
 export async function deleteKnowledgeFile(id:string,config=kmsConfig(),fetcher:typeof fetch=fetch){
   return call(`/documents/${encodeURIComponent(id)}`,config,{method:'DELETE'},fetcher);
 }
+export async function kmsServiceStatus(config=kmsConfig(),fetcher:typeof fetch=fetch){
+  const result=await call('/chat/status',config,{method:'GET'},fetcher);
+  const details=result.details&&typeof result.details==='object'?result.details as Record<string,unknown>:{};
+  const dependencies=Object.fromEntries(Object.entries(details).map(([key,value])=>[key,String(value)]));
+  const required=['qdrant','embedding','reranker','llm'];
+  const ready=result.status==='ready'&&required.every(name=>dependencies[name]==='ok');
+  return {ready,dependencies,detail:ready?'Semua dependensi KMS siap':'KMS melaporkan dependensi belum siap'};
+}

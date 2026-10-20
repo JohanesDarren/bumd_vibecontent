@@ -15,7 +15,7 @@ sys.stdout.buffer.write(b.getvalue())`;
 });
 
 import assert from 'node:assert/strict';
-import { validateKnowledgeUpload, uploadKnowledgeFile, queryKnowledge, searchKnowledge } from './kms.ts';
+import { validateKnowledgeUpload, uploadKnowledgeFile, queryKnowledge, searchKnowledge, kmsServiceStatus } from './kms.ts';
 
 test('query sends only authorized document IDs to shared KMS', async () => {
   const fetcher:typeof fetch=async (_url,init) => {
@@ -117,4 +117,16 @@ test('propagates KMS network failures instead of a blind 502', async () => {
     queryKnowledge('Pertanyaan?',{url:'https://kms.test',key:'secret',organizationId:'org-shared'},fetcher,['doc-1']),
     /fetch failed/
   );
+});
+test('status is ready only when all required KMS dependencies are ok', async () => {
+  const fetcher:typeof fetch=async()=>new Response(JSON.stringify({success:true,status:'ready',details:{qdrant:'ok',embedding:'ok',reranker:'ok',llm:'ok',jev:'disabled'}}),{status:200});
+  const status=await kmsServiceStatus({url:'https://kms.test',key:'secret',organizationId:'org-shared'},fetcher);
+  assert.equal(status.ready,true);
+  assert.equal(status.dependencies.llm,'ok');
+});
+
+test('status reports degraded when a required dependency fails', async () => {
+  const fetcher:typeof fetch=async()=>new Response(JSON.stringify({success:true,status:'degraded',details:{qdrant:'ok',embedding:'ok',reranker:'ok',llm:'down'}}),{status:200});
+  const status=await kmsServiceStatus({url:'https://kms.test',key:'secret',organizationId:'org-shared'},fetcher);
+  assert.equal(status.ready,false);
 });

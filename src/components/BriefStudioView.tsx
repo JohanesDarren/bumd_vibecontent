@@ -83,6 +83,16 @@ function toCitation(hit: RagHit, index: number): GroundedCitation {
   };
 }
 
+function renderEditorMarkup(text:string){
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\n/g, '<br/>')
+    .replace(/\[References:([^\]]+)\]/g, '<span class="brief-citation-tag">[References:$1]</span>')
+    .replace(/\[(?:Perlu Verifikasi|Needs Verification)([^\]]*)\]/g, '<span class="brief-warning-tag">[Needs Verification$1]</span>');
+}
+
 export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
   brandProfile,
 
@@ -184,6 +194,13 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
       if (streamTimerRef.current) clearTimeout(streamTimerRef.current);
     };
   }, []);
+
+  // The canvas is uncontrolled after generation so typing never resets the caret.
+  useEffect(() => {
+    if (!isStreaming && editorRef.current && editorRef.current.innerText !== editorContent) {
+      editorRef.current.innerHTML = renderEditorMarkup(editorContent);
+    }
+  }, [isStreaming, editorContent]);
 
   const handleSubmit = async (e?: React.FormEvent, continueToEditor = false) => {
     e?.preventDefault();
@@ -738,19 +755,9 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
                   setEditorContent((e.target as HTMLDivElement).innerText);
                 }
               }}
-              dangerouslySetInnerHTML={{
-                __html: editorContent
-                  ? editorContent
-                      .replace(/&/g, '&amp;')
-                      .replace(/</g, '&lt;')
-                      .replace(/>/g, '&gt;')
-                      .replace(/\n/g, '<br/>')
-                      // Highlight grounding markers
-                      .replace(/\[References:([^\]]+)\]/g, '<span class="brief-citation-tag">[References:$1]</span>')
-                      .replace(/\[(?:Perlu Verifikasi|Needs Verification)([^\]]*)\]/g, '<span class="brief-warning-tag">[Needs Verification$1]</span>')
-                      + (isStreaming ? '<span class="brief-cursor-blink">▊</span>' : '')
-                  : ''
-              }}
+              dangerouslySetInnerHTML={isStreaming ? {
+                __html: renderEditorMarkup(editorContent) + '<span class="brief-cursor-blink">▊</span>'
+              } : undefined}
               data-placeholder="Hasil draf AI akan muncul di sini. Anda dapat mengeditnya langsung..."
             />
 
