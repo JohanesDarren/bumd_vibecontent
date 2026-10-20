@@ -88,13 +88,16 @@ function validDocx(data:Buffer):boolean {
   return false;
 }
 
+const KMS_TIMEOUT_MS=Number(process.env.KMS_TIMEOUT_MS||180000);
+
 async function call(path:string,config:KmsConfig,init:RequestInit,fetcher:typeof fetch=fetch){
   if(!config.url || !config.key || !config.organizationId) throw new Error('KMS belum dikonfigurasi');
   let response:Response;
   try {
-    response=await fetcher(`${config.url.replace(/\/+$/,'')}/api${path}`,{...init,headers:{'X-API-Key':config.key,...init.headers},signal:AbortSignal.timeout(90000)});
+    response=await fetcher(`${config.url.replace(/\/+$/,'')}/api${path}`,{...init,headers:{'X-API-Key':config.key,...init.headers},signal:AbortSignal.timeout(KMS_TIMEOUT_MS)});
   } catch(error) {
-    const reason=error instanceof Error&&error.name==='TimeoutError'?'KMS tidak merespons dalam 90 detik':error instanceof Error?error.message:'KMS tidak dapat dihubungi';
+    const seconds=Math.round(KMS_TIMEOUT_MS/1000);
+    const reason=error instanceof Error&&error.name==='TimeoutError'?`KMS tidak merespons dalam ${seconds} detik`:error instanceof Error?error.message:'KMS tidak dapat dihubungi';
     throw new Error(reason,{cause:error});
   }
   const text=await response.text();let body:any;
