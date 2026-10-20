@@ -123,6 +123,12 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
   const cta = ctaMode === 'custom' ? customCta : selectedCta;
   const briefKey = JSON.stringify([title, campaign, targetAudience, format, channel, tone, keyMessage, cta, limitations]);
 
+  // A saved draft only belongs to the exact brief that produced it. Once the
+  // brief changes, the old id must not be reused for a different draft.
+  useEffect(() => {
+    setSavedBrief(current => current && current.key !== briefKey ? null : current);
+  }, [briefKey]);
+
   // Editor & Streaming state
   const [editorContent, setEditorContent] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
@@ -195,12 +201,14 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
     };
   }, []);
 
-  // The canvas is uncontrolled after generation so typing never resets the caret.
+  // Sync the DOM only when streaming ends. Depending on editorContent would let
+  // React rewrite the canvas (and reset the caret) on every keystroke.
   useEffect(() => {
-    if (!isStreaming && editorRef.current && editorRef.current.innerText !== editorContent) {
+    if (!isStreaming && editorRef.current) {
       editorRef.current.innerHTML = renderEditorMarkup(editorContent);
     }
-  }, [isStreaming, editorContent]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isStreaming]);
 
   const handleSubmit = async (e?: React.FormEvent, continueToEditor = false) => {
     e?.preventDefault();
@@ -677,11 +685,11 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
             <button
               type="submit"
               className="btn btn-secondary"
-              disabled={isGenerating || isStreaming}
+              disabled={isGenerating || isStreaming || savedBrief?.key === briefKey}
               style={{ padding: '12px 24px', fontSize: '0.95rem' }}
             >
               <Save size={18} />
-              <span>Simpan Draf Brief</span>
+              <span>{savedBrief?.key === briefKey ? 'Draf Tersimpan' : 'Buat & Simpan Draf'}</span>
             </button>
             <button
               type="button"
