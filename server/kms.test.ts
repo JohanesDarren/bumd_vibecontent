@@ -103,3 +103,18 @@ test('does not claim success on provider failure', async () => {
   const fetcher:typeof fetch=async()=>new Response(JSON.stringify({success:false,message:'Failed'}),{status:200});
   await assert.rejects(uploadKnowledgeFile({name:'notes.md',data:Buffer.from('# Test'),title:'Test',category:'SOP'},{url:'https://kms.test',key:'secret',organizationId:'org-shared'},fetcher));
 });
+test('propagates KMS HTTP failures with provider detail', async () => {
+  const fetcher:typeof fetch=async()=>new Response(JSON.stringify({success:false,error:'LLM connection lost'}),{status:502});
+  await assert.rejects(
+    queryKnowledge('Pertanyaan?',{url:'https://kms.test',key:'secret',organizationId:'org-shared'},fetcher,['doc-1']),
+    /KMS menolak permintaan \(HTTP 502\): LLM connection lost/
+  );
+});
+
+test('propagates KMS network failures instead of a blind 502', async () => {
+  const fetcher:typeof fetch=async()=>{throw new TypeError('fetch failed');};
+  await assert.rejects(
+    queryKnowledge('Pertanyaan?',{url:'https://kms.test',key:'secret',organizationId:'org-shared'},fetcher,['doc-1']),
+    /fetch failed/
+  );
+});

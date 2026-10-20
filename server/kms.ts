@@ -90,10 +90,19 @@ function validDocx(data:Buffer):boolean {
 
 async function call(path:string,config:KmsConfig,init:RequestInit,fetcher:typeof fetch=fetch){
   if(!config.url || !config.key || !config.organizationId) throw new Error('KMS belum dikonfigurasi');
-  const response=await fetcher(`${config.url.replace(/\/+$/,'')}/api${path}`,{...init,headers:{'X-API-Key':config.key,...init.headers},signal:AbortSignal.timeout(90000)});
+  let response:Response;
+  try {
+    response=await fetcher(`${config.url.replace(/\/+$/,'')}/api${path}`,{...init,headers:{'X-API-Key':config.key,...init.headers},signal:AbortSignal.timeout(90000)});
+  } catch(error) {
+    const reason=error instanceof Error&&error.name==='TimeoutError'?'KMS tidak merespons dalam 90 detik':error instanceof Error?error.message:'KMS tidak dapat dihubungi';
+    throw new Error(reason,{cause:error});
+  }
   const text=await response.text();let body:any;
   try{body=JSON.parse(text);}catch{throw new Error(`KMS mengembalikan respons tidak valid (HTTP ${response.status})`);}
-  if(!response.ok || body?.success!==true) throw new Error(`KMS menolak permintaan (HTTP ${response.status})`);
+  if(!response.ok || body?.success!==true) {
+    const detail=typeof body?.error==='string'?`: ${body.error.slice(0,200)}`:typeof body?.message==='string'?`: ${body.message.slice(0,200)}`:'';
+    throw new Error(`KMS menolak permintaan (HTTP ${response.status})${detail}`);
+  }
   return body;
 }
 
