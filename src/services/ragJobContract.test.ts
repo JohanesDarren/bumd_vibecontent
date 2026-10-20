@@ -17,5 +17,7 @@ test('server exposes job creation and polling endpoints', async () => {
   const source = await fs.readFile(new URL('../../server/index.ts', import.meta.url), 'utf8');
   assert.match(source, /app\.post\('\/api\/rag\/jobs'/);
   assert.match(source, /app\.get\('\/api\/rag\/jobs\/:id'/);
-  assert.match(source, /RAG_JOB_TTL_MS/, 'finished jobs must expire so memory cannot grow forever');
+  assert.match(source, /INSERT INTO rag_jobs/, 'jobs must be shared across PM2 workers via the database');
+  assert.match(source, /RAG_JOB_TTL_MS/, 'finished jobs must expire');
+  assert.ok(!/const ragJobs=new Map/.test(source), 'in-memory jobs break when polling hits another worker');
 });
