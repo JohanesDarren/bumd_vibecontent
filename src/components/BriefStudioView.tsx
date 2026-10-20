@@ -265,10 +265,8 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
         setIsGenerating(false);
         return;
       } else {
-        const retrievalQuery = buildRetrievalQuery(settings, { title, keyMessage, targetAudience, tone, channel, format });
-        const queryForRag = settings.privacy.includeBrandContextInQuery
-          ? structuredQuery
-          : [`Judul: ${title}`, `Pesan Kunci & Fakta:\n${keyMessage}`].join('\n');
+
+        const queryForRag = buildRetrievalQuery(settings, { title, keyMessage, targetAudience, channel });
         try {
           const rag = await apiService.ragQuery(activeWorkspace.id, queryForRag, toRagOptions(grounding));
           const guarded = guardRagResponse({
@@ -285,17 +283,9 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
           });
           // KMS supplies source metadata without excerpt text. Preserve real citations;
           // numeric claims remain flagged until source text can corroborate them.
-          let citationHits = guarded.sources;
-          if (!citationHits.length) {
-            try {
-              const retrieval = await apiService.ragSearch(activeWorkspace.id, retrievalQuery, toRagOptions(grounding));
-              citationHits = (retrieval.results || [])
-                .filter(hit => typeof hit.content === 'string' && hit.content.trim() && normalizeScore(hit.score) >= grounding.threshold);
-            } catch (error) {
-              console.warn('ragSearch citation lookup failed:', error);
-            }
-          }
-          const citations = redactCitationExcerpts(settings, citationHits.map(toCitation));
+          // KMS /chat/query returns citation metadata only (no excerpts). A second
+          // /api/rag/search call repeats the same AI query, not retrieval, and can 502.
+          const citations = redactCitationExcerpts(settings, guarded.sources.map(toCitation));
           let answer = guarded.answer;
           let unsupported = [...guarded.unsupportedClaims];
           let responseModel = rag.model;
@@ -358,7 +348,8 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
     }
 
     if (usedRemoteService && !output.aiCopyUsed) {
-      setGenerationError(`AI belum berhasil menyusun naskah yang layak: ${output.failureReason || 'hasil tidak memenuhi pemeriksaan mutu'}. Draf tidak dibuat.`);
+      const reason = output.failureReason || 'hasil tidak memenuhi pemeriksaan mutu';
+      setGenerationError(`AI belum berhasil menyusun naskah yang layak: ${reason.replace(/[.\s]+$/, '')}. Draf tidak dibuat.`);
       setIsGenerating(false);
       return;
     }
