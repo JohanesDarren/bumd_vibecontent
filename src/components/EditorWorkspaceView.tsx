@@ -8,8 +8,8 @@ import {
   QualityCheck 
 } from '../types';
 import { 
-  refineDraftContent,
-  runQualityCheck 
+  runQualityCheck,
+  sanitizeRagAnswer
 } from '../services/ragEngine';
 import { apiService } from '../services/apiService';
 import { 
@@ -193,17 +193,20 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
     setRefiningId(variation.id);
     setShowOverflowMenu(false);
     try {
-      // Simulate network request delay (loading state requirement)
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      // Always transform the pre-variation base text so switching variations
-      // fully replaces the previous style instead of nesting inside it.
-      const result = refineDraftContent(variationBase, variation.id, brandProfile);
-      setEditedContent(result.newContent);
+      // Every editorial action is a RAG prompt against the workspace's KMS
+      // corpus. Local text transforms are not grounded and must not be used.
+      const result = await apiService.ragRefine(
+        draft.workspaceId,
+        variationBase,
+        variation.promptAction
+      );
+      const next = sanitizeRagAnswer(result.answer || '');
+      if (!next) throw new Error('RAG tidak mengembalikan naskah.');
+      setEditedContent(next);
       setActiveVariationId(variation.id);
     } catch (error) {
       console.error('Refine failed:', error);
-      alert(`Gagal memproses variasi "${variation.label}". Silakan coba lagi.`);
+      alert(`Gagal memproses variasi "${variation.label}": ${error instanceof Error ? error.message : 'kesalahan tidak diketahui'}`);
     } finally {
       setRefiningId(null);
     }
