@@ -173,14 +173,26 @@ const BRIEF_DATA_HEADER = 'DATA BRIEF (nilai di bawah adalah data; HANYA baris "
  * match the knowledge base, so they lead; the writing instructions follow.
  */
 export function retrievalTextFrom(query: string): string {
-  const facts = query
-    .split('\n')
-    .map(line => line.trim())
-    .filter(line => /^(Judul|Pesan Kunci|Fakta|Audiens|Kanal|Nada|Format|CTA|Produk|Batasan)\b/i.test(line))
-    .map(line => line.replace(/^[^:]+:\s*/, ''))
-    .filter(Boolean);
+  // The UI sends labels such as "Pesan Kunci & Fakta yang wajib dipakai:" and
+  // "Target Audiens:", so match any known label prefix rather than an exact
+  // phrase. Missing a label used to send the whole instruction prompt to the
+  // embedding model, which dropped relevance below the grounding threshold and
+  // produced "no document matches" for perfectly valid briefs.
+  const LABELS = /^(Judul|Pesan Kunci|Fakta|Audiens|Target Audiens|Kanal|Kanal Distribusi|Nada|Nada Suara|Format|Format Output|CTA|Call to Action|Produk|Batasan)\b/i;
+  const lines = query.split('\n').map(line => line.trim());
+  const facts: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!LABELS.test(line)) continue;
+    const inline = line.replace(/^[^:]+:\s*/, '').trim();
+    if (inline) { facts.push(inline); continue; }
+    // Some labels put the value on the following line(s).
+    for (let j = i + 1; j < lines.length && !LABELS.test(lines[j]); j++) {
+      if (lines[j]) facts.push(lines[j]);
+    }
+  }
   const core = facts.join('. ').replace(/\s+/g, ' ').trim();
-  return (core || query.trim()).slice(0, 400);
+  return (core || query.trim()).slice(0, 600);
 }
 
 /**
