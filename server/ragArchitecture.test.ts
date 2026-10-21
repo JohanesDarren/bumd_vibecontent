@@ -32,3 +32,12 @@ test('markdown documents are extracted for indexing', () => {
 test('unsupported binary formats are rejected instead of indexed empty', () => {
   assert.throws(() => extractDocumentText('gambar.png', Buffer.from([0x89, 0x50])), /belum didukung/);
 });
+
+test('model reasoning traces are never used as the draft', async () => {
+  // Regression: deepseek sometimes returns empty `content` and puts its plan in
+  // `reasoning_content` ("The user wants a single Instagram caption..."), which
+  // then failed the quality gate and produced no draft at all.
+  const src = await readFile(new URL('./rag.ts', import.meta.url), 'utf8');
+  assert.match(src, /reasoning traces are NOT copy/i);
+  assert.ok(src.includes("the user|i |we |let me"), 'reasoning must be screened before use');
+});

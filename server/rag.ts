@@ -288,7 +288,14 @@ async function writeCopyFromExcerpts(briefFacts: string, excerpts: string, fetch
       response = await fetcher(`${config.baseUrl}/chat/completions`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model, temperature: 0.6, max_tokens: 900, messages }),
+        body: JSON.stringify({
+          model,
+          temperature: 0.6,
+          max_tokens: 900,
+          // Ask reasoning-capable models to answer directly: their trace is not copy.
+          reasoning_effort: 'none',
+          messages
+        }),
         signal: AbortSignal.timeout(Number(process.env['9ROUTER_TIMEOUT_MS'] || 120000))
       });
       raw = await response.text();
@@ -301,9 +308,12 @@ async function writeCopyFromExcerpts(briefFacts: string, excerpts: string, fetch
   if (!response?.ok) throw new Error(`Penulis naskah gagal (HTTP ${lastStatus ?? response?.status})`);
   const body = parseFirstJson(raw) as { choices?: Array<{ message?: { content?: unknown; reasoning_content?: unknown } }> };
   const message = body.choices?.[0]?.message;
-  const content = typeof message?.content === 'string' ? message.content : '';
-  const reasoning = typeof message?.reasoning_content === 'string' ? message.reasoning_content : '';
-  return singleDraft((content.trim() || reasoning.trim())).slice(0, 4000);
+  const content = typeof message?.content === 'string' ? message.content.trim() : '';
+  const reasoning = typeof message?.reasoning_content === 'string' ? message.reasoning_content.trim() : '';
+  // Reasoning traces are NOT copy. `reasoning_content` is only a last resort when
+  // it does not read like deliberation ("The user wants…", "I should…").
+  const pick = content || (/^(?:the user|i |we |let me|okay|first,|to )/i.test(reasoning) ? '' : reasoning);
+  return singleDraft(pick).slice(0, 4000);
 }
 
 export async function ragQuery(scopeId: string, query: string, options?: unknown): Promise<RagQueryResult> {
