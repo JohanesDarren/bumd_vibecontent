@@ -308,3 +308,17 @@ test('garbled mixed-language grounded copy is blocked; list markers are not requ
   assert.deepEqual(cleanReview.blocking, []);
   assert.ok(!cleanReview.warnings.some(issue => /angka penting/.test(issue)));
 });
+
+test('Indonesian copy may use product nouns without being blocked as English', () => {
+  // Regression: "caption", "feed", "reels", "friendly" and the acronym "IT"
+  // blocked valid drafts, so Brief sometimes produced nothing at all.
+  const copy = 'Caption Instagram ini cocok untuk feed dan reels. Program IT ini ramah untuk pemula. Daftar sekarang di portal resmi.';
+  const review = reviewRagCopy(copy, copyBrief, copyBrand, [copyCitation]);
+  assert.deepEqual(review.blocking, []);
+});
+
+test('a real English clause still blocks the copy', () => {
+  const copy = 'Program ini sangat baik. This program is designed for students who want to learn about technology and business.';
+  const review = reviewRagCopy(copy, copyBrief, copyBrand, [copyCitation]);
+  assert.ok(review.blocking.some(issue => /Inggris/.test(issue)));
+});

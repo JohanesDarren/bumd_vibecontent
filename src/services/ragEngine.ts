@@ -51,21 +51,21 @@ export interface RemoteGrounding {
   composedCopy?: string;
 }
 
-const englishArtifacts = new Set([
-  'about', 'after', 'again', 'also', 'and', 'are', 'around', 'because', 'been', 'being', 'began', 'but',
-  'can', 'could', 'crisscross', 'does', 'doesn', 'doesnt', 'discovering', 'do', 'down', 'during',
-  'each', 'even', 'every', 'for', 'from', 'further', 'had', 'has', 'have', 'here', 'how', 'into',
-  'is', 'it', 'its', 'just', 'more', 'most', 'much', 'must', 'neither', 'never', 'not', 'now',
-  'off', 'once', 'only', 'other', 'our', 'out', 'over', 'own', 'rather', 'rightly', 'same',
-  'should', 'since', 'some', 'such', 'than', 'that', 'the', 'their', 'them', 'then', 'there',
+// Only true English function words are treated as contamination. Product nouns
+// that Indonesian copy legitimately uses (caption, feed, reels, brief, update,
+// service, free) must NOT block a draft, and short tokens like "it" collide with
+// the Indonesian acronym "IT".
+const englishFunctionWords = new Set([
+  'about', 'after', 'again', 'also', 'and', 'are', 'around', 'because', 'been', 'being', 'but',
+  'could', 'does', 'doesn', 'doesnt', 'down', 'during', 'each', 'even', 'every', 'for', 'from',
+  'further', 'had', 'has', 'have', 'here', 'how', 'into', 'its', 'much', 'must', 'neither',
+  'never', 'not', 'off', 'once', 'only', 'other', 'our', 'out', 'over', 'own', 'rather',
+  'should', 'since', 'some', 'such', 'than', 'that', 'their', 'them', 'then', 'there',
   'these', 'they', 'this', 'those', 'through', 'too', 'under', 'until', 'very', 'was', 'were',
-  'what', 'when', 'where', 'which', 'while', 'who', 'why', 'will', 'with', 'would', 'you',
-  'surrounded', 'goodbye', 'city', 'residents', 'friendly', 'formal', 'feed', 'reels', 'caption',
-  'let', 'me', 'output', 'properly', 'okay', 'sure', 'here', 'adjustment', 'vegetable', 'please', 'note',
-  'closer', 'close', 'immediate', 'immediately', 'check', 'checking', 'easy', 'easily', 'now', 'new', 'get',
-  'free', 'best', 'update', 'updates', 'service', 'services', 'feature', 'features', 'your', 'yours', 'we',
-  'us', 'can', 'will', 'need', 'help', 'just', 'anytime', 'anywhere', 'without', 'within', 'all', 'one'
+  'what', 'when', 'where', 'which', 'while', 'who', 'why', 'with', 'would', 'you', 'your',
+  'yours', 'the', 'is', 'of', 'to', 'in', 'on', 'at', 'by', 'we', 'us'
 ]);
+
 
 const briefStopWords = new Set([
   'agar', 'akan', 'atau', 'bagi', 'bahwa', 'dalam', 'dari', 'dengan', 'di', 'dan', 'hingga', 'ini',
@@ -198,14 +198,26 @@ export function reviewRagCopy(
     ...citations.map(citation => citation.documentTitle)
   ].filter(Boolean).join(' ').toLocaleLowerCase('id-ID');
   const allowedWords = new Set(suppliedText.match(/\p{Script=Latin}+/gu) || []);
-  const foreignWords = [...new Set((text.toLocaleLowerCase('id-ID').match(/\p{Script=Latin}+/gu) || [])
-    .filter(word => englishArtifacts.has(word) && !allowedWords.has(word)))];
-  const englishShaped = [...new Set((text.toLocaleLowerCase('id-ID').match(/\p{Script=Latin}+/gu) || [])
-    .filter(word => word.length > 5 && /(?:ment|tion|tions|ness|able|ible|ful|ally|ately)$/.test(word) && !allowedWords.has(word)))];
-  // Any English word not supplied by the brief blocks the copy; the pipeline then
-  // repairs or rewrites it instead of publishing mixed-language text.
-  if (englishShaped.length || foreignWords.length) {
-    blocking.push(`Naskah mencampur bahasa Inggris: ${[...new Set([...englishShaped, ...foreignWords])].join(', ')}.`);
+  // Contamination means a whole English clause slipped in, not a borrowed product
+  // noun. Require at least two function words, or one function word next to an
+  // English-looking long word, before blocking the copy.
+  const words = text.toLocaleLowerCase('id-ID').match(/\p{Script=Latin}+/gu) || [];
+  const foreignWords = [...new Set(words.filter(word => englishFunctionWords.has(word) && !allowedWords.has(word)))];
+  const englishShaped = [...new Set(words
+    .filter(word => !allowedWords.has(word) && (
+      /(?:tion|sion|ment|ness|ility|ously|ingly)$/.test(word)
+      // Adverbs/adjectives that only exist in English (immediate, closer, slowly).
+      || (word.length > 5 && /(?:ly|ive|ous|ical|ate|able|ible)$/.test(word))
+      // Unmistakably English nouns that never occur in Indonesian copy.
+      || ['adjustment', 'vegetable', 'friendly', 'throughout', 'nevertheless'].includes(word)
+    )))];
+  // A single unmistakably-English word is already contamination; ordinary
+  // Indonesian copy never contains "adjustment" or "vegetable".
+  const englishRun = foreignWords.length >= 2
+    || (foreignWords.length >= 1 && englishShaped.length >= 1)
+    || englishShaped.length >= 2;
+  if (englishRun) {
+    blocking.push(`Naskah memuat kalimat berbahasa Inggris: ${[...new Set([...foreignWords, ...englishShaped])].join(', ')}.`);
   }
   // Garbled model output: stray tildes, ",/checking" fragments.
   if (/~|,\/|\s\/\p{L}/u.test(text)) {

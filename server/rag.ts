@@ -209,6 +209,30 @@ function singleDraft(text: string): string {
   return lines.join('\n').trim();
 }
 
+/**
+ * Some gateway responses contain extra data after the JSON object (concatenated
+ * SSE frames). Take the first complete JSON value instead of failing the draft.
+ */
+function parseFirstJson(raw: string): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    let depth = 0;
+    let start = -1;
+    for (let i = 0; i < raw.length; i++) {
+      const ch = raw[i];
+      if (ch === '{') { if (depth === 0) start = i; depth++; }
+      else if (ch === '}') {
+        depth--;
+        if (depth === 0 && start >= 0) {
+          try { return JSON.parse(raw.slice(start, i + 1)); } catch { start = -1; }
+        }
+      }
+    }
+    throw new Error('Respons penulis naskah tidak dapat dibaca');
+  }
+}
+
 type WriterConfig = { baseUrl: string; apiKey: string; model: string };
 
 /** Same gateway that powers vision/OCR; it is fast and already configured. */
@@ -230,6 +254,10 @@ export function writerConfig(): WriterConfig {
 async function writeCopyFromExcerpts(briefFacts: string, excerpts: string, fetcher: typeof fetch = fetch): Promise<string> {
   const config = writerConfig();
   if (!config.apiKey) throw new Error('Penulis naskah belum dikonfigurasi (9ROUTER_API_KEY)');
+  // Providers throttle per model, so a single model is not reliable enough for a
+  // user-facing draft. Try the preferred model first, then known-good fallbacks.
+  const models = [config.model, ...(process.env['9ROUTER_WRITER_FALLBACKS'] || 'ocg/deepseek-flash,ocg/glm-5.3-flash')
+    .split(',').map(m => m.trim()).filter(Boolean)].filter((m, i, all) => m && all.indexOf(m) === i);
 
   const messages = [
     {
@@ -254,20 +282,24 @@ async function writeCopyFromExcerpts(briefFacts: string, excerpts: string, fetch
   // surfacing the failure.
   let response: Response | undefined;
   let raw = '';
-  for (let attempt = 0; attempt < 3; attempt++) {
-    response = await fetcher(`${config.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: config.model, temperature: 0.6, max_tokens: 900, messages }),
-      signal: AbortSignal.timeout(Number(process.env['9ROUTER_TIMEOUT_MS'] || 120000))
-    });
-    raw = await response.text();
-    if (response.ok) break;
-    if (![429, 500, 502, 503, 504].includes(response.status)) break;
-    await new Promise(resolve => setTimeout(resolve, 1200 * (attempt + 1)));
+  let lastStatus: number | undefined;
+  outer: for (const model of models) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      response = await fetcher(`${config.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, temperature: 0.6, max_tokens: 900, messages }),
+        signal: AbortSignal.timeout(Number(process.env['9ROUTER_TIMEOUT_MS'] || 120000))
+      });
+      raw = await response.text();
+      if (response.ok) break outer;
+      lastStatus = response.status;
+      if (![429, 500, 502, 503, 504].includes(response.status)) break outer;
+      await new Promise(resolve => setTimeout(resolve, 900 * (attempt + 1)));
+    }
   }
-  if (!response?.ok) throw new Error(`Penulis naskah gagal (HTTP ${response?.status})`);
-  const body = JSON.parse(raw) as { choices?: Array<{ message?: { content?: unknown; reasoning_content?: unknown } }> };
+  if (!response?.ok) throw new Error(`Penulis naskah gagal (HTTP ${lastStatus ?? response?.status})`);
+  const body = parseFirstJson(raw) as { choices?: Array<{ message?: { content?: unknown; reasoning_content?: unknown } }> };
   const message = body.choices?.[0]?.message;
   const content = typeof message?.content === 'string' ? message.content : '';
   const reasoning = typeof message?.reasoning_content === 'string' ? message.reasoning_content : '';
