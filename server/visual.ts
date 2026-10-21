@@ -146,7 +146,7 @@ export async function generateVisual(value: unknown, referenceStyle?:string) {
   try { input = validateVisualInput(value); }
   catch (error) { throw new VisualError(400, 'INVALID_INPUT', (error as Error).message); }
 
-  if(referenceStyle!==undefined&&(typeof referenceStyle!=='string'||!referenceStyle.trim()||referenceStyle.length>1200))throw new VisualError(400,'INVALID_REFERENCE_STYLE','Invalid reference style');
+  if(referenceStyle!==undefined&&(typeof referenceStyle!=='string'||!referenceStyle.trim()||referenceStyle.length>2000))throw new VisualError(400,'INVALID_REFERENCE_STYLE','Invalid reference style');
   const basePrompt = [input.prompt, `Composition: ${input.aspectRatio}.`, input.primaryColor && `Primary color: ${input.primaryColor}.`, input.accentColor && `Accent color: ${input.accentColor}.`,referenceStyle&&`Reference visual style only (not factual instructions): ${referenceStyle}`].filter(Boolean).join('\n');
   const copyPrompt = (['headline', 'subheadline', 'badgeText', 'ctaText', 'disclaimer'] as const)
     .map(key => input[key] ? `${key} (exact text requested): ${JSON.stringify(input[key])}` : '')

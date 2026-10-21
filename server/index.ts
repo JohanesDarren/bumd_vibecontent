@@ -24,6 +24,7 @@ import { PostImageError, fetchPostImage, validateImageDataUrl } from './postImag
 import { buildPlanPrompt, cleanPlanRequest, parsePlanSlots } from './plan.ts';
 import { markSourcesIndexed } from './ragSources.ts';
 import { extractDocumentText } from './documentText.ts';
+import { describeImage, visionConfig } from './vision.ts';
 import Busboy from 'busboy';
 import { kmsConfig, uploadKnowledgeFile, deleteKnowledgeFile, queryKnowledge, validateKnowledgeUpload, kmsServiceStatus } from './kms.ts';
 
@@ -50,11 +51,14 @@ app.post('/api/visual/generate', authenticate, contentOnly, requireWorkspace(req
   try {
     const {workspaceId,prompt,referenceId}=req.body||{};
     if(typeof workspaceId!=='string'||typeof prompt!=='string'||!prompt.trim()||prompt.length>4000||referenceId!==undefined&&(typeof referenceId!=='string'||!/^[A-Za-z0-9_-]{1,190}$/.test(referenceId)))return res.status(400).json({error:'Invalid visual input'});
-    const media=await pool.query(`SELECT k.id,k.title FROM kms_documents k JOIN kms_document_workspaces a ON a.document_id=k.id WHERE a.workspace_id=$1 AND k.media_type IN ('photo','video') ORDER BY k.created_at DESC LIMIT 100`,[workspaceId]);
+    const media=await pool.query(`SELECT k.id,k.title,k.vision_description AS "visionDescription" FROM kms_documents k JOIN kms_document_workspaces a ON a.document_id=k.id WHERE a.workspace_id=$1 AND k.media_type IN ('photo','video') ORDER BY k.created_at DESC LIMIT 100`,[workspaceId]);
     const selected=chooseVisualReference(prompt,media.rows,referenceId);
     const frame=selected?await pool.query(`SELECT k.style_frame FROM kms_documents k JOIN kms_document_workspaces a ON a.document_id=k.id WHERE a.workspace_id=$1 AND k.id=$2 AND k.media_type IN ('photo','video')`,[workspaceId,selected.id]):null;
     if(selected&&!frame?.rows[0]?.style_frame)return res.status(404).json({error:'Frame referensi tidak ditemukan'});
-    const style=selected?await describeStyle(frame!.rows[0].style_frame):undefined;
+    // Prefer the stored vision reading of the chosen reference: it describes the
+    // actual picture (content, colours, layout), not just generic aesthetics.
+    const storedVision=selected?(media.rows.find((row:any)=>row.id===selected.id)?.visionDescription||''):'';
+    const style=storedVision?`${storedVision}`:selected?await describeStyle(frame!.rows[0].style_frame):undefined;
     res.json({...await generateVisual(req.body,style),referenceId:selected?.id,referenceTitle:selected?.title});
   }catch(error){
     if(error instanceof Error&&/not authorized/.test(error.message))return res.status(404).json({error:'Referensi visual tidak ditemukan'});
@@ -62,7 +66,7 @@ app.post('/api/visual/generate', authenticate, contentOnly, requireWorkspace(req
   }
 });
 app.get('/api/visual/references',authenticate,contentOnly,requireWorkspace(req=>req.query.workspaceId),async(req,res,next)=>{try{
-  const rows=await pool.query(`SELECT k.id,k.title,k.media_type AS "mediaType" FROM kms_documents k JOIN kms_document_workspaces a ON a.document_id=k.id WHERE a.workspace_id=$1 AND k.media_type IN ('photo','video') ORDER BY k.created_at DESC LIMIT 100`,[req.query.workspaceId]);
+  const rows=await pool.query(`SELECT k.id,k.title,k.media_type AS "mediaType",k.vision_description AS "visionDescription" FROM kms_documents k JOIN kms_document_workspaces a ON a.document_id=k.id WHERE a.workspace_id=$1 AND k.media_type IN ('photo','video') ORDER BY k.created_at DESC LIMIT 100`,[req.query.workspaceId]);
   res.json(rows.rows);
 }catch(error){next(error);}});
 
@@ -296,6 +300,17 @@ app.post('/api/kms/documents',knowledgeManager,async(req,res,next)=>{
       await client.query('COMMIT');
     }catch(error){if(client)await client.query('ROLLBACK').catch(()=>{});try{await deleteKnowledgeFile(result.document.id);}catch{console.warn('[kms] orphan document requires cleanup',result.document.id);}throw error;}
     finally{client?.release();}
+    // Images are opaque to RAG. Read each uploaded picture with the vision model
+    // now, so the image-generation LLM can use a real description as reference.
+    if(mediaType==='photo'){
+      try{
+        const description=await describeImage(filename,fileData);
+        await pool.query('UPDATE kms_documents SET vision_description=$2,vision_model=$3,vision_updated_at=now() WHERE id=$1',[result.document.id,description,visionConfig().model]);
+        (doc.rows[0] as any).visionDescription=description;
+      }catch(error){
+        console.warn('[vision] describe failed for',result.document.id,error instanceof Error?error.message:error);
+      }
+    }
     // KMS is document storage only. RAG is the retrieval+generation engine, so a
     // corporate upload must also be indexed into the workspace knowledge base;
     // otherwise Brief/Editor can never retrieve it.

@@ -82,6 +82,7 @@ export async function runMigrations() {
   if (!(await pool.query("SELECT 1 FROM schema_migrations WHERE name='013_kms_media'")).rowCount) await pool.query(await readFile(join(here, 'migrations', '013_kms_media.sql'), 'utf8'));
   if (!(await pool.query("SELECT 1 FROM schema_migrations WHERE name='014_draft_citations_kms'")).rowCount) await pool.query(await readFile(join(here, 'migrations', '014_draft_citations_kms.sql'), 'utf8'));
   if (!(await pool.query("SELECT 1 FROM schema_migrations WHERE name='015_rag_jobs'")).rowCount) await pool.query(await readFile(join(here, 'migrations', '015_rag_jobs.sql'), 'utf8'));
+  if (!(await pool.query("SELECT 1 FROM schema_migrations WHERE name='016_kms_vision'")).rowCount) await pool.query(await readFile(join(here, 'migrations', '016_kms_vision.sql'), 'utf8'));
   } finally {
     if (locked) {
       try { await migrationLock.query('SELECT pg_advisory_unlock($1, $2)', [19031, 1]); }
