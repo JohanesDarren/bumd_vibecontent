@@ -23,6 +23,7 @@ import { publish, subscribe, unsubscribe, subscriberCount, resolveScope } from '
 import { PostImageError, fetchPostImage, validateImageDataUrl } from './postImage.ts';
 import { buildPlanPrompt, cleanPlanRequest, parsePlanSlots } from './plan.ts';
 import { markSourcesIndexed } from './ragSources.ts';
+import { extractDocumentText } from './documentText.ts';
 import Busboy from 'busboy';
 import { kmsConfig, uploadKnowledgeFile, deleteKnowledgeFile, queryKnowledge, validateKnowledgeUpload, kmsServiceStatus } from './kms.ts';
 
@@ -295,8 +296,27 @@ app.post('/api/kms/documents',knowledgeManager,async(req,res,next)=>{
       await client.query('COMMIT');
     }catch(error){if(client)await client.query('ROLLBACK').catch(()=>{});try{await deleteKnowledgeFile(result.document.id);}catch{console.warn('[kms] orphan document requires cleanup',result.document.id);}throw error;}
     finally{client?.release();}
-    res.status(201).json({...doc.rows[0],workspaceIds,indexed:false});
-    // ponytail: provider indexed status is not grounded retrieval; confirmation occurs on a cited query.
+    // KMS is document storage only. RAG is the retrieval+generation engine, so a
+    // corporate upload must also be indexed into the workspace knowledge base;
+    // otherwise Brief/Editor can never retrieve it.
+    let ragIndexed=false;
+    if(mediaType==='document'){
+      try{
+        const indexedDoc=await ragIndexDocument({
+          scopeId:workspaceIds[0],
+          documentId:result.document.id,
+          documentName:filename,
+          text:await extractDocumentText(filename,fileData),
+          language:'id',
+          metadata:{title:fields.title,category:'Dokumen',source:'kms'}
+        });
+        ragIndexed=Boolean(indexedDoc);
+        await pool.query('UPDATE kms_documents SET indexed=true WHERE id=$1',[result.document.id]);
+      }catch(error){
+        console.warn('[rag] index after KMS upload failed',error instanceof Error?error.message:error);
+      }
+    }
+    res.status(201).json({...doc.rows[0],workspaceIds,indexed:ragIndexed});
   }catch(e){if(e instanceof Error&&/Hanya PDF|File harus berisi|Nama file tidak valid|Judul dan kategori wajib|Frame video|Frame hanya/.test(e.message))return res.status(400).json({error:e.message});console.error('[kms] upload failed',e instanceof Error?e.message:e);res.status(502).json({error:'Upload KMS gagal; coba lagi nanti'});}
 });
 app.delete('/api/kms/documents/:id',knowledgeManager,async(req,res,next)=>{try{
@@ -331,7 +351,9 @@ const RAG_JOB_TTL_MS=10*60*1000;
 
 async function runRagJob(id:string,workspaceId:string,query:string){
   try{
-    const answer=await queryKnowledge(query,kmsConfig(),fetch,await authorizedKmsIds(workspaceId));
+    // Brief/Editor are RAG work, not KMS work: RAG retrieves matched knowledge
+    // and writes the copy. KMS only stores corporate-uploaded documents.
+    const answer=await ragQuery(workspaceId,query);
     if(answer.grounded)await markSourcesIndexed(answer.sources,ids=>pool.query('UPDATE kms_documents SET indexed=true WHERE id=ANY($1::text[])',[ids]),error=>console.warn('[rag] indexed metadata update failed',error instanceof Error?error.message:error));
     await pool.query("UPDATE rag_jobs SET status='done',answer=$2::jsonb WHERE id=$1",[id,JSON.stringify(answer)]);
   }catch(error){
@@ -341,9 +363,9 @@ async function runRagJob(id:string,workspaceId:string,query:string){
   }
 }
 // ── RAG service proxy routes ──
-app.get('/api/rag/status',async(_req,res)=>{const config=kmsConfig();const configured=Boolean(config.url&&config.key&&config.organizationId);if(!configured)return res.json({configured,ready:false,urlConfigured:Boolean(config.url),keyConfigured:Boolean(config.key),projectConfigured:Boolean(config.organizationId),detail:'KMS environment variables are incomplete'});try{const status=await kmsServiceStatus(config);res.json({configured,ready:status.ready,urlConfigured:true,keyConfigured:true,projectConfigured:true,dependencies:status.dependencies,detail:status.detail});}catch(error){res.json({configured,ready:false,urlConfigured:true,keyConfigured:true,projectConfigured:true,detail:error instanceof Error?error.message:'KMS status unavailable'});}});
+app.get('/api/rag/status',async(_req,res)=>{try{const status=await ragStatus();const deps=status?.dependencies||{};const ready=status?.status==='ready'&&['qdrant','embedding','reranker','llm'].every(name=>String((deps as any)[name]||'')==='ok');res.json({configured:true,ready,dependencies:deps,detail:status?.detail||{}});}catch(error){const message=error instanceof Error?error.message:'RAG status unavailable';res.json({configured:!RagNotConfiguredError.prototype.isPrototypeOf(error),ready:false,detail:message});}});
 app.post('/api/rag/search',contentOnly,requireWorkspace(req=>req.body?.workspaceId),(_req,res)=>res.status(410).json({error:'KMS tidak menyediakan pencarian kutipan terpisah; gunakan sumber dari jawaban RAG'}));
-app.post('/api/rag/query',contentOnly,requireWorkspace(req=>req.body?.workspaceId),async(req,res)=>{try{const{workspaceId,query}=req.body||{};if(!isNonEmptyString(workspaceId))return res.status(400).json({error:'workspaceId is required'});if(!isNonEmptyString(query))return res.status(400).json({error:'query is required'});const answer=await queryKnowledge(query,kmsConfig(),fetch,await authorizedKmsIds(workspaceId));if(answer.grounded){await markSourcesIndexed(answer.sources,ids=>pool.query('UPDATE kms_documents SET indexed=true WHERE id=ANY($1::text[])',[ids]),error=>console.warn('[rag] indexed metadata update failed',error instanceof Error?error.message:error));}res.json(answer);}catch(error){const message=error instanceof Error?error.message:'unknown error';console.error('[rag] query failed',{message,cause:error instanceof Error&&error.cause?String(error.cause):undefined});res.status(502).json({error:`KMS query gagal: ${message}`});}});
+app.post('/api/rag/query',contentOnly,requireWorkspace(req=>req.body?.workspaceId),async(req,res)=>{try{const{workspaceId,query}=req.body||{};if(!isNonEmptyString(workspaceId))return res.status(400).json({error:'workspaceId is required'});if(!isNonEmptyString(query))return res.status(400).json({error:'query is required'});const answer=await ragQuery(workspaceId,query);if(answer.grounded){await markSourcesIndexed(answer.sources,ids=>pool.query('UPDATE kms_documents SET indexed=true WHERE id=ANY($1::text[])',[ids]),error=>console.warn('[rag] indexed metadata update failed',error instanceof Error?error.message:error));}res.json(answer);}catch(error){const message=error instanceof Error?error.message:'unknown error';console.error('[rag] query failed',{message,cause:error instanceof Error&&error.cause?String(error.cause):undefined});res.status(502).json({error:`KMS query gagal: ${message}`});}});
 app.post('/api/rag/jobs',contentOnly,requireWorkspace(req=>req.body?.workspaceId),async(req,res)=>{try{const{workspaceId,query}=req.body||{};if(!isNonEmptyString(workspaceId)||!isNonEmptyString(query))return res.status(400).json({error:'workspaceId and query are required'});const id=randomUUID();await pool.query("INSERT INTO rag_jobs(id,workspace_id,user_id,status) VALUES($1,$2,$3,'running')",[id,workspaceId,String(res.locals.user?.id||'')]);await pool.query("DELETE FROM rag_jobs WHERE created_at<now()-make_interval(secs=>$1)",[Math.round(RAG_JOB_TTL_MS/1000)]);void runRagJob(id,workspaceId,query);res.status(202).json({jobId:id,status:'running'});}catch(error){next(error);}});
 app.get('/api/rag/jobs/:id',async(req,res,next)=>{try{const result=await pool.query('SELECT workspace_id AS "workspaceId",status,answer,error FROM rag_jobs WHERE id=$1',[String(req.params.id)]);const job=result.rows[0];if(!job)return res.status(404).json({error:'Job not found or expired'});if(!permitted(res.locals.user,job.workspaceId))return res.status(403).json({error:'Workspace access denied'});if(job.status==='done')return res.json({status:'done',answer:job.answer});if(job.status==='error')return res.json({status:'error',error:job.error});res.json({status:'running'});}catch(error){next(error);}});
 app.post('/api/rag/refine',contentOnly,requireWorkspace(req=>req.body?.workspaceId),async(req,res,next)=>{try{const{draftContent,promptAction}=req.body||{};if(!isNonEmptyString(draftContent)||!isNonEmptyString(promptAction))return res.status(400).json({error:'draftContent and promptAction required'});res.json(await queryKnowledge(`Perbaiki draf berikut sesuai instruksi. Pertahankan fakta dan jangan tambahkan fakta di luar dokumen. Instruksi: ${promptAction}\nDraf: ${draftContent}`,kmsConfig(),fetch,await authorizedKmsIds(req.body.workspaceId)));}catch(error){next(error);}});

@@ -1,0 +1,34 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { extractDocumentText } from './documentText.ts';
+
+const indexSrc = await readFile(new URL('./index.ts', import.meta.url), 'utf8');
+
+test('Brief and Editor generation go to RAG, never to KMS', () => {
+  // KMS is document storage for corporate uploads; RAG does retrieval+generation.
+  assert.match(indexSrc, /const answer=await ragQuery\(workspaceId,query\)/);
+  assert.ok(
+    !/queryKnowledge\(query,kmsConfig\(\)/.test(indexSrc),
+    'generation must not call the KMS chat endpoint'
+  );
+});
+
+test('KMS upload also indexes the document into the workspace RAG knowledge base', () => {
+  assert.match(indexSrc, /ragIndexDocument\(\{/);
+  assert.match(indexSrc, /extractDocumentText\(filename,fileData\)/);
+  assert.match(indexSrc, /SET indexed=true/);
+});
+
+test('RAG status reflects the RAG service, not KMS', () => {
+  assert.match(indexSrc, /await ragStatus\(\)/);
+});
+
+test('markdown documents are extracted for indexing', () => {
+  const text = extractDocumentText('profil.md', Buffer.from('# Profil\n\nMasa studi 6 semester.'));
+  assert.match(text, /Masa studi 6 semester/);
+});
+
+test('unsupported binary formats are rejected instead of indexed empty', () => {
+  assert.throws(() => extractDocumentText('gambar.png', Buffer.from([0x89, 0x50])), /belum didukung/);
+});
