@@ -36,10 +36,28 @@ export function sanitizeAnswer(raw: string, maxSentences = 12, maxChars = 1800):
   // Remove a leading meta label such as "Jawaban:" / "Answer:".
   text = text.replace(/^(jawaban|answer)\s*[:-]\s*/i, '');
 
+  // Strip model self-talk that leaks into the copy (regression: answers contained
+  // fragments such as "intensively? Need Indonesian natural." and "pesertaTxn").
+  // Drop the whole sentence, not just the marker, so no orphan words survive.
+  const SELF_TALK = /\b(?:need(?:s|ed)?\s+(?:indonesian|bahasa|natural|shorter|longer)|let me|i will|i'll|i need to|wait|actually|hmm|as an ai|note:|catatan:)\b/i;
+  // A lone lowercase word followed by "?" is a leftover thought, never copy.
+  const LONE_FRAGMENT = /^\s*[a-z]{3,}\?\s*$/;
+  text = text
+    .split(/(?<=[.!?])\s+/)
+    .filter(sentence => !SELF_TALK.test(sentence) && !LONE_FRAGMENT.test(sentence))
+    .join(' ')
+    .replace(/\b([a-z]{3,})Txn\b/g, '$1')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+
   // Protect thousand separators (e.g. "1.250.000") so they are not mistaken
   // for sentence boundaries while splitting.
   const DOT = '\u0001';
-  const protectedText = text.replace(/(\d)\.(?=\d)/g, `$1${DOT}`);
+  // Protect both thousand separators and dotted academic titles/abbreviations
+  // (A.Md.Kom., S.Kom., M.M.) so they are not split into separate sentences.
+  const protectedText = text
+    .replace(/(\d)\.(?=\d)/g, `$1${DOT}`)
+    .replace(/\b((?:[A-Z][A-Za-z]*\.){2,}[A-Za-z]*)/g, match => match.split('.').join(DOT));
   const keptLines: string[] = [];
   let used = 0;
   for (const line of protectedText.split('\n')) {

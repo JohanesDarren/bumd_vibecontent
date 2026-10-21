@@ -116,3 +116,17 @@ test('guardRagResponse accepts numbers that appear in the excerpt', () => {
   assert.equal(result.sources.length, 2);
   assert.equal(result.unsupportedClaims.length, 0);
 });
+
+test('sanitizeAnswer removes model self-talk that leaked into the copy', () => {
+  // Regression: production answers contained fragments like these.
+  const raw = 'D3 Sistem Informasi ditempuh 6 semester. intensively? Need Indonesian natural. Gelar A.Md.Kom.';
+  const clean = sanitizeAnswer(raw);
+  assert.ok(!/need indonesian/i.test(clean), clean);
+  assert.ok(!/intensively\?/i.test(clean), clean);
+  assert.match(clean, /6 semester/);
+  assert.match(clean, /A\.Md\.Kom/);
+});
+
+test('sanitizeAnswer repairs corrupted concatenation tokens', () => {
+  assert.match(sanitizeAnswer('Setelah studi selesai, pesertaTxn memperoleh gelar.'), /peserta memperoleh/);
+});
