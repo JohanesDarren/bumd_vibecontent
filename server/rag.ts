@@ -492,6 +492,117 @@ export async function ragCompose(scopeId: string, briefText: string, feedback?: 
   });
 }
 
+export type ScheduleSlotSuggestion = {
+  date: string;
+  time: string;
+  reason: string;
+  alternatives: Array<{ date: string; time: string; reason: string }>;
+};
+
+/**
+ * Ask the writer model for a publish slot (date AND time), not just an hour.
+ *
+ * There is no single "best" time for social media: it depends on the platform,
+ * the content pillar, the audience and what is already scheduled. A static table
+ * cannot know that, so the model reasons over the actual context and returns a
+ * concrete free slot. The date/time is validated server-side; if the model
+ * answers something unusable we fall back to deterministic free-slot search.
+ */
+export async function ragSuggestSchedule(input: {
+  platform: string;
+  title: string;
+  pillar?: string;
+  campaign?: string;
+  caption?: string;
+  audience?: string;
+  todayStr: string;
+  booked: Array<{ date: string; time: string; platform?: string; title?: string }>;
+}): Promise<ScheduleSlotSuggestion> {
+  const config = writerConfig();
+  if (!config.apiKey) throw new Error('Penulis naskah belum dikonfigurasi (9ROUTER_API_KEY)');
+
+  const busy = input.booked.length
+    ? input.booked.slice(0, 40).map(b => `- ${b.date} ${b.time} (${b.platform || '?'}) ${b.title || ''}`.trim()).join('\n')
+    : '(belum ada jadwal)';
+
+  const messages = [
+    {
+      role: 'system',
+      content: [
+        'Kamu perencana konten media sosial senior untuk korporat Indonesia.',
+        'Tugasmu memilih JADWAL TERBIT: tanggal DAN jam (WIB), bukan hanya jam.',
+        'Setiap platform punya perilaku algoritma berbeda, dan setiap unggahan punya konteks berbeda.',
+        'Pertimbangkan: platform, pilar konten, audiens, momentum kampanye, dan jadwal yang sudah ada.',
+        'Jangan menyarankan slot yang sudah terpakai. Sebarkan jadwal agar tidak menumpuk di hari yang sama.',
+        'Jangan selalu memilih jam yang sama; variasikan sesuai konteks konten.',
+        'Balas HANYA dengan JSON valid tanpa penjelasan lain:',
+        '{"date":"YYYY-MM-DD","time":"HH:MM","reason":"alasan singkat bahasa Indonesia","alternatives":[{"date":"YYYY-MM-DD","time":"HH:MM","reason":"..."}]}'
+      ].join(' ')
+    },
+    {
+      role: 'user',
+      content: [
+        `Hari ini: ${input.todayStr} (zona WIB).`,
+        `Platform: ${input.platform}`,
+        `Judul konten: ${input.title}`,
+        input.pillar ? `Pilar konten: ${input.pillar}` : '',
+        input.campaign ? `Kampanye: ${input.campaign}` : '',
+        input.audience ? `Audiens: ${input.audience}` : '',
+        input.caption ? `Ringkasan isi: ${input.caption.slice(0, 500)}` : '',
+        '',
+        'JADWAL YANG SUDAH ADA:',
+        busy,
+        '',
+        'Pilih satu slot kosong setelah hari ini, plus dua alternatif di hari berbeda.'
+      ].filter(Boolean).join('\n')
+    }
+  ];
+
+  const models = [config.model, ...(process.env['9ROUTER_WRITER_FALLBACKS'] || 'ocg/deepseek-flash,ocg/glm-5.3-flash')
+    .split(',').map(m => m.trim()).filter(Boolean)].filter((m, i, all) => m && all.indexOf(m) === i);
+
+  let response: Response | undefined;
+  let raw = '';
+  outer: for (const model of models) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      response = await fetch(`${config.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, temperature: 0.4, max_tokens: 500, reasoning_effort: 'none', messages }),
+        signal: AbortSignal.timeout(Number(process.env['9ROUTER_TIMEOUT_MS'] || 60000))
+      });
+      raw = await response.text();
+      if (response.ok) break outer;
+      if (![429, 500, 502, 503, 504].includes(response.status)) break outer;
+      await new Promise(resolve => setTimeout(resolve, 800 * (attempt + 1)));
+    }
+  }
+  if (!response?.ok) throw new Error(`Penyusun jadwal gagal (HTTP ${response?.status})`);
+
+  const body = parseFirstJson(raw) as { choices?: Array<{ message?: { content?: unknown } }> };
+  const content = typeof body.choices?.[0]?.message?.content === 'string' ? body.choices[0].message.content : '';
+  const jsonText = content.match(/\{[\s\S]*\}/)?.[0];
+  if (!jsonText) throw new Error('Model tidak mengembalikan jadwal yang bisa dibaca');
+  const parsed = JSON.parse(jsonText) as { date?: string; time?: string; reason?: string; alternatives?: Array<{ date?: string; time?: string; reason?: string }> };
+
+  const validDate = (d?: string) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d) && d >= input.todayStr;
+  const validTime = (t?: string) => typeof t === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(t);
+  if (!validDate(parsed.date) || !validTime(parsed.time)) throw new Error('Model memberi tanggal/jam yang tidak valid');
+
+  const taken = new Set(input.booked.map(b => `${b.date}T${b.time}`));
+  if (taken.has(`${parsed.date}T${parsed.time}`)) throw new Error('Model menyarankan slot yang sudah terpakai');
+
+  return {
+    date: parsed.date as string,
+    time: parsed.time as string,
+    reason: (parsed.reason || 'Dipilih berdasarkan platform dan konteks konten.').slice(0, 240),
+    alternatives: (parsed.alternatives || [])
+      .filter(a => validDate(a.date) && validTime(a.time) && !taken.has(`${a.date}T${a.time}`))
+      .slice(0, 3)
+      .map(a => ({ date: a.date as string, time: a.time as string, reason: (a.reason || '').slice(0, 200) }))
+  };
+}
+
 export function ragDeleteDocument(scopeId: string, documentId: string) {
   // Deleting a document that is not (or no longer) indexed is a no-op, not an error:
   // a pending/inactive source may never have been indexed, and re-syncs are idempotent.

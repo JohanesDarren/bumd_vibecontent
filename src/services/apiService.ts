@@ -176,6 +176,7 @@ export const apiService={
   listSchedules:(workspaceId:string)=>request<ScheduledContent[]>(`/api/workspaces/${workspaceId}/schedules`),
   addScheduleComment:(scheduleId:string,text:string)=>request<NonNullable<ScheduledContent['comments']>[number]>(`/api/schedules/${scheduleId}/comments`,{method:'POST',body:JSON.stringify({text})}),
   saveSchedule:(item:ScheduledContent)=>request<ScheduledContent>(`/api/schedules/${item.id}`,{method:'PUT',body:JSON.stringify(item)}),
+  suggestSchedule:(workspaceId:string,payload:{platform:string;title?:string;pillar?:string;campaign?:string;caption?:string;audience?:string;today?:string})=>request<{date:string;time:string;reason:string;alternatives:Array<{date:string;time:string;reason:string}>;source:string}>(`/api/workspaces/${workspaceId}/schedule-suggestion`,{method:'POST',body:JSON.stringify(payload)}),
   deleteSchedule:(workspaceId:string,id:string)=>request<{ok:boolean}>(`/api/organizations/${workspaceId}/schedules/${id}`,{method:'DELETE'}),
   deleteDraft:(workspaceId:string,id:string)=>request<{ok:boolean}>(`/api/organizations/${workspaceId}/drafts/${id}`,{method:'DELETE'}),
 

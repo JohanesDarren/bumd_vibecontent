@@ -262,6 +262,8 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
+  const [suggestBusy, setSuggestBusy] = useState(false);
+  const [suggestion, setSuggestion] = useState<{ date: string; time: string; reason: string; alternatives: Array<{ date: string; time: string; reason: string }>; source: string } | null>(null);
   const [publishUrl, setPublishUrl] = useState('');
   const [postImageBusy, setPostImageBusy] = useState(false);
   const [imageBusy, setImageBusy] = useState<'upload' | 'ai' | 'remove' | null>(null);
@@ -426,6 +428,35 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
       setSaving(false);
     }
   };
+
+  const handleSuggestSchedule = async () => {
+    const platform = formPlatforms[0];
+    if (!platform) return setFormError('Pilih platform dulu agar AI bisa menyarankan jadwal.');
+    setSuggestBusy(true);
+    setFormError(null);
+    try {
+      const draft = drafts.find(d => d.id === formDraftId);
+      const result = await apiService.suggestSchedule(activeWorkspace.id, {
+        platform,
+        title: formTitle,
+        pillar: formPillar,
+        campaign: formCampaign,
+        caption: currentVersion(draft)?.content?.slice(0, 600),
+        today: todayStr
+      });
+      setSuggestion(result);
+      setFormDate(result.date);
+      setFormTime(result.time);
+    } catch (error) {
+      setFormError(`Gagal meminta saran jadwal: ${error instanceof Error ? error.message : error}`);
+    } finally {
+      setSuggestBusy(false);
+    }
+  };
+
+  const clashSlot = !!formDate && !!formTime && schedule.some(
+    s => s.id !== editing?.id && s.status !== 'draft' && s.date === formDate && s.time === formTime
+  );
 
   const handleAdaptCaption = async () => {
     const draft = drafts.find(d => d.id === formDraftId);
@@ -1569,51 +1600,59 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
                   <input className="form-input" type="date" min={editing && editing.date < todayStr ? undefined : todayStr} value={formDate} onChange={e => setFormDate(e.target.value)} />
                   <input className="form-input" type="time" value={formTime} onChange={e => setFormTime(e.target.value)} />
                 </div>
-                {formPlatforms.length > 0 && (() => {
-                  const platform = formPlatforms[0];
-                  const booked = schedule
-                    .filter(s => s.id !== editing?.id && s.status !== 'draft')
-                    .map(s => ({ date: s.date, time: s.time, platform: s.platform }));
-                  const slots = suggestPublishSlots(platform, todayStr, booked, 3);
-                  const best = slots[0];
-                  const current = `${formDate}T${formTime}`;
-                  const clashes = booked.some(b => `${b.date}T${b.time}` === current);
-                  return (
-                    <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                {formPlatforms.length > 0 && (
+                  <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-primary"
+                        style={{ fontSize: '0.72rem', padding: '3px 9px' }}
+                        disabled={suggestBusy}
+                        onClick={handleSuggestSchedule}
+                        title="Minta AI memilih tanggal dan jam terbit berdasarkan platform dan isi konten"
+                      >
+                        <Sparkles size={12} /> {suggestBusy ? 'Menyusun jadwal…' : 'Minta saran jadwal (AI)'}
+                      </button>
+                      {suggestion && (
                         <button
                           type="button"
-                          className="btn btn-sm btn-primary"
+                          className="btn btn-sm btn-secondary"
                           style={{ fontSize: '0.72rem', padding: '3px 9px' }}
-                          onClick={() => { setFormDate(best.date); setFormTime(best.time); }}
-                          title={best.reason}
+                          onClick={() => { setFormDate(suggestion.date); setFormTime(suggestion.time); }}
                         >
-                          <CalendarCheck2 size={12} /> Pakai saran: {best.weekday}, {best.date} · {best.time} WIB
+                          <CalendarCheck2 size={12} /> Pakai: {suggestion.date} · {suggestion.time} WIB
                         </button>
-                        {clashes && (
-                          <span style={{ fontSize: '0.7rem', color: 'var(--danger, #c0392b)' }}>
-                            Slot ini sudah terpakai — pilih saran di atas.
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                        {slots.slice(1).map(slot => (
-                          <button
-                            key={`${slot.date}-${slot.time}`}
-                            type="button"
-                            className="btn btn-sm btn-secondary"
-                            style={{ fontSize: '0.68rem', padding: '2px 7px' }}
-                            onClick={() => { setFormDate(slot.date); setFormTime(slot.time); }}
-                            title={slot.reason}
-                          >
-                            {slot.weekday} {slot.date} · {slot.time}
-                          </button>
-                        ))}
-                      </div>
-                      <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{best.reason}</span>
+                      )}
+                      {clashSlot && (
+                        <span style={{ fontSize: '0.7rem', color: 'var(--danger, #c0392b)' }}>
+                          Slot ini sudah terpakai — pilih saran lain.
+                        </span>
+                      )}
                     </div>
-                  );
-                })()}
+                    {suggestion && (
+                      <>
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                          {suggestion.alternatives.map(alt => (
+                            <button
+                              key={`${alt.date}-${alt.time}`}
+                              type="button"
+                              className="btn btn-sm btn-secondary"
+                              style={{ fontSize: '0.68rem', padding: '2px 7px' }}
+                              onClick={() => { setFormDate(alt.date); setFormTime(alt.time); }}
+                              title={alt.reason}
+                            >
+                              {alt.date} · {alt.time}
+                            </button>
+                          ))}
+                        </div>
+                        <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+                          {suggestion.reason}
+                          {suggestion.source === 'fallback' ? ' (saran cadangan: AI sedang sibuk)' : ''}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="form-group">

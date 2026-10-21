@@ -2,7 +2,7 @@ import './env.ts';
 import { describeStyle, generateVisual, VisualError } from './visual.ts';
 import { chooseVisualReference } from './visualReferenceSelection.ts';
 import { env, ragConfigured } from './env.ts';
-import { knowledgeBaseIdFor, RagNotConfiguredError, ragDeleteDocument, ragIndexDocument, ragListDocuments, ragCompose, ragPlan, ragQuery, ragRefine, ragSearch, ragStatus } from './rag.ts';
+import { knowledgeBaseIdFor, RagNotConfiguredError, ragDeleteDocument, ragIndexDocument, ragListDocuments, ragCompose, ragPlan, ragQuery, ragRefine, ragSearch, ragSuggestSchedule, ragStatus } from './rag.ts';
 import express from 'express';
 import cors from 'cors';
 import { resolve } from 'node:path';
@@ -355,6 +355,66 @@ app.delete('/api/organizations/:workspaceId/brand-profile',contentOnly,requireWo
 app.delete('/api/organizations/:workspaceId/drafts/:id',contentOnly,requireWorkspace(req=>req.params.workspaceId),async(req,res,next)=>{try{await deleteDraft(req.params.workspaceId,req.params.id);res.json({ok:true});}catch(error){next(error);}});
 app.get('/api/workspaces/:workspaceId/settings',requireMember(req=>String(req.params.workspaceId)),async(req,res,next)=>{try{if(!(await organizationExists(req.params.workspaceId)))return res.status(404).json({error:'Organization not found'});res.json(await getWorkspaceSettings(req.params.workspaceId));}catch(error){next(error);}});
 app.put('/api/workspaces/:workspaceId/settings',requireWorkspace(req=>String(req.params.workspaceId),true),async(req,res,next)=>{try{if(!(await organizationExists(req.params.workspaceId)))return res.status(404).json({error:'Organization not found'});const data=req.body;if(!data||typeof data!=='object'||Array.isArray(data))return res.status(400).json({error:'A settings object is required'});res.json(await saveWorkspaceSettings(req.params.workspaceId,data));}catch(error){next(error);}});
+/**
+ * Deterministic free-slot search used only when the model cannot answer.
+ * Mirrors the client rules: prefer platform weekdays, one post per day.
+ */
+function freeScheduleSlot(platform:string,todayStr:string,booked:Array<{date:string;time:string}>){
+  const WEEKDAYS:Record<string,number[]>={instagram:[2,3,4],facebook:[3,4,5],twitter:[1,2,3],linkedin:[2,3,4],youtube:[5,6,0]};
+  const TIMES:Record<string,string>={instagram:'19:00',facebook:'12:00',twitter:'12:00',linkedin:'08:00',youtube:'17:00'};
+  const preferred=WEEKDAYS[platform]||[2,3,4];
+  const baseTime=TIMES[platform]||'19:00';
+  const times=[baseTime,'12:00','09:00','20:00','17:00','08:00'];
+  const taken=new Set(booked.map(b=>`${b.date}T${b.time}`));
+  const busyDates=new Set(booked.map(b=>b.date));
+  const base=new Date(`${todayStr}T00:00:00`);
+  const labels=['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+  let fallback:{date:string;time:string;reason:string}|null=null;
+  for(let offset=1;offset<=30;offset++){
+    const day=new Date(base);day.setDate(base.getDate()+offset);
+    const date=`${day.getFullYear()}-${String(day.getMonth()+1).padStart(2,'0')}-${String(day.getDate()).padStart(2,'0')}`;
+    const good=preferred.includes(day.getDay());
+    for(const time of times){
+      if(taken.has(`${date}T${time}`))continue;
+      const slot={date,time,reason:`${labels[day.getDay()]} ${date} pukul ${time} WIB masih kosong untuk ${platform}.`};
+      if(good&&!busyDates.has(date))return slot;
+      if(!fallback)fallback=slot;
+    }
+  }
+  return fallback||{date:todayStr,time:baseTime,reason:'Semua slot mendekati penuh; pilih manual.'};
+}
+
+app.post('/api/workspaces/:workspaceId/schedule-suggestion',requireMember(req=>String(req.params.workspaceId)),async(req,res,next)=>{
+  try{
+    const workspaceId=String(req.params.workspaceId);
+    const body=req.body||{};
+    const platform=typeof body.platform==='string'?body.platform:'instagram';
+    const todayStr=typeof body.today==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(body.today)?body.today:new Date().toISOString().slice(0,10);
+    const existing=await listSchedules(workspaceId);
+    const booked=existing
+      .filter(item=>item.status!=='draft')
+      .map(item=>({date:item.date,time:item.time,platform:item.platform,title:item.title}));
+    try{
+      const suggestion=await ragSuggestSchedule({
+        platform,
+        title:typeof body.title==='string'?body.title:'',
+        pillar:typeof body.pillar==='string'?body.pillar:undefined,
+        campaign:typeof body.campaign==='string'?body.campaign:undefined,
+        caption:typeof body.caption==='string'?body.caption:undefined,
+        audience:typeof body.audience==='string'?body.audience:undefined,
+        todayStr,
+        booked
+      });
+      res.json({...suggestion,source:'model'});
+    }catch(error){
+      // The model is the primary planner, but a scheduling UI must still work when
+      // the provider is throttled. Deterministic free-slot search is the fallback.
+      console.warn('[schedule] model suggestion failed:',error instanceof Error?error.message:error);
+      const slot=freeScheduleSlot(platform,todayStr,booked);
+      res.json({...slot,source:'fallback'});
+    }
+  }catch(error){next(error);}
+});
 app.get('/api/workspaces/:workspaceId/schedules',requireMember(req=>String(req.params.workspaceId)),async(req,res,next)=>{try{res.json(await listSchedules(req.params.workspaceId));}catch(error){next(error);}});
 app.post('/api/schedules/:id/comments',corporateOnly,async(req,res,next)=>{try{const text=typeof req.body?.text==='string'?req.body.text.trim():'';if(!text||text.length>2000)return res.status(400).json({error:'Comment must be 1–2000 characters'});res.status(201).json(await addScheduleComment(req.params.id,text,res.locals.user));}catch(error){if(error instanceof Error&&error.message==='Schedule not available to this company')return res.status(404).json({error:'Schedule not found'});next(error);}});
 app.put('/api/schedules/:id',contentOnly,requireMember(req=>req.body?.workspaceId),async(req,res,next)=>{try{const b=req.body||{};if(req.params.id!==b.id)return res.status(400).json({error:'Schedule ID mismatch'});if(!isNonEmptyString(b.workspaceId)||!isNonEmptyString(b.title))return res.status(400).json({error:'workspaceId and title are required'});if(!['instagram','facebook','twitter','linkedin','youtube'].includes(b.platform))return res.status(400).json({error:'Invalid platform'});if(!['draft','scheduled','published'].includes(b.status))return res.status(400).json({error:'Invalid status'});if(!/^\d{4}-\d{2}-\d{2}$/.test(String(b.date))||(b.time&&!/^\d{2}:\d{2}$/.test(String(b.time))))return res.status(400).json({error:'date must be YYYY-MM-DD and time HH:mm'});if(b.pillar&&!['edukasi','layanan','korporat'].includes(b.pillar))return res.status(400).json({error:'Invalid pillar'});if(b.postUrl&&!/^https?:\/\/\S+$/.test(String(b.postUrl).trim()))return res.status(400).json({error:'Link post harus diawali http:// atau https://'});const actorId=res.locals.user?.id||(req as any).user?.id||'usr-system';res.json(await saveSchedule(b,actorId));}catch(error){if(error instanceof ScheduleRuleError)return res.status(400).json({error:error.message});next(error);}});
