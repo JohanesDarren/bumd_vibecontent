@@ -217,10 +217,14 @@ export function ragIndexDocument(input: {
   language?: string;
   metadata?: Record<string, unknown>;
 }) {
+  // A KMS document can be assigned to several workspaces, but RAG requires a
+  // globally unique document_id. Scope the id per workspace so one document can
+  // be indexed into each workspace's own knowledge base.
+  const scopedDocumentId = `${input.documentId}__${input.scopeId.replace(/[^a-zA-Z0-9]/g, '').slice(-8)}`;
   return call<{ document_id: string; status: string; job_id: string; chunks: number }>('/knowledge/index', {
     method: 'POST',
     body: JSON.stringify({
-      document_id: input.documentId,
+      document_id: scopedDocumentId,
       knowledge_base_id: knowledgeBaseIdFor(input.scopeId),
       document_name: input.documentName,
       text: input.text,
@@ -311,8 +315,11 @@ export async function ragCompose(scopeId: string, briefText: string, feedback?: 
 export function ragDeleteDocument(scopeId: string, documentId: string) {
   // Deleting a document that is not (or no longer) indexed is a no-op, not an error:
   // a pending/inactive source may never have been indexed, and re-syncs are idempotent.
+  // Indexed ids are workspace-scoped (see ragIndexDocument), so deletion must
+  // target the same scoped id or the document would stay retrievable.
+  const scopedDocumentId = `${documentId}__${scopeId.replace(/[^a-zA-Z0-9]/g, '').slice(-8)}`;
   return call<Record<string, unknown>>(
-    `/knowledge/${encodeURIComponent(documentId)}?knowledge_base_id=${encodeURIComponent(knowledgeBaseIdFor(scopeId))}`,
+    `/knowledge/${encodeURIComponent(scopedDocumentId)}?knowledge_base_id=${encodeURIComponent(knowledgeBaseIdFor(scopeId))}`,
     { method: 'DELETE' },
     { ignoreNotFound: true }
   );

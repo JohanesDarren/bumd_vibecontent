@@ -338,6 +338,11 @@ app.delete('/api/kms/documents/:id',knowledgeManager,async(req,res,next)=>{try{
   const u=res.locals.user;
   const found=await pool.query(`SELECT k.id FROM kms_documents k JOIN organizations o ON o.id=k.workspace_id WHERE k.id=$1 AND ($2='superadmin' OR o.company_id=$3)`,[req.params.id,u.role,u.companyId]);
   if(!found.rowCount)return res.status(404).json({error:'Dokumen tidak ditemukan'});
+  // Remove from RAG first: a deleted document must never remain citable.
+  const scopes=await pool.query('SELECT workspace_id FROM kms_document_workspaces WHERE document_id=$1',[req.params.id]);
+  for(const row of scopes.rows as Array<{workspace_id:string}>){
+    await ragDeleteDocument(row.workspace_id,req.params.id).catch(error=>console.warn('[rag] delete failed',row.workspace_id,error instanceof Error?error.message:error));
+  }
   await deleteKnowledgeFile(req.params.id);
   await pool.query('DELETE FROM kms_documents WHERE id=$1',[req.params.id]);res.json({ok:true});
 }catch(e){console.error('[kms] delete failed',e instanceof Error?e.message:e);res.status(502).json({error:'Hapus KMS gagal; coba lagi nanti'});}});
