@@ -30,30 +30,48 @@ export async function resolveKnowledgeBaseId(_scopeId: string): Promise<string> 
 
 async function call<T>(path: string, init: RequestInit = {}, options: { ignoreNotFound?: boolean } = {}): Promise<T> {
   if (!ragConfigured()) throw new RagNotConfiguredError();
-  const response = await fetch(`${baseUrl()}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${env.ragApiKey}`,
-      'Content-Type': 'application/json',
-      ...(init.headers || {})
-    },
-    signal: AbortSignal.timeout(TIMEOUT_MS)
-  });
-  const raw = await response.text();
-  const body = raw ? (() => { try { return JSON.parse(raw); } catch { return null; } })() : null;
 
-  // No automatic retry: a second full generation doubles latency and load, and
-  // the client already retries by starting a new job.
+  const send = async () => {
+    const res = await fetch(`${baseUrl()}${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${env.ragApiKey}`,
+        'Content-Type': 'application/json',
+        ...(init.headers || {})
+      },
+      signal: AbortSignal.timeout(TIMEOUT_MS)
+    });
+    const text = await res.text();
+    const parsed = text ? (() => { try { return JSON.parse(text); } catch { return null; } })() : null;
+    return { res, text, parsed };
+  };
+
+  let { res: response, text: raw, parsed: body } = await send();
+
+  // The RAG gateway intermittently answers 502 (production logs show whole jobs
+  // failing with an HTML "Bad gateway" page) while /ready stays green. Those are
+  // transient edge errors, not request problems, so retry a couple of times
+  // before surfacing the failure to the user.
+  const gatewayError = () => [502, 503, 504].includes(response.status)
+    && /<html|<!doctype html|bad gateway/i.test(raw);
+  for (let attempt = 1; attempt <= 2 && gatewayError(); attempt++) {
+    await new Promise(resolve => setTimeout(resolve, 800 * attempt));
+    ({ res: response, text: raw, parsed: body } = await send());
+  }
 
   // A 404 on a delete means "already gone" — treat it as success for idempotent syncs.
   if (options.ignoreNotFound && response.status === 404) return undefined as T;
   if (!response.ok || (body && body.success === false)) {
-    const message = body?.error?.message || body?.detail || body?.error || raw.trim() || `RAG service responded ${response.status}`;
-    if (typeof message === 'string' && /<html|<!doctype html/i.test(message)) {
-      const title = message.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]*>/g, '').trim();
-      const code = message.match(/Error code (\d{3})/i)?.[1] || response.status;
-      throw new Error(`${title || 'RAG gateway error'} (HTTP ${code})`);
+    // A gateway page can arrive as the raw body, so inspect that too, not just
+    // the parsed JSON message.
+    if (/<html|<!doctype html|<title/i.test(raw)) {
+      const title = raw.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]*>/g, '').trim();
+      const code = raw.match(/Error code (\d{3})/i)?.[1] || response.status;
+      throw new Error(Number(code) >= 500
+        ? 'Layanan RAG sedang tidak stabil (gateway menolak permintaan). Coba lagi beberapa saat lagi.'
+        : `${title || 'RAG gateway error'} (HTTP ${code})`);
     }
+    const message = body?.error?.message || body?.detail || body?.error || raw.trim() || `RAG service responded ${response.status}`;
     throw new Error(typeof message === 'string' ? message : JSON.stringify(message));
   }
   return (body && 'data' in body ? body.data : body) as T;

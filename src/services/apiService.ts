@@ -124,15 +124,28 @@ export const apiService={
   ragStatus:()=>request<RagStatus>('/api/rag/status'),
   ragSearch:(workspaceId:string,query:string,options?:RagOptionsPayload|number)=>request<{results:RagHit[]}>(`/api/rag/search`,{method:'POST',body:JSON.stringify({workspaceId,query,...(typeof options === 'number' ? {topK:options} : {options})})}),
   ragQuery:async(workspaceId:string,query:string,options?:RagOptionsPayload|number):Promise<RagAnswer>=>{
-    const started=await request<{jobId:string;status:string}>(`/api/rag/jobs`,{method:'POST',body:JSON.stringify({workspaceId,query,...(typeof options === 'number' ? {topK:options} : {options})})});
-    const deadline=Date.now()+10*60*1000;
-    while(Date.now()<deadline){
-      await new Promise(resolve=>setTimeout(resolve,2000));
-      const job=await request<{status:'running'|'done'|'error';answer?:RagAnswer;error?:string}>(`/api/rag/jobs/${encodeURIComponent(started.jobId)}`);
-      if(job.status==='done'&&job.answer)return job.answer;
-      if(job.status==='error')throw new Error(job.error||'KMS gagal memproses permintaan');
+    // The RAG gateway intermittently returns 502 while the service itself is
+    // healthy, so one automatic retry is expected instead of asking the user to
+    // press the button again.
+    const run=async()=>{
+      const started=await request<{jobId:string;status:string}>(`/api/rag/jobs`,{method:'POST',body:JSON.stringify({workspaceId,query,...(typeof options === 'number' ? {topK:options} : {options})})});
+      const deadline=Date.now()+10*60*1000;
+      while(Date.now()<deadline){
+        await new Promise(resolve=>setTimeout(resolve,2000));
+        const job=await request<{status:'running'|'done'|'error';answer?:RagAnswer;error?:string}>(`/api/rag/jobs/${encodeURIComponent(started.jobId)}`);
+        if(job.status==='done'&&job.answer)return job.answer;
+        if(job.status==='error')throw new Error(job.error||'Layanan RAG gagal memproses permintaan');
+      }
+      throw new Error('Layanan RAG belum selesai memproses permintaan setelah 10 menit');
+    };
+    try{
+      return await run();
+    }catch(error){
+      const message=error instanceof Error?error.message:'';
+      if(!/tidak stabil|502|Bad gateway|504|timeout/i.test(message))throw error;
+      await new Promise(resolve=>setTimeout(resolve,1500));
+      return run();
     }
-    throw new Error('KMS belum selesai memproses permintaan setelah 10 menit');
   },
   ragRefine:async(workspaceId:string,draftContent:string,promptAction:string):Promise<{answer:string;model?:string}>=>{
     const started=await request<{jobId:string}>(`/api/rag/jobs`,{method:'POST',body:JSON.stringify({workspaceId,query:`Perbaiki draf berikut sesuai instruksi. Pertahankan fakta dan jangan tambahkan fakta di luar dokumen. Instruksi: ${promptAction}\nDraf: ${draftContent}`})});

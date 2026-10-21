@@ -34,8 +34,8 @@ test('rag query condenses Cloudflare gateway pages after its retry', async () =>
     return new Response('<title>aiones.app | 502: Bad gateway</title><h1>Error code 502</h1>', { status: 502 });
   };
   try {
-    await assert.rejects(() => ragQuery('ws-test', 'test query'), /aiones.app.*502.*Bad gateway/i);
-    assert.equal(attempts, 2);
+    await assert.rejects(() => ragQuery('ws-test', 'test query'), /Layanan RAG sedang tidak stabil/i);
+    assert.equal(attempts, 3);
   } finally {
     globalThis.fetch = originalFetch;
   }
