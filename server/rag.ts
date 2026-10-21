@@ -52,10 +52,15 @@ async function call<T>(path: string, init: RequestInit = {}, options: { ignoreNo
   // failing with an HTML "Bad gateway" page) while /ready stays green. Those are
   // transient edge errors, not request problems, so retry a couple of times
   // before surfacing the failure to the user.
-  const gatewayError = () => [502, 503, 504].includes(response.status)
-    && /<html|<!doctype html|bad gateway/i.test(raw);
-  for (let attempt = 1; attempt <= 2 && gatewayError(); attempt++) {
-    await new Promise(resolve => setTimeout(resolve, 800 * attempt));
+  // 530 is Cloudflare's "origin unreachable": the RAG host itself is down for a
+  // while (observed outages of ~70s), so wait it out instead of failing the
+  // draft immediately. 502/503/504 are treated the same way.
+  const gatewayError = () => [502, 503, 504, 530].includes(response.status)
+    && /<html|<!doctype html|bad gateway|origin is unreachable/i.test(raw);
+  const retryDelays = [2000, 5000, 10000, 15000];
+  for (const delay of retryDelays) {
+    if (!gatewayError()) break;
+    await new Promise(resolve => setTimeout(resolve, delay));
     ({ res: response, text: raw, parsed: body } = await send());
   }
 
@@ -67,8 +72,9 @@ async function call<T>(path: string, init: RequestInit = {}, options: { ignoreNo
     if (/<html|<!doctype html|<title/i.test(raw)) {
       const title = raw.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]*>/g, '').trim();
       const code = raw.match(/Error code (\d{3})/i)?.[1] || response.status;
-      throw new Error(Number(code) >= 500
-        ? 'Layanan RAG sedang tidak stabil (gateway menolak permintaan). Coba lagi beberapa saat lagi.'
+      const down = ['530', '502', '503', '504'].includes(String(code));
+      throw new Error(down
+        ? 'Layanan RAG sedang tidak dapat dihubungi (server mereka sedang down). Coba lagi dalam beberapa menit.'
         : `${title || 'RAG gateway error'} (HTTP ${code})`);
     }
     const message = body?.error?.message || body?.detail || body?.error || raw.trim() || `RAG service responded ${response.status}`;
@@ -190,33 +196,9 @@ export async function ragQuery(scopeId: string, query: string, options?: unknown
   // writing GUIDANCE: the model must apply them, never copy them verbatim,
   // and must emit exactly one final ready-to-use draft with no
   // chain-of-thought, multiple attempts, or mixed foreign languages.
-  const copywritingQuery = [
-    'PERAN: kamu adalah copywriter senior korporat BUMD.',
-    'TUGAS: tulis ulang pesan kunci pada brief di bawah menjadi copywriting siap pakai. Fakta hanya boleh berasal dari dokumen resmi dan data brief.',
-    '',
-    'CARA MENULIS:',
-    '1. Susun kalimat dan struktur BARU yang menarik. DILARANG menyalin kalimat pada pesan kunci brief kata per kata.',
-    '2. Buka dengan kalimat pembuka yang menggugah dan cocok untuk target audiens serta kanal distribusi pada brief.',
-    '3. Terapkan secara konsisten format output, kanal distribusi, target audiens, dan nada suara yang tertera pada brief.',
-    '4. Tulis dalam Bahasa Indonesia yang natural dan enak dibaca; sebut sasaran audiens secara wajar bila relevan.',
-    '',
-    'ATURAN FAKTA (LANGGAR = GAGAL):',
-    '5. Pertahankan nilai seluruh angka, tanggal, harga, nama, dan syarat yang tertulis pada pesan kunci brief, ditulis ulang dengan kalimatmu sendiri tanpa mengubah nilainya.',
-    '6. Dilarang menambah fakta, angka, tanggal, manfaat, kelayakan, atau kanal yang tidak tertulis pada dokumen resmi dan brief.',
-    '7. Fakta pada pesan kunci brief adalah masukan resmi tim: tetap cantumkan meskipun tidak tertulis di dokumen; dokumen resmi dipakai sebagai konteks tambahan (aplikasi menandai fakta yang belum terverifikasi).',
-    '8. Jangan mengulang bagian "Batasan/Syarat Penting" brief secara utuh; aplikasi menambahkan bagian itu secara terpisah.',
-    '',
-    ...FORMAT_GUIDE,
-    '',
-    ...LANGUAGE_RULES,
-    '',
-    'KELUARAN:',
-    '9. Keluarkan tepat satu naskah final: HANYA isi copywriting, tanpa judul, label, CTA, tagar, sitasi, penjelasan, atau versi alternatif.',
-    '10. Tulis prosa natural berupa beberapa kalimat atau paragraf pendek; jangan menyebut istilah struktur seperti "hook" atau "paragraf".',
-    '',
-    BRIEF_DATA_HEADER,
-    query
-  ].join('\n');
+  // (full instruction block removed: it made the /query payload large enough to
+  // trigger intermittent 502s at the RAG gateway; see the short directive below)
+
   const knowledgeBaseId = await resolveKnowledgeBaseId(scopeId);
 
   // Retrieval is semantic: a long instruction prompt shifts the embedding away
@@ -224,11 +206,19 @@ export async function ragQuery(scopeId: string, query: string, options?: unknown
   // score 0.60 on 3/3 runs; the full brief prompt -> ungrounded on 3/3). So the
   // factual part drives retrieval, while the writing instructions ride along as
   // an explicit directive the model still sees.
+  // Payload size is the real failure trigger: the RAG gateway returns 502 for
+  // long instructional prompts (measured: ~5KB prompt failed 2/3 runs, while the
+  // short factual query succeeded 3/3). The brief's facts are what retrieval
+  // needs, and the writing contract is carried by a short directive instead of
+  // the full multi-paragraph instruction block.
   const retrievalQuery = retrievalTextFrom(query);
+  const directive = 'Tulis caption/naskah siap pakai dalam Bahasa Indonesia yang natural, '
+    + 'gaya sesuai kanal dan audiens pada data di atas. Jangan menyalin kalimat brief, '
+    + 'jangan menambah fakta baru, dan keluarkan hanya naskah final.';
   const result = await call<RagQueryResult>('/query', {
     method: 'POST',
     body: JSON.stringify({
-      query: `${retrievalQuery}\n\n---\nINSTRUKSI PENULISAN (wajib diikuti):\n${copywritingQuery}`,
+      query: `${retrievalQuery}\n\nINSTRUKSI: ${directive}`,
       knowledge_base_id: knowledgeBaseId,
       options: clean
     })
