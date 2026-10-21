@@ -67,9 +67,15 @@ test('isClaimSupported matches against excerpt digits', () => {
 const strong = hit(0.9, 'Biaya sambungan baru pelanggan niaga 1.250.000 rupiah dengan 3 kali angsuran tanpa bunga.');
 const weak = hit(0.2, 'Bab 4 mengatur tarif bulanan 2.800 rupiah per m3.');
 
-test('guardRagResponse drops sources below the threshold', () => {
+test('a grounded answer keeps every citation the provider returned', () => {
   const result = guardRagResponse({ answer: 'Biaya 1.250.000 rupiah.', grounded: true, sources: [strong, weak], threshold: 0.35 });
-  assert.equal(result.sources.length, 1);
+  assert.equal(result.sources.length, 2);
+  assert.equal(result.droppedSources, 0);
+});
+
+test('an ungrounded answer still drops sources below the threshold', () => {
+  const result = guardRagResponse({ answer: 'Biaya 1.250.000 rupiah.', grounded: false, sources: [strong, weak], threshold: 0.35 });
+  assert.equal(result.grounded, false);
   assert.equal(result.droppedSources, 1);
   assert.match(result.notes.join(' '), /1 dokumen kurang cocok/i);
 });
@@ -89,8 +95,17 @@ test('guardRagResponse grounds when evidence passes the threshold', () => {
   assert.doesNotMatch(result.answer, /##/);
 });
 
-test('guardRagResponse falls back when no source passes the threshold', () => {
+test('guardRagResponse keeps citations when the service already grounded the answer', () => {
+  // The UI threshold is a local relevance filter, not a veto over the provider's
+  // grounding decision: provider scores are on a different scale.
   const result = guardRagResponse({ answer: 'Tarif bulanan 2.800 rupiah.', grounded: true, sources: [weak], threshold: 0.8 });
+  assert.equal(result.grounded, true);
+  assert.equal(result.usedFallback, false);
+  assert.equal(result.sources.length, 1);
+});
+
+test('guardRagResponse falls back when an ungrounded answer has no relevant source', () => {
+  const result = guardRagResponse({ answer: 'Tarif bulanan 2.800 rupiah.', grounded: false, sources: [weak], threshold: 0.8 });
   assert.equal(result.grounded, false);
   assert.equal(result.usedFallback, true);
   assert.match(result.answer, /belum tersedia di dokumen aktif/i);
@@ -129,4 +144,25 @@ test('sanitizeAnswer removes model self-talk that leaked into the copy', () => {
 
 test('sanitizeAnswer repairs corrupted concatenation tokens', () => {
   assert.match(sanitizeAnswer('Setelah studi selesai, pesertaTxn memperoleh gelar.'), /peserta memperoleh/);
+});
+
+test('grounded answers keep their citations even below the UI threshold', () => {
+  // Regression: provider reranker scores (~0.27-0.32) sit under the 0.35 UI
+  // threshold, so every source was dropped and valid copy became
+  // "no document supports this".
+  const weak = [hit(0.31, 'masa studi 6 semester'), hit(0.28, 'gelar A.Md.Kom')];
+  const result = guardRagResponse({ answer: 'Masa studi 6 semester dengan gelar A.Md.Kom.', grounded: true, sources: weak, threshold: 0.35 });
+  assert.equal(result.grounded, true);
+  assert.equal(result.sources.length, 2);
+});
+
+test('ungrounded answers still drop weak sources', () => {
+  const result = guardRagResponse({ answer: 'teks', grounded: false, sources: [hit(0.1, 'x')], threshold: 0.35 });
+  assert.equal(result.grounded, false);
+  assert.equal(result.sources.length, 0);
+});
+
+test('citation markers never reach the copy', () => {
+  assert.equal(sanitizeAnswer('Masa studi 6 semester [1][2].'), 'Masa studi 6 semester.');
+  assert.equal(sanitizeAnswer('Gelar A.Md.Kom [1, 2].'), 'Gelar A.Md.Kom.');
 });

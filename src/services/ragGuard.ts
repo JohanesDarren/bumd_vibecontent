@@ -29,6 +29,7 @@ export function sanitizeAnswer(raw: string, maxSentences = 12, maxChars = 1800):
     .replace(/^\s*[-*•]\s+/gm, '')               // bullet markers
     .replace(/`([^`]*)`/g, '$1')                 // inline code
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')     // markdown links
+    .replace(/\s*\[\d+(?:\s*,\s*\d+)*\]/g, '')   // citation markers like [1] or [1, 2]
     .replace(/\r/g, '')
     .replace(/[ \t]+/g, ' ')
     .trim();
@@ -137,7 +138,13 @@ const FALLBACK_ANSWER = 'Informasi yang diminta belum tersedia di dokumen aktif.
 export function guardRagResponse(input: RagGuardInput): RagGuardResult {
   const threshold = normalizeScore(input.threshold);
   const allSources = input.sources || [];
-  const kept = allSources.filter(hit => (hit.score == null && input.grounded === true) || normalizeScore(hit.score) >= threshold); // KMS confirms grounding but omits per-citation scores.
+  // When the RAG service already decided the answer is grounded, its citations are
+  // authoritative: the provider's reranker scores are not comparable to our UI
+  // threshold (production returns ~0.27-0.32 for correct answers), so re-filtering
+  // here discarded every source and turned valid copy into "no document found".
+  const kept = input.grounded === true
+    ? allSources
+    : allSources.filter(hit => normalizeScore(hit.score) >= threshold);
   const droppedSources = allSources.length - kept.length;
   const notes: string[] = [];
   if (droppedSources > 0) {
