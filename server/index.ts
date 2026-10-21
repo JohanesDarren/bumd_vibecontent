@@ -411,10 +411,11 @@ if(process.env.NODE_ENV!=='test') {
       console.log(`VibeContent API listening on 0.0.0.0:${port}`);
       // Startup fingerprint: booleans only, never the secret values. This makes
       // "is the key actually loaded in this process?" answerable from logs.
-      console.log('[config] rag=%s kms=%s vision=%s kb=%s',
+      console.log('[config] rag=%s kms=%s vision=%s image=%s kb=%s',
         ragConfigured(),
         Boolean(process.env.KMS_API_URL && process.env.KMS_API_KEY),
         Boolean(process.env['9ROUTER_BASE_URL'] && process.env['9ROUTER_API_KEY']),
+        Boolean(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN),
         process.env.RAG_KNOWLEDGE_BASE_ID || 'kb_vibecontent');
       // Keep the job table bounded even when no new job is created.
       void sweepRagJobs();
