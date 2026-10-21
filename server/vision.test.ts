@@ -33,15 +33,17 @@ test('reasoning-only responses are still accepted (no empty description)', async
   assert.equal(await describeImage('foto.jpg', png, cfg, fetcher), 'Gambar: persegi merah.');
 });
 
-test('provider busy responses are retried before failing', async () => {
+test('provider busy responses surface a clear error instead of retrying', async () => {
   let calls = 0;
   const fetcher: typeof fetch = async () => {
     calls++;
-    if (calls < 2) return new Response(JSON.stringify({ error: { message: 'busy' } }), { status: 429 });
-    return new Response(JSON.stringify({ choices: [{ message: { content: 'ok' } }] }), { status: 200 });
+    return new Response(JSON.stringify({ error: { message: 'Model busy. Please switch models or retry later' } }), { status: 429 });
   };
-  assert.equal(await describeImage('foto.png', png, cfg, fetcher), 'ok');
-  assert.equal(calls, 2);
+  await assert.rejects(
+    describeImage('foto.png', png, cfg, fetcher),
+    /menolak permintaan \(HTTP 429\)/
+  );
+  assert.equal(calls, 1);
 });
 
 test('missing credentials fail with an actionable message', async () => {
@@ -51,8 +53,9 @@ test('missing credentials fail with an actionable message', async () => {
   );
 });
 
-test('default config points at the 9router gateway', () => {
+test('default config reads the 9ROUTER env names used by the project', () => {
   const config = visionConfig();
   assert.match(config.baseUrl, /^https:\/\//);
-  assert.ok(config.model.length > 0);
+  assert.equal(config.model, process.env['9ROUTER_VISION_MODEL'] || process.env['9ROUTER_LLM_MODEL'] || 'cbai/deepseek-v4.1-flash');
+  assert.equal(config.apiKey, process.env['9ROUTER_API_KEY'] || '');
 });

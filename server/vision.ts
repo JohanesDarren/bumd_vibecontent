@@ -8,9 +8,9 @@
 export type VisionConfig = { baseUrl: string; apiKey: string; model: string };
 
 export const visionConfig = (): VisionConfig => ({
-  baseUrl: (process.env.NINE_ROUTER_BASE_URL || process.env['9ROUTER_BASE_URL'] || 'https://9router.jagoai.dev/v1').replace(/\/+$/, ''),
+  baseUrl: (process.env['9ROUTER_BASE_URL'] || 'https://9router.jagoai.dev/v1').replace(/\/+$/, ''),
   apiKey: process.env.NINE_ROUTER_API_KEY || process.env['9ROUTER_API_KEY'] || '',
-  model: process.env.NINE_ROUTER_VISION_MODEL || process.env['9ROUTER_VISION_MODEL'] || 'cmc/deepseek/deepseek-v4.1-flash'
+  model: process.env['9ROUTER_VISION_MODEL'] || process.env['9ROUTER_LLM_MODEL'] || 'cbai/deepseek-v4.1-flash'
 });
 
 export const visionConfigured = (config = visionConfig()) => Boolean(config.baseUrl && config.apiKey && config.model);
@@ -48,10 +48,7 @@ export async function describeImage(
   if (!mime) throw new Error(`Format ${filename} bukan gambar yang didukung vision`);
   if (!data.length || data.length > 5 * 1024 * 1024) throw new Error('Gambar harus berukuran maksimal 5 MB');
 
-  const attempts = Math.max(1, Math.min(4, Number(process.env.NINE_ROUTER_RETRIES || 3)));
-  let response!: Response;
-  let raw = '';
-  for (let attempt = 1; attempt <= attempts; attempt++) {
+  let response: Response;
   try {
     response = await fetcher(`${config.baseUrl}/chat/completions`, {
       method: 'POST',
@@ -68,24 +65,17 @@ export async function describeImage(
           ]
         }]
       }),
-      signal: AbortSignal.timeout(Number(process.env.NINE_ROUTER_TIMEOUT_MS || 90000))
+      signal: AbortSignal.timeout(90000)
     });
   } catch (error) {
-    if (attempt < attempts) { await new Promise(r => setTimeout(r, 700 * attempt)); continue; }
     const reason = error instanceof Error && error.name === 'TimeoutError'
       ? 'Vision LLM tidak merespons tepat waktu'
       : error instanceof Error ? error.message : 'Vision LLM tidak dapat dihubungi';
     throw new Error(reason, { cause: error });
   }
 
-  raw = await response.text();
-  // 429/503 = provider busy; retrying is expected and non-destructive.
-  if ((response.status === 429 || response.status === 503) && attempt < attempts) {
-    await new Promise(r => setTimeout(r, 900 * attempt));
-    continue;
-  }
-  break;
-  }
+  const raw = await response.text();
+
   let body: ChatResponse;
   try { body = JSON.parse(raw) as ChatResponse; } catch { throw new Error(`Vision LLM mengembalikan respons tidak valid (HTTP ${response.status})`); }
   if (!response.ok) {
