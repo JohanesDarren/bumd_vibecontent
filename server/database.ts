@@ -187,7 +187,11 @@ export async function replaceDraft(draft:any) {
       await client.query('INSERT INTO draft_versions(draft_id,version_number,content,scenes,unsupported_claims,quality_check,created_at,created_by,change_summary) VALUES($1,$2,$3,$4::jsonb,$5::jsonb,$6::jsonb,$7,$8,$9)',[draft.id,version.versionNumber,version.content,JSON.stringify(version.scenes||null),JSON.stringify(version.unsupportedClaims||[]),JSON.stringify(version.qualityCheck||{}),version.createdAt,version.createdBy,version.changeSummary||'']);
       for(const citation of version.citations||[]){
         const source=await client.query(`SELECT EXISTS(SELECT 1 FROM knowledge_sources s JOIN knowledge_source_workspaces a ON a.source_id=s.id WHERE s.id=$1 AND a.workspace_id=$2 AND a.enabled AND s.status='aktif') AS legacy,EXISTS(SELECT 1 FROM kms_documents d JOIN kms_document_workspaces a ON a.document_id=d.id WHERE d.id=$1 AND a.workspace_id=$2) AS kms`,[citation.documentId,draft.workspaceId]);
-        const refs=citationSourceColumns(citation.documentId,source.rows[0].legacy,source.rows[0].kms);
+        // RAG also cites its own internal document ids (e.g. "d3_..._bjo85") that do
+        // not exist in KMS. Those cannot be linked by foreign key, but the copy itself
+        // is valid, so keep the citation metadata and store it unattached instead of
+        // failing the whole draft save.
+        const refs=citationSourceColumns(citation.documentId,source.rows[0].legacy,source.rows[0].kms,{allowUnlinked:true});
         await client.query('INSERT INTO draft_citations(id,draft_id,version_number,source_id,kms_document_id,data) VALUES($1,$2,$3,$4,$5,$6::jsonb)',[`${draft.id}-${version.versionNumber}-${citation.id}`,draft.id,version.versionNumber,refs.sourceId,refs.kmsDocumentId,JSON.stringify(citation)]);
       }
     }
