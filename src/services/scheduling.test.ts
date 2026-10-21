@@ -38,3 +38,35 @@ test('moments follow the workspace sector; gaps and weak pillars are detected', 
   assert.deepEqual(weakPillars([{ pillar: 'edukasi' }, { pillar: 'edukasi' }]), []);
   assert.deepEqual(weakPillars([{ pillar: 'edukasi' }, { pillar: 'edukasi' }, { pillar: 'layanan' }, { pillar: 'layanan' }]), ['korporat']);
 });
+
+import { suggestPublishSlot, suggestPublishSlots, type BookedSlot } from './scheduling.ts';
+
+test('suggested slots are a full date+time and never repeat', () => {
+  const booked: BookedSlot[] = [];
+  const seen = new Set<string>();
+  for (let i = 0; i < 5; i++) {
+    const slot = suggestPublishSlot('instagram', '2026-10-22', booked);
+    assert.match(slot.date, /^\d{4}-\d{2}-\d{2}$/);
+    assert.match(slot.time, /^\d{2}:\d{2}$/);
+    assert.ok(!seen.has(`${slot.date}T${slot.time}`), 'slot must be unique');
+    seen.add(`${slot.date}T${slot.time}`);
+    booked.push({ date: slot.date, time: slot.time });
+  }
+  assert.equal(seen.size, 5);
+});
+
+test('a date already holding a post is skipped in favour of another day', () => {
+  const booked: BookedSlot[] = [{ date: '2026-10-27', time: '19:00' }];
+  const slot = suggestPublishSlot('instagram', '2026-10-22', booked);
+  assert.notEqual(slot.date, '2026-10-27');
+});
+
+test('alternatives land on different days', () => {
+  const slots = suggestPublishSlots('instagram', '2026-10-22', [], 3);
+  assert.equal(new Set(slots.map(s => s.date)).size, 3);
+});
+
+test('a fully booked day is avoided', () => {
+  const booked: BookedSlot[] = ['08:00','09:00','12:00','17:00','19:00','20:00'].map(time => ({ date: '2026-10-27', time }));
+  assert.notEqual(suggestPublishSlot('instagram', '2026-10-22', booked).date, '2026-10-27');
+});

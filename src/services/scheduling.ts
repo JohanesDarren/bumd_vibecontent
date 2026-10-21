@@ -164,16 +164,89 @@ export const SUGGESTED_WEEKDAY: Record<SchedulePlatform, number[]> = {
 
 export const WEEKDAY_LABELS = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 
-/** First upcoming date (from today, inclusive) that falls on a suggested weekday. */
-export function nextSuggestedDate(platform: SchedulePlatform, todayStr: string): string {
+export type ScheduleSlot = { date: string; time: string; weekday: string; reason: string };
+
+/** Existing booking used to avoid collisions. */
+export type BookedSlot = { date: string; time: string; platform?: string };
+
+function toDateString(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Suggest a complete publication slot (date AND time) that is free.
+ *
+ * A schedule is only useful if it does not collide with what is already planned,
+ * so the search walks forward from tomorrow, prefers the platform's best weekdays
+ * and times, and skips any slot already occupied on that date. It always returns
+ * a different slot as more content is scheduled.
+ */
+export function suggestPublishSlot(
+  platform: SchedulePlatform,
+  todayStr: string,
+  booked: BookedSlot[] = [],
+  options: { minLeadDays?: number; horizonDays?: number } = {}
+): ScheduleSlot {
+  const minLead = options.minLeadDays ?? 1;
+  const horizon = options.horizonDays ?? 30;
+  const preferredTimes = [SUGGESTED_TIME[platform], '12:00', '09:00', '20:00', '17:00', '08:00'];
+  const preferredDays = SUGGESTED_WEEKDAY[platform] || [];
+  const taken = new Set(booked.map(b => `${b.date}T${b.time}`));
+  // One post per day per platform: piling several drafts onto the same date is
+  // what made schedules feel "crashed". Only fall back to a second slot on the
+  // same date when the whole horizon is otherwise busy.
+  const busyDates = new Set(booked.map(b => b.date));
+
   const base = new Date(`${todayStr}T00:00:00`);
-  const wanted = SUGGESTED_WEEKDAY[platform] || [];
-  for (let i = 0; i < 8; i++) {
-    const candidate = new Date(base);
-    candidate.setDate(base.getDate() + i);
-    if (wanted.includes(candidate.getDay())) {
-      return `${candidate.getFullYear()}-${String(candidate.getMonth() + 1).padStart(2, '0')}-${String(candidate.getDate()).padStart(2, '0')}`;
+  let fallback: ScheduleSlot | null = null;
+
+  for (let offset = minLead; offset <= horizon; offset++) {
+    const day = new Date(base);
+    day.setDate(base.getDate() + offset);
+    const date = toDateString(day);
+    const weekday = WEEKDAY_LABELS[day.getDay()];
+    const dayScore = preferredDays.includes(day.getDay()) ? 0 : 1;
+
+    const dayAlreadyUsed = busyDates.has(date);
+    for (const time of preferredTimes) {
+      if (taken.has(`${date}T${time}`)) continue;
+      const slot: ScheduleSlot = {
+        date,
+        time,
+        weekday,
+        reason: dayScore === 0
+          ? `${weekday} termasuk hari dengan jangkauan terbaik untuk ${platform}; jam ${time} WIB masih kosong.`
+          : `${weekday} masih kosong pada jam ${time} WIB; hari terbaik ${platform} sudah terisi.`
+      };
+      if (dayScore === 0 && !dayAlreadyUsed) return slot;
+      if (!fallback) fallback = slot;
     }
+
+    // After the preferred weekdays pass, do not drift more than two weeks out.
+    if (offset >= minLead + 14 && fallback) return fallback;
   }
-  return todayStr;
+
+  if (fallback) return fallback;
+  // Everything in the horizon is booked: pick the first slot after the last booking.
+  const latest = booked.map(b => b.date).sort().pop();
+  const anchor = latest ? new Date(`${latest}T00:00:00`) : base;
+  anchor.setDate(anchor.getDate() + 1);
+  const date = toDateString(anchor);
+  return { date, time: SUGGESTED_TIME[platform], weekday: WEEKDAY_LABELS[anchor.getDay()], reason: 'Semua slot dalam 30 hari terisi; ini slot berikutnya yang tersedia.' };
+}
+
+/** Compact list of the nearest free slots, for showing alternatives. */
+export function suggestPublishSlots(platform: SchedulePlatform, todayStr: string, booked: BookedSlot[] = [], count = 3): ScheduleSlot[] {
+  const out: ScheduleSlot[] = [];
+  // Treat each suggested date as taken so the alternatives land on different days
+  // instead of stacking several times on the same date.
+  const used = [...booked];
+  for (let i = 0; i < count; i++) {
+    const slot = suggestPublishSlot(platform, todayStr, used);
+    out.push(slot);
+    used.push({ date: slot.date, time: slot.time });
+    used.push({ date: slot.date, time: '00:00' });
+    for (const t of ['08:00','09:00','12:00','17:00','19:00','20:00']) used.push({ date: slot.date, time: t });
+  }
+  return out;
 }

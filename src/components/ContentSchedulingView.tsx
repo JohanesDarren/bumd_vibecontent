@@ -54,7 +54,8 @@ import {
   SUGGESTED_TIME,
   SUGGESTED_WEEKDAY,
   WEEKDAY_LABELS,
-  nextSuggestedDate,
+  suggestPublishSlot,
+  suggestPublishSlots,
   addDays,
   currentVersion,
   emptyFutureDates,
@@ -1562,56 +1563,57 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                <div className="form-group">
-                  <label className="form-label">Tanggal Publikasi *</label>
+              <div className="form-group">
+                <label className="form-label">Tanggal &amp; Waktu Publikasi *</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <input className="form-input" type="date" min={editing && editing.date < todayStr ? undefined : todayStr} value={formDate} onChange={e => setFormDate(e.target.value)} />
-                  {formPlatforms.length === 1 && (() => {
-                    const suggested = nextSuggestedDate(formPlatforms[0], todayStr);
-                    const days = (SUGGESTED_WEEKDAY[formPlatforms[0]] || []).map(d => WEEKDAY_LABELS[d]).join(', ');
-                    return (
-                      <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                  <input className="form-input" type="time" value={formTime} onChange={e => setFormTime(e.target.value)} />
+                </div>
+                {formPlatforms.length > 0 && (() => {
+                  const platform = formPlatforms[0];
+                  const booked = schedule
+                    .filter(s => s.id !== editing?.id && s.status !== 'draft')
+                    .map(s => ({ date: s.date, time: s.time, platform: s.platform }));
+                  const slots = suggestPublishSlots(platform, todayStr, booked, 3);
+                  const best = slots[0];
+                  const current = `${formDate}T${formTime}`;
+                  const clashes = booked.some(b => `${b.date}T${b.time}` === current);
+                  return (
+                    <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                         <button
                           type="button"
-                          className="btn btn-sm btn-secondary"
-                          style={{ fontSize: '0.72rem', padding: '2px 8px' }}
-                          onClick={() => setFormDate(suggested)}
-                          title={`Hari dengan jangkauan terbaik untuk ${PLATFORM_LABELS[formPlatforms[0]]}: ${days}`}
+                          className="btn btn-sm btn-primary"
+                          style={{ fontSize: '0.72rem', padding: '3px 9px' }}
+                          onClick={() => { setFormDate(best.date); setFormTime(best.time); }}
+                          title={best.reason}
                         >
-                          <CalendarCheck2 size={12} /> Saran tanggal: {suggested}
+                          <CalendarCheck2 size={12} /> Pakai saran: {best.weekday}, {best.date} · {best.time} WIB
                         </button>
-                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>hari terbaik: {days}</span>
+                        {clashes && (
+                          <span style={{ fontSize: '0.7rem', color: 'var(--danger, #c0392b)' }}>
+                            Slot ini sudah terpakai — pilih saran di atas.
+                          </span>
+                        )}
                       </div>
-                    );
-                  })()}
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Waktu (WIB)</label>
-                  <input className="form-input" type="time" value={formTime} onChange={e => setFormTime(e.target.value)} />
-                  {formPlatforms.length === 1 && (
-                    <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                      <button
-                        type="button"
-                        className="btn btn-sm btn-secondary"
-                        style={{ fontSize: '0.72rem', padding: '2px 8px' }}
-                        onClick={() => setFormTime(SUGGESTED_TIME[formPlatforms[0]])}
-                        title={`Jam dengan interaksi tertinggi untuk ${PLATFORM_LABELS[formPlatforms[0]]}`}
-                      >
-                        <Clock size={12} /> Saran {PLATFORM_LABELS[formPlatforms[0]]}: {SUGGESTED_TIME[formPlatforms[0]]} WIB
-                      </button>
-                      {formTime === SUGGESTED_TIME[formPlatforms[0]] ? (
-                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>sudah sesuai saran</span>
-                      ) : (
-                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>sekarang {formTime || '—'} WIB</span>
-                      )}
+                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                        {slots.slice(1).map(slot => (
+                          <button
+                            key={`${slot.date}-${slot.time}`}
+                            type="button"
+                            className="btn btn-sm btn-secondary"
+                            style={{ fontSize: '0.68rem', padding: '2px 7px' }}
+                            onClick={() => { setFormDate(slot.date); setFormTime(slot.time); }}
+                            title={slot.reason}
+                          >
+                            {slot.weekday} {slot.date} · {slot.time}
+                          </button>
+                        ))}
+                      </div>
+                      <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{best.reason}</span>
                     </div>
-                  )}
-                  {formPlatforms.length > 1 && (
-                    <div style={{ marginTop: '4px', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                      Saran jam: {formPlatforms.map(p => `${PLATFORM_LABELS[p]} ${SUGGESTED_TIME[p]}`).join(' · ')} WIB
-                    </div>
-                  )}
-                </div>
+                  );
+                })()}
               </div>
 
               <div className="form-group">
