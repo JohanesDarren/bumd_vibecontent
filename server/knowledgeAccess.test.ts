@@ -2,9 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeWorkspaceAssignments, workspaceKnowledgeBaseId, isKnowledgeAssigned } from './knowledgeAccess.ts';
 
-test('workspace RAG scopes differ so one company can separate knowledge by workspace', () => {
-  assert.notEqual(workspaceKnowledgeBaseId('ws-a'), workspaceKnowledgeBaseId('ws-b'));
-  assert.equal(workspaceKnowledgeBaseId('ws-a'), 'kb-vibecontent-ws-ws-a');
+test('the app uses one shared project knowledge base', () => {
+  // Workspace isolation comes from KMS document assignment, not from inventing
+  // a separate RAG knowledge base per workspace.
+  assert.equal(workspaceKnowledgeBaseId('ws-a'), 'kb_vibecontent');
+  assert.equal(workspaceKnowledgeBaseId('ws-b'), 'kb_vibecontent');
 });
 
 test('a workspace only uses enabled assigned knowledge', () => {

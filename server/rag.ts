@@ -4,7 +4,9 @@ import './env.ts';
 import { env, ragConfigured } from './env.ts';
 import { workspaceKnowledgeBaseId } from './knowledgeAccess.ts';
 
-const TIMEOUT_MS = Number(process.env.RAG_TIMEOUT_MS || 60000);
+// RAG answers grounded copy in 20-60s; the async job layer absorbs longer waits,
+// so this only guards a genuinely hung connection.
+const TIMEOUT_MS = Number(process.env.RAG_TIMEOUT_MS || 240000);
 
 export class RagNotConfiguredError extends Error {
   constructor() { super('RAG service is not configured (RAG_API_URL / RAG_API_KEY missing)'); }
@@ -21,28 +23,16 @@ export const knowledgeBaseIdFor = workspaceKnowledgeBaseId;
 type KnowledgeBase = { knowledge_base_id: string; documents: number; chunks: number };
 
 /**
- * Resolve which knowledge base actually holds this workspace's documents.
- * The derived id is preferred, but an empty scope must not silently answer
- * "not found" while real documents live under the project-level base.
+ * Knowledge base used by the app. There is exactly one shared project base
+ * (`kb_vibecontent`); workspace isolation comes from KMS document assignment.
  */
-export async function resolveKnowledgeBaseId(scopeId: string): Promise<string> {
-  const preferred = knowledgeBaseIdFor(scopeId);
-  try {
-    const listed = await call<{ knowledge_bases: KnowledgeBase[] }>('/knowledge-bases', { method: 'GET' });
-    const bases = listed.knowledge_bases || [];
-    const own = bases.find(base => base.knowledge_base_id === preferred);
-    if (own && own.documents > 0) return preferred;
-    const fallback = process.env.RAG_FALLBACK_KNOWLEDGE_BASE?.trim();
-    if (fallback && bases.some(base => base.knowledge_base_id === fallback && base.documents > 0)) return fallback;
-  } catch {
-    // Listing is advisory; the preferred scope is still a valid request target.
-  }
-  return preferred;
+export async function resolveKnowledgeBaseId(_scopeId: string): Promise<string> {
+  return knowledgeBaseIdFor(_scopeId);
 }
 
 async function call<T>(path: string, init: RequestInit = {}, options: { ignoreNotFound?: boolean } = {}): Promise<T> {
   if (!ragConfigured()) throw new RagNotConfiguredError();
-  const request = () => fetch(`${baseUrl()}${path}`, {
+  const response = await fetch(`${baseUrl()}${path}`, {
     ...init,
     headers: {
       Authorization: `Bearer ${env.ragApiKey}`,
@@ -51,17 +41,11 @@ async function call<T>(path: string, init: RequestInit = {}, options: { ignoreNo
     },
     signal: AbortSignal.timeout(TIMEOUT_MS)
   });
-  let response = await request();
-  let raw = await response.text();
-  let body = raw ? (() => { try { return JSON.parse(raw); } catch { return null; } })() : null;
+  const raw = await response.text();
+  const body = raw ? (() => { try { return JSON.parse(raw); } catch { return null; } })() : null;
 
-  // A single retry handles transient LLM gateway failures without repeating policy refusals.
-  if (path === '/query' && [502, 503, 504].includes(response.status) && !/(invalid prompt|flagged as potentially violating|policy violation)/i.test(raw)) {
-    await new Promise(resolve => setTimeout(resolve, 250));
-    response = await request();
-    raw = await response.text();
-    body = raw ? (() => { try { return JSON.parse(raw); } catch { return null; } })() : null;
-  }
+  // No automatic retry: a second full generation doubles latency and load, and
+  // the client already retries by starting a new job.
 
   // A 404 on a delete means "already gone" — treat it as success for idempotent syncs.
   if (options.ignoreNotFound && response.status === 404) return undefined as T;
@@ -217,14 +201,12 @@ export function ragIndexDocument(input: {
   language?: string;
   metadata?: Record<string, unknown>;
 }) {
-  // A KMS document can be assigned to several workspaces, but RAG requires a
-  // globally unique document_id. Scope the id per workspace so one document can
-  // be indexed into each workspace's own knowledge base.
-  const scopedDocumentId = `${input.documentId}__${input.scopeId.replace(/[^a-zA-Z0-9]/g, '').slice(-8)}`;
+  // One shared knowledge base: the KMS document id is already unique, so it is
+  // used directly. This keeps index/delete/query addressing identical.
   return call<{ document_id: string; status: string; job_id: string; chunks: number }>('/knowledge/index', {
     method: 'POST',
     body: JSON.stringify({
-      document_id: scopedDocumentId,
+      document_id: input.documentId,
       knowledge_base_id: knowledgeBaseIdFor(input.scopeId),
       document_name: input.documentName,
       text: input.text,
@@ -315,11 +297,8 @@ export async function ragCompose(scopeId: string, briefText: string, feedback?: 
 export function ragDeleteDocument(scopeId: string, documentId: string) {
   // Deleting a document that is not (or no longer) indexed is a no-op, not an error:
   // a pending/inactive source may never have been indexed, and re-syncs are idempotent.
-  // Indexed ids are workspace-scoped (see ragIndexDocument), so deletion must
-  // target the same scoped id or the document would stay retrievable.
-  const scopedDocumentId = `${documentId}__${scopeId.replace(/[^a-zA-Z0-9]/g, '').slice(-8)}`;
   return call<Record<string, unknown>>(
-    `/knowledge/${encodeURIComponent(scopedDocumentId)}?knowledge_base_id=${encodeURIComponent(knowledgeBaseIdFor(scopeId))}`,
+    `/knowledge/${encodeURIComponent(documentId)}?knowledge_base_id=${encodeURIComponent(knowledgeBaseIdFor(scopeId))}`,
     { method: 'DELETE' },
     { ignoreNotFound: true }
   );

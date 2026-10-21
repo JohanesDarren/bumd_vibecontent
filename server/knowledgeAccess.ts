@@ -13,9 +13,15 @@ export function normalizeWorkspaceAssignments(raw: unknown, fallbackWorkspaceId?
   return [...unique.values()];
 }
 
-export function workspaceKnowledgeBaseId(workspaceId: string): string {
-  const safe = workspaceId.toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 180);
-  return `kb-vibecontent-ws-${safe}`;
+/**
+ * The app reads one shared project knowledge base (`kb_vibecontent`).
+ * Workspace isolation is enforced by KMS document assignment, not by
+ * inventing a new RAG knowledge base per workspace.
+ */
+export const APP_KNOWLEDGE_BASE_ID = 'kb_vibecontent';
+
+export function workspaceKnowledgeBaseId(_workspaceId?: string): string {
+  return process.env.RAG_KNOWLEDGE_BASE_ID?.trim() || APP_KNOWLEDGE_BASE_ID;
 }
 
 export function isKnowledgeAssigned(assignments: WorkspaceKnowledgeAssignment[], workspaceId: string): boolean {

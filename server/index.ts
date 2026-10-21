@@ -369,6 +369,13 @@ async function authorizedKmsIds(workspaceId:string){return (await pool.query('SE
 // in-memory map meant a poll could land on a worker that never saw the job.
 const RAG_JOB_TTL_MS=10*60*1000;
 
+// Finished jobs are deleted after the TTL so rag_jobs cannot grow without bound.
+// The sweep is idempotent and safe to run on every worker.
+async function sweepRagJobs(){
+  try{await pool.query('DELETE FROM rag_jobs WHERE created_at<now()-make_interval(secs=>$1)',[Math.round(RAG_JOB_TTL_MS/1000)]);}
+  catch(error){console.warn('[rag] job sweep failed',error instanceof Error?error.message:error);}
+}
+
 async function runRagJob(id:string,workspaceId:string,query:string){
   try{
     // Brief/Editor are RAG work, not KMS work: RAG retrieves matched knowledge
@@ -386,7 +393,7 @@ async function runRagJob(id:string,workspaceId:string,query:string){
 app.get('/api/rag/status',async(_req,res)=>{try{const status=await ragStatus();const deps=status?.dependencies||{};const ready=status?.status==='ready'&&['qdrant','embedding','reranker','llm'].every(name=>String((deps as any)[name]||'')==='ok');res.json({configured:true,ready,dependencies:deps,detail:status?.detail||{}});}catch(error){const message=error instanceof Error?error.message:'RAG status unavailable';res.json({configured:!RagNotConfiguredError.prototype.isPrototypeOf(error),ready:false,detail:message});}});
 app.post('/api/rag/search',contentOnly,requireWorkspace(req=>req.body?.workspaceId),(_req,res)=>res.status(410).json({error:'KMS tidak menyediakan pencarian kutipan terpisah; gunakan sumber dari jawaban RAG'}));
 app.post('/api/rag/query',contentOnly,requireWorkspace(req=>req.body?.workspaceId),async(req,res)=>{try{const{workspaceId,query}=req.body||{};if(!isNonEmptyString(workspaceId))return res.status(400).json({error:'workspaceId is required'});if(!isNonEmptyString(query))return res.status(400).json({error:'query is required'});const answer=await ragQuery(workspaceId,query);if(answer.grounded){await markSourcesIndexed(answer.sources,ids=>pool.query('UPDATE kms_documents SET indexed=true WHERE id=ANY($1::text[])',[ids]),error=>console.warn('[rag] indexed metadata update failed',error instanceof Error?error.message:error));}res.json(answer);}catch(error){const message=error instanceof Error?error.message:'unknown error';console.error('[rag] query failed',{message,cause:error instanceof Error&&error.cause?String(error.cause):undefined});res.status(502).json({error:`KMS query gagal: ${message}`});}});
-app.post('/api/rag/jobs',contentOnly,requireWorkspace(req=>req.body?.workspaceId),async(req,res)=>{try{const{workspaceId,query}=req.body||{};if(!isNonEmptyString(workspaceId)||!isNonEmptyString(query))return res.status(400).json({error:'workspaceId and query are required'});const id=randomUUID();await pool.query("INSERT INTO rag_jobs(id,workspace_id,user_id,status) VALUES($1,$2,$3,'running')",[id,workspaceId,String(res.locals.user?.id||'')]);await pool.query("DELETE FROM rag_jobs WHERE created_at<now()-make_interval(secs=>$1)",[Math.round(RAG_JOB_TTL_MS/1000)]);void runRagJob(id,workspaceId,query);res.status(202).json({jobId:id,status:'running'});}catch(error){next(error);}});
+app.post('/api/rag/jobs',contentOnly,requireWorkspace(req=>req.body?.workspaceId),async(req,res)=>{try{const{workspaceId,query}=req.body||{};if(!isNonEmptyString(workspaceId)||!isNonEmptyString(query))return res.status(400).json({error:'workspaceId and query are required'});const id=randomUUID();await pool.query("INSERT INTO rag_jobs(id,workspace_id,user_id,status) VALUES($1,$2,$3,'running')",[id,workspaceId,String(res.locals.user?.id||'')]);await sweepRagJobs();void runRagJob(id,workspaceId,query);res.status(202).json({jobId:id,status:'running'});}catch(error){next(error);}});
 app.get('/api/rag/jobs/:id',async(req,res,next)=>{try{const result=await pool.query('SELECT workspace_id AS "workspaceId",status,answer,error FROM rag_jobs WHERE id=$1',[String(req.params.id)]);const job=result.rows[0];if(!job)return res.status(404).json({error:'Job not found or expired'});if(!permitted(res.locals.user,job.workspaceId))return res.status(403).json({error:'Workspace access denied'});if(job.status==='done')return res.json({status:'done',answer:job.answer});if(job.status==='error')return res.json({status:'error',error:job.error});res.json({status:'running'});}catch(error){next(error);}});
 app.post('/api/rag/refine',contentOnly,requireWorkspace(req=>req.body?.workspaceId),async(req,res,next)=>{try{const{draftContent,promptAction}=req.body||{};if(!isNonEmptyString(draftContent)||!isNonEmptyString(promptAction))return res.status(400).json({error:'draftContent and promptAction required'});res.json(await queryKnowledge(`Perbaiki draf berikut sesuai instruksi. Pertahankan fakta dan jangan tambahkan fakta di luar dokumen. Instruksi: ${promptAction}\nDraf: ${draftContent}`,kmsConfig(),fetch,await authorizedKmsIds(req.body.workspaceId)));}catch(error){next(error);}});
 app.post('/api/rag/plan',contentOnly,requireWorkspace(req=>req.body?.workspaceId),async(req,res,next)=>{try{const plan=cleanPlanRequest(req.body);if(typeof plan==='string')return res.status(400).json({error:plan});const result=await queryKnowledge(buildPlanPrompt(plan),kmsConfig(),fetch,await authorizedKmsIds(String(req.body.workspaceId)));const slots=parsePlanSlots(result.answer||'',plan);if(!slots.length)return res.status(502).json({error:'AI belum menghasilkan rencana yang valid. Coba lagi atau ubah tema.'});const sources=[...new Set((result.sources||[]).map((s:any)=>s.document_name).filter(Boolean))];res.json({slots,sources,model:result.model});}catch(error){next(error);}});
@@ -400,7 +407,12 @@ const port=Number(process.env.PORT||process.env.API_PORT||3005);
 if(process.env.NODE_ENV!=='test') {
   runMigrations()
     .then(provisionSuperadmin)
-    .then(() => app.listen(port, '0.0.0.0', () => console.log(`VibeContent API listening on 0.0.0.0:${port}`)))
+    .then(() => app.listen(port, '0.0.0.0', () => {
+      console.log(`VibeContent API listening on 0.0.0.0:${port}`);
+      // Keep the job table bounded even when no new job is created.
+      void sweepRagJobs();
+      setInterval(()=>{void sweepRagJobs();},5*60*1000).unref();
+    }))
     .catch(async error => {
       console.error('Database migrations failed; API server was not started.', error);
       await pool.end();
