@@ -151,7 +151,9 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
   const loadRagStatus = useCallback(() => {
     apiService.ragStatus()
       .then(s => setRagService(s))
-      .catch(error => { console.error('ragStatus failed:', error); setRagService({ configured: false, ready: false }); });
+      // A failed status probe says nothing about the server's configuration:
+      // the network may be down. Report "unknown" and let generation try anyway.
+      .catch(error => { console.error('ragStatus failed:', error); setRagService(null); });
   }, []);
 
   useEffect(() => { loadRagStatus(); }, [loadRagStatus]);
@@ -279,14 +281,17 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
     if (!usedRemoteService) {
       setUsedRemoteRag(false);
       setRagModel(null);
-      setGenerationError('Mode privasi lokal aktif. Aktifkan RAG untuk membuat draf AI; draf tidak dibuat.');
+      setGenerationError('Mode privasi lokal aktif. Aktifkan "Izinkan generasi remote" di pengaturan untuk membuat draf AI.');
       setIsGenerating(false);
       return;
     } else {
-      if (!ragService || !ragService.configured) {
+      // Only block when the server explicitly reports it is not configured.
+      // A null status (probe failed) must still attempt generation so the real
+      // server error reaches the user instead of a misleading env message.
+      if (ragService && !ragService.configured) {
         setUsedRemoteRag(false);
         setRagModel(null);
-        setGenerationError('RAG_API_KEY belum terkonfigurasi. Draf AI tidak dibuat; periksa .env.local lalu mulai ulang server.');
+        setGenerationError('RAG_API_KEY belum terkonfigurasi di server. Draf AI tidak dibuat.');
         setIsGenerating(false);
         return;
       } else {
