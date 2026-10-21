@@ -183,47 +183,137 @@ export function retrievalTextFrom(query: string): string {
   return (core || query.trim()).slice(0, 400);
 }
 
-export async function ragQuery(scopeId: string, query: string, options?: unknown) {
-  const clean = sanitizeOptions(options) || { top_k: 5, strict_grounding: true, include_sources: true };
-  // The answer of this endpoint is used directly as copywriting material, so
-  // the query must steer the model away from analyst-style replies (citation
-  // markers like [1], meta commentary about the knowledge base, internal
-  // disclaimers) — those used to leak verbatim into the generated draft.
-  // The model must REWRITE the key message into fresh copy (an earlier rule
-  // asking it to "preserve" the brief text made the model echo it verbatim)
-  // while keeping every fact value intact and applying the brief's format,
-  // channel, audience and tone. Brief parameters arrive inside `query` as
-  // writing GUIDANCE: the model must apply them, never copy them verbatim,
-  // and must emit exactly one final ready-to-use draft with no
-  // chain-of-thought, multiple attempts, or mixed foreign languages.
-  // (full instruction block removed: it made the /query payload large enough to
-  // trigger intermittent 502s at the RAG gateway; see the short directive below)
+/**
+ * Models like to return "Opsi 1 / Opsi 2" variants with markdown headings.
+ * A draft must be exactly one ready-to-publish piece of copy.
+ */
+function singleDraft(text: string): string {
+  let out = text
+    .replace(/```[\s\S]*?```/g, match => match.replace(/```[a-zA-Z]*\n?/g, ''))
+    .replace(/^\s{0,3}#{1,6}\s*/gm, '')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/^\s*>\s?/gm, '')
+    .replace(/^\s*-{3,}\s*$/gm, '')
+    .trim();
+  // Models often offer several variants; keep the first real one.
+  const optionSplit = out.split(/\n\s*(?:Opsi|Option|Versi|Alternatif)\s*\d+\s*[:\-—]?\s*/i);
+  if (optionSplit.length > 1) out = optionSplit[1].trim();
+  // Drop leading label lines such as "VERSI 1: Ramah", "Pilihan 1 — ...",
+  // "Caption Utama (versi lengkap):" — a draft starts with its first sentence.
+  const lines = out.split('\n');
+  while (lines.length && (
+    /^\s*[^\n]{0,60}?(?:versi|opsi|pilihan|option|caption|naskah|postingan|rekomendasi|alternatif)\b[^\n]{0,60}$/i.test(lines[0])
+    || /^\s*-{3,}\s*$/.test(lines[0])
+    || /^\s*$/.test(lines[0])
+  )) lines.shift();
+  return lines.join('\n').trim();
+}
 
-  const knowledgeBaseId = await resolveKnowledgeBaseId(scopeId);
+type WriterConfig = { baseUrl: string; apiKey: string; model: string };
 
-  // Retrieval is semantic: a long instruction prompt shifts the embedding away
-  // from the source document (production: short factual query -> grounded with
-  // score 0.60 on 3/3 runs; the full brief prompt -> ungrounded on 3/3). So the
-  // factual part drives retrieval, while the writing instructions ride along as
-  // an explicit directive the model still sees.
-  // Payload size is the real failure trigger: the RAG gateway returns 502 for
-  // long instructional prompts (measured: ~5KB prompt failed 2/3 runs, while the
-  // short factual query succeeded 3/3). The brief's facts are what retrieval
-  // needs, and the writing contract is carried by a short directive instead of
-  // the full multi-paragraph instruction block.
+/** Same gateway that powers vision/OCR; it is fast and already configured. */
+export function writerConfig(): WriterConfig {
+  return {
+    baseUrl: (process.env['9ROUTER_BASE_URL'] || 'https://9router.jagoai.dev/v1').replace(/\/+$/, ''),
+    apiKey: process.env['9ROUTER_API_KEY'] || '',
+    model: process.env['9ROUTER_WRITER_MODEL'] || process.env['9ROUTER_LLM_MODEL'] || 'cbai/deepseek-v4.1-flash'
+  };
+}
+
+/**
+ * Writes the draft from retrieved excerpts only.
+ *
+ * The prompt is deliberately short (long prompts made the RAG gateway return
+ * 502) and states the grounding contract in one place: facts may come only from
+ * the excerpts below.
+ */
+async function writeCopyFromExcerpts(briefFacts: string, excerpts: string, fetcher: typeof fetch = fetch): Promise<string> {
+  const config = writerConfig();
+  if (!config.apiKey) throw new Error('Penulis naskah belum dikonfigurasi (9ROUTER_API_KEY)');
+
+  const messages = [
+    {
+      role: 'system',
+      content: [
+        'Kamu copywriter senior untuk konten korporat Indonesia.',
+        'Tulis satu naskah siap terbit sesuai data brief.',
+        'Fakta hanya boleh berasal dari KUTIPAN DOKUMEN di bawah. Jangan menambah angka, harga, tanggal, atau nama yang tidak ada di sana.',
+        'Jangan menyalin kalimat brief kata per kata; susun kalimat baru.',
+        'Keluarkan TEPAT SATU naskah final dan langsung mulai dari kalimat pertama naskah.',
+        'DILARANG menulis label apa pun di awal, seperti "Versi 1", "Opsi A", "Pilihan 1", "Caption Utama", atau "Rekomendasi".',
+        'DILARANG memberi judul, penjelasan, sitasi, atau beberapa alternatif.'
+      ].join(' ')
+    },
+    {
+      role: 'user',
+      content: `DATA BRIEF:\n${briefFacts}\n\nKUTIPAN DOKUMEN:\n${excerpts}`
+    }
+  ];
+
+  // The gateway occasionally answers 503 "model busy"; retry a few times before
+  // surfacing the failure.
+  let response: Response | undefined;
+  let raw = '';
+  for (let attempt = 0; attempt < 3; attempt++) {
+    response = await fetcher(`${config.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: config.model, temperature: 0.6, max_tokens: 900, messages }),
+      signal: AbortSignal.timeout(Number(process.env['9ROUTER_TIMEOUT_MS'] || 120000))
+    });
+    raw = await response.text();
+    if (response.ok) break;
+    if (![429, 500, 502, 503, 504].includes(response.status)) break;
+    await new Promise(resolve => setTimeout(resolve, 1200 * (attempt + 1)));
+  }
+  if (!response?.ok) throw new Error(`Penulis naskah gagal (HTTP ${response?.status})`);
+  const body = JSON.parse(raw) as { choices?: Array<{ message?: { content?: unknown; reasoning_content?: unknown } }> };
+  const message = body.choices?.[0]?.message;
+  const content = typeof message?.content === 'string' ? message.content : '';
+  const reasoning = typeof message?.reasoning_content === 'string' ? message.reasoning_content : '';
+  return singleDraft((content.trim() || reasoning.trim())).slice(0, 4000);
+}
+
+export async function ragQuery(scopeId: string, query: string, options?: unknown): Promise<RagQueryResult> {
+  const clean = sanitizeOptions(options) || { top_k: 6, strict_grounding: true, include_sources: true };
   const retrievalQuery = retrievalTextFrom(query);
-  const directive = 'Tulis caption/naskah siap pakai dalam Bahasa Indonesia yang natural, '
-    + 'gaya sesuai kanal dan audiens pada data di atas. Jangan menyalin kalimat brief, '
-    + 'jangan menambah fakta baru, dan keluarkan hanya naskah final.';
-  const result = await call<RagQueryResult>('/query', {
-    method: 'POST',
-    body: JSON.stringify({
-      query: `${retrievalQuery}\n\nINSTRUKSI: ${directive}`,
-      knowledge_base_id: knowledgeBaseId,
-      options: clean
-    })
-  });
-  return result;
+
+  // Retrieval and generation are separated on purpose.
+  //
+  // The provider's /query endpoint runs retrieval *and* a full LLM completion in
+  // one request, which took 20-120s and regularly tripped the gateway (502/524).
+  // /search returns the same chunks in 1-2s, so retrieval happens there and the
+  // writing step runs against our own vision/LLM gateway, which is fast and
+  // reliable. Grounding rules stay identical: no chunks means no draft.
+  const found = await ragSearch(scopeId, retrievalQuery, { top_k: clean.top_k, use_reranker: clean.use_reranker, use_hybrid: clean.use_hybrid });
+  const hits = (found.results || []).filter(hit => typeof hit.content === 'string' && hit.content.trim());
+  const threshold = typeof clean.threshold === 'number' ? clean.threshold : 0.2;
+  const usable = hits.filter(hit => normalizeScore(hit.score) >= threshold);
+
+  if (!usable.length) {
+    return {
+      answer: '',
+      grounded: false,
+      sources: [],
+      no_answer_reason: 'Tidak ada bagian dokumen yang cocok dengan fakta pada brief.'
+    };
+  }
+
+  const excerpts = usable
+    .map((hit, index) => `[${index + 1}] ${hit.document_name || hit.document_id}${hit.section ? ` — ${hit.section}` : ''}\n${hit.content.trim().slice(0, 1200)}`)
+    .join('\n\n');
+
+  const answer = await writeCopyFromExcerpts(retrievalQuery, excerpts);
+  if (!answer.trim()) {
+    return { answer: '', grounded: false, sources: usable, no_answer_reason: 'Model tidak menghasilkan naskah.' };
+  }
+  return { answer, grounded: true, sources: usable, model: writerConfig().model };
+}
+
+/** Relevance scores are 0..1 but the provider occasionally sends 0..100. */
+function normalizeScore(score: unknown): number {
+  const value = typeof score === 'number' && Number.isFinite(score) ? score : 0;
+  return Math.min(1, Math.max(0, value > 1 ? value / 100 : value));
 }
 
 export function ragIndexDocument(input: {
