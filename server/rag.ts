@@ -400,33 +400,54 @@ export type RagRefineResult = {
 };
 
 export async function ragRefine(scopeId: string, draftContent: string, promptAction: string) {
-  // Guard rails so the model restyles the draft instead of amputating it
-  // (regression: quick variations used to return only header + closing line).
-  const combinedQuery = [
-    'PERAN: kamu adalah asisten editor copywriting BUMD.',
-    'TUGAS: tulis ulang/format ulang DRAF ASLI di bawah sesuai instruksi.',
-    'ATURAN WAJIB:',
-    '1. Pertahankan SELURUH isi utama draf asli: semua paragraf, fakta, angka, nama, dan CTA (boleh diringkas kalimat, jangan dibuang).',
-    '2. DILARANG menjawab hanya dengan header/judul plus penutup; keluaran harus memuat isi utama.',
-    '3. Panjang keluaran minimal 70% dari teks asli (kecuali instruksi memang minta lebih pendek, tetap jaga semua fakta).',
-    '4. Keluarkan HANYA draf hasil, tanpa penjelasan, tanpa preface, tanpa awalan seperti "Berikut draf...".',
-    '5. Jawab dalam Bahasa Indonesia, gaya sesuai instruksi.',
-    '',
-    `INSTRUKSI: ${promptAction}`,
-    '',
-    '---',
-    'DRAF ASLI:',
-    draftContent
-  ].join('\n');
-  const knowledgeBaseId = await resolveKnowledgeBaseId(scopeId);
-  return call<RagRefineResult>('/query', {
-    method: 'POST',
-    body: JSON.stringify({
-      query: combinedQuery,
-      knowledge_base_id: knowledgeBaseId,
-      options: { top_k: 3, strict_grounding: false, include_sources: false }
-    })
-  });
+  // Rewriting an existing draft needs no retrieval, so it runs on the writer model
+  // directly. Routing it through RAG /query made caption generation slow and
+  // prone to "AI tidak menghasilkan caption" when that endpoint throttled.
+  void scopeId;
+  const config = writerConfig();
+  if (!config.apiKey) throw new Error('Penulis naskah belum dikonfigurasi (9ROUTER_API_KEY)');
+
+  const messages = [
+    {
+      role: 'system',
+      content: [
+        'Kamu editor copywriting senior untuk konten korporat Indonesia.',
+        'Tulis ulang DRAF ASLI sesuai INSTRUKSI.',
+        'Pertahankan seluruh fakta, angka, nama, dan CTA; jangan menambah fakta baru.',
+        'Keluarkan hanya naskah final dalam Bahasa Indonesia, tanpa label, judul, sitasi, atau penjelasan.',
+        'DILARANG membalas dengan rencana atau komentar tentang tugas ini.'
+      ].join(' ')
+    },
+    { role: 'user', content: `INSTRUKSI:\n${promptAction}\n\nDRAF ASLI:\n${draftContent}` }
+  ];
+
+  const models = [config.model, ...(process.env['9ROUTER_WRITER_FALLBACKS'] || 'ocg/deepseek-flash,ocg/glm-5.3-flash')
+    .split(',').map(m => m.trim()).filter(Boolean)].filter((m, i, all) => m && all.indexOf(m) === i);
+
+  let response: Response | undefined;
+  let raw = '';
+  outer: for (const model of models) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      response = await fetch(`${config.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, temperature: 0.5, max_tokens: 900, reasoning_effort: 'none', messages }),
+        signal: AbortSignal.timeout(Number(process.env['9ROUTER_TIMEOUT_MS'] || 120000))
+      });
+      raw = await response.text();
+      if (response.ok) break outer;
+      if (![429, 500, 502, 503, 504].includes(response.status)) break outer;
+      await new Promise(resolve => setTimeout(resolve, 900 * (attempt + 1)));
+    }
+  }
+  if (!response?.ok) throw new Error(`Penyusun caption gagal (HTTP ${response?.status})`);
+
+  const body = parseFirstJson(raw) as { choices?: Array<{ message?: { content?: unknown; reasoning_content?: unknown } }> };
+  const message = body.choices?.[0]?.message;
+  const content = typeof message?.content === 'string' ? message.content.trim() : '';
+  const reasoning = typeof message?.reasoning_content === 'string' ? message.reasoning_content.trim() : '';
+  const pick = content || (/^(?:the user|i |we |let me|okay|first,|to )/i.test(reasoning) ? '' : reasoning);
+  return { answer: singleDraft(pick).slice(0, 4000), model: config.model };
 }
 
 /**

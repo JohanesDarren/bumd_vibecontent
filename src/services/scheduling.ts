@@ -149,3 +149,31 @@ export function weakPillars(items: { pillar?: SchedulePillar | null }[]): Schedu
   if (items.length < 4) return [];
   return (Object.keys(PILLARS) as SchedulePillar[]).filter(key => items.filter(i => i.pillar === key).length / items.length < 0.2);
 }
+
+/**
+ * Days of the week with the strongest organic reach per platform. Used only as a
+ * suggestion next to the date field; the user always keeps the final choice.
+ */
+export const SUGGESTED_WEEKDAY: Record<SchedulePlatform, number[]> = {
+  instagram: [2, 3, 4],   // Tue-Thu
+  facebook: [3, 4, 5],    // Wed-Fri
+  twitter: [1, 2, 3],     // Mon-Wed
+  linkedin: [2, 3, 4],    // Tue-Thu
+  youtube: [5, 6, 0]      // Fri-Sun
+};
+
+export const WEEKDAY_LABELS = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+
+/** First upcoming date (from today, inclusive) that falls on a suggested weekday. */
+export function nextSuggestedDate(platform: SchedulePlatform, todayStr: string): string {
+  const base = new Date(`${todayStr}T00:00:00`);
+  const wanted = SUGGESTED_WEEKDAY[platform] || [];
+  for (let i = 0; i < 8; i++) {
+    const candidate = new Date(base);
+    candidate.setDate(base.getDate() + i);
+    if (wanted.includes(candidate.getDay())) {
+      return `${candidate.getFullYear()}-${String(candidate.getMonth() + 1).padStart(2, '0')}-${String(candidate.getDate()).padStart(2, '0')}`;
+    }
+  }
+  return todayStr;
+}

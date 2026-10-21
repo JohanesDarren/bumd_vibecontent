@@ -52,6 +52,9 @@ import {
   CAPTION_STYLE,
   PILLARS,
   SUGGESTED_TIME,
+  SUGGESTED_WEEKDAY,
+  WEEKDAY_LABELS,
+  nextSuggestedDate,
   addDays,
   currentVersion,
   emptyFutureDates,
@@ -431,7 +434,26 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
     setAiBusy(true);
     setFormError(null);
     try {
-      const result = await apiService.ragRefine(activeWorkspace.id, content, `${CAPTION_STYLE[platform]} Pertahankan semua fakta, angka, nama, dan CTA. Hapus label draf seperti [DRAF ...]. Tulis dalam Bahasa Indonesia baku tanpa kata bahasa Inggris.`);
+      // The caption is written from everything the user has produced so far:
+      // the draft text, the brief/title/campaign context and the visual concept.
+      const draftVersion = currentVersion(draft);
+      const visual = draft?.visualAsset;
+      const context = [
+        `Judul konten: ${formTitle || draft?.title || '-'}`,
+        formCampaign ? `Kampanye: ${formCampaign}` : '',
+        formPillar ? `Pilar konten: ${formPillar}` : '',
+        draft?.format ? `Format draf: ${draft.format}` : '',
+        visual?.visualPrompt ? `Arahan visual: ${visual.visualPrompt}` : '',
+        visual?.headline ? `Teks visual: ${visual.headline}` : '',
+        visual?.ctaText ? `CTA visual: ${visual.ctaText}` : '',
+        draftVersion?.unsupportedClaims?.length ? `Catatan verifikasi: ${draftVersion.unsupportedClaims.join(' ')}` : ''
+      ].filter(Boolean).join('\n');
+
+      const result = await apiService.ragRefine(
+        activeWorkspace.id,
+        content,
+        `${CAPTION_STYLE[platform]}\n\nKONTEKS KAMPANYE:\n${context}\n\nPertahankan semua fakta, angka, nama, dan CTA. Hapus label draf seperti [DRAF ...]. Tulis dalam Bahasa Indonesia baku tanpa kata bahasa Inggris.`
+      );
       const caption = sanitizeRagAnswer(result.answer || '');
       if (!caption) throw new Error('AI tidak menghasilkan caption.');
       setFormCaption(caption);
@@ -1544,14 +1566,50 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
                 <div className="form-group">
                   <label className="form-label">Tanggal Publikasi *</label>
                   <input className="form-input" type="date" min={editing && editing.date < todayStr ? undefined : todayStr} value={formDate} onChange={e => setFormDate(e.target.value)} />
+                  {formPlatforms.length === 1 && (() => {
+                    const suggested = nextSuggestedDate(formPlatforms[0], todayStr);
+                    const days = (SUGGESTED_WEEKDAY[formPlatforms[0]] || []).map(d => WEEKDAY_LABELS[d]).join(', ');
+                    return (
+                      <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-secondary"
+                          style={{ fontSize: '0.72rem', padding: '2px 8px' }}
+                          onClick={() => setFormDate(suggested)}
+                          title={`Hari dengan jangkauan terbaik untuk ${PLATFORM_LABELS[formPlatforms[0]]}: ${days}`}
+                        >
+                          <CalendarCheck2 size={12} /> Saran tanggal: {suggested}
+                        </button>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>hari terbaik: {days}</span>
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div className="form-group">
                   <label className="form-label">Waktu (WIB)</label>
                   <input className="form-input" type="time" value={formTime} onChange={e => setFormTime(e.target.value)} />
-                  {formPlatforms.length === 1 && formTime !== SUGGESTED_TIME[formPlatforms[0]] && (
-                    <button type="button" className="btn btn-sm btn-secondary" style={{ marginTop: '4px', fontSize: '0.72rem', padding: '2px 8px', alignSelf: 'flex-start' }} onClick={() => setFormTime(SUGGESTED_TIME[formPlatforms[0]])}>
-                      <Clock size={12} /> Saran {PLATFORM_LABELS[formPlatforms[0]]}: {SUGGESTED_TIME[formPlatforms[0]]}
-                    </button>
+                  {formPlatforms.length === 1 && (
+                    <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-secondary"
+                        style={{ fontSize: '0.72rem', padding: '2px 8px' }}
+                        onClick={() => setFormTime(SUGGESTED_TIME[formPlatforms[0]])}
+                        title={`Jam dengan interaksi tertinggi untuk ${PLATFORM_LABELS[formPlatforms[0]]}`}
+                      >
+                        <Clock size={12} /> Saran {PLATFORM_LABELS[formPlatforms[0]]}: {SUGGESTED_TIME[formPlatforms[0]]} WIB
+                      </button>
+                      {formTime === SUGGESTED_TIME[formPlatforms[0]] ? (
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>sudah sesuai saran</span>
+                      ) : (
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>sekarang {formTime || '—'} WIB</span>
+                      )}
+                    </div>
+                  )}
+                  {formPlatforms.length > 1 && (
+                    <div style={{ marginTop: '4px', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                      Saran jam: {formPlatforms.map(p => `${PLATFORM_LABELS[p]} ${SUGGESTED_TIME[p]}`).join(' · ')} WIB
+                    </div>
                   )}
                 </div>
               </div>
