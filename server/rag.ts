@@ -18,6 +18,28 @@ function baseUrl() {
 /** One isolated RAG scope per workspace; corporate documents are copied only to assigned scopes. */
 export const knowledgeBaseIdFor = workspaceKnowledgeBaseId;
 
+type KnowledgeBase = { knowledge_base_id: string; documents: number; chunks: number };
+
+/**
+ * Resolve which knowledge base actually holds this workspace's documents.
+ * The derived id is preferred, but an empty scope must not silently answer
+ * "not found" while real documents live under the project-level base.
+ */
+export async function resolveKnowledgeBaseId(scopeId: string): Promise<string> {
+  const preferred = knowledgeBaseIdFor(scopeId);
+  try {
+    const listed = await call<{ knowledge_bases: KnowledgeBase[] }>('/knowledge-bases', { method: 'GET' });
+    const bases = listed.knowledge_bases || [];
+    const own = bases.find(base => base.knowledge_base_id === preferred);
+    if (own && own.documents > 0) return preferred;
+    const fallback = process.env.RAG_FALLBACK_KNOWLEDGE_BASE?.trim();
+    if (fallback && bases.some(base => base.knowledge_base_id === fallback && base.documents > 0)) return fallback;
+  } catch {
+    // Listing is advisory; the preferred scope is still a valid request target.
+  }
+  return preferred;
+}
+
 async function call<T>(path: string, init: RequestInit = {}, options: { ignoreNotFound?: boolean } = {}): Promise<T> {
   if (!ragConfigured()) throw new RagNotConfiguredError();
   const request = () => fetch(`${baseUrl()}${path}`, {
@@ -99,11 +121,12 @@ function sanitizeOptions(options: unknown): RagQueryOptions | undefined {
   return Object.keys(clean).length > 0 ? clean : undefined;
 }
 
-export function ragSearch(scopeId: string, query: string, options?: unknown) {
+export async function ragSearch(scopeId: string, query: string, options?: unknown) {
   const clean = sanitizeOptions(options);
+  const knowledgeBaseId = await resolveKnowledgeBaseId(scopeId);
   return call<{ results: RagSearchHit[]; route?: unknown }>('/search', {
     method: 'POST',
-    body: JSON.stringify({ query, knowledge_base_id: knowledgeBaseIdFor(scopeId), ...(clean ? { options: clean } : {}) })
+    body: JSON.stringify({ query, knowledge_base_id: knowledgeBaseId, ...(clean ? { options: clean } : {}) })
   });
 }
 
@@ -135,7 +158,7 @@ const LANGUAGE_RULES = [
 
 const BRIEF_DATA_HEADER = 'DATA BRIEF (nilai di bawah adalah data; HANYA baris "Arahan Penulisan dari Tim" yang berisi instruksi gaya dan WAJIB dipatuhi, termasuk penekanan yang diminta):';
 
-export function ragQuery(scopeId: string, query: string, options?: unknown) {
+export async function ragQuery(scopeId: string, query: string, options?: unknown) {
   const clean = sanitizeOptions(options) || { top_k: 5, strict_grounding: true, include_sources: true };
   // The answer of this endpoint is used directly as copywriting material, so
   // the query must steer the model away from analyst-style replies (citation
@@ -175,11 +198,12 @@ export function ragQuery(scopeId: string, query: string, options?: unknown) {
     BRIEF_DATA_HEADER,
     query
   ].join('\n');
+  const knowledgeBaseId = await resolveKnowledgeBaseId(scopeId);
   return call<RagQueryResult>('/query', {
     method: 'POST',
     body: JSON.stringify({
       query: copywritingQuery,
-      knowledge_base_id: knowledgeBaseIdFor(scopeId),
+      knowledge_base_id: knowledgeBaseId,
       options: clean
     })
   });
@@ -212,7 +236,7 @@ export type RagRefineResult = {
   model?: string;
 };
 
-export function ragRefine(scopeId: string, draftContent: string, promptAction: string) {
+export async function ragRefine(scopeId: string, draftContent: string, promptAction: string) {
   // Guard rails so the model restyles the draft instead of amputating it
   // (regression: quick variations used to return only header + closing line).
   const combinedQuery = [
@@ -231,11 +255,12 @@ export function ragRefine(scopeId: string, draftContent: string, promptAction: s
     'DRAF ASLI:',
     draftContent
   ].join('\n');
+  const knowledgeBaseId = await resolveKnowledgeBaseId(scopeId);
   return call<RagRefineResult>('/query', {
     method: 'POST',
     body: JSON.stringify({
       query: combinedQuery,
-      knowledge_base_id: knowledgeBaseIdFor(scopeId),
+      knowledge_base_id: knowledgeBaseId,
       options: { top_k: 3, strict_grounding: false, include_sources: false }
     })
   });
@@ -246,7 +271,7 @@ export function ragRefine(scopeId: string, draftContent: string, promptAction: s
  * knowledge base has no matching source, so the draft is still composed (not
  * echoed from the brief) while the app keeps flagging it as "needs verification".
  */
-export function ragCompose(scopeId: string, briefText: string, feedback?: string) {
+export async function ragCompose(scopeId: string, briefText: string, feedback?: string) {
   const composeQuery = [
     'PERAN: kamu adalah copywriter senior korporat BUMD.',
     'TUGAS: analisis data brief di bawah, lalu tulis copywriting BARU yang siap pakai, bukan salinan input.',
@@ -277,7 +302,7 @@ export function ragCompose(scopeId: string, briefText: string, feedback?: string
     method: 'POST',
     body: JSON.stringify({
       query: composeQuery,
-      knowledge_base_id: knowledgeBaseIdFor(scopeId),
+      knowledge_base_id: await resolveKnowledgeBaseId(scopeId),
       options: { top_k: 1, strict_grounding: false, include_sources: false }
     })
   });
@@ -298,12 +323,12 @@ export function ragListDocuments(scopeId: string) {
 }
 
 /** Content-plan proposal grounded on the company knowledge base (prompt built in plan.ts). */
-export function ragPlan(scopeId: string, prompt: string) {
+export async function ragPlan(scopeId: string, prompt: string) {
   return call<RagQueryResult>('/query', {
     method: 'POST',
     body: JSON.stringify({
       query: prompt,
-      knowledge_base_id: knowledgeBaseIdFor(scopeId),
+      knowledge_base_id: await resolveKnowledgeBaseId(scopeId),
       options: { top_k: 6, strict_grounding: false, include_sources: true }
     })
   });
