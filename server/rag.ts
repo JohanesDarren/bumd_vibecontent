@@ -17,10 +17,8 @@ function baseUrl() {
   return url.endsWith('/api/v1') ? url : `${url}/api/v1`;
 }
 
-/** One isolated RAG scope per workspace; corporate documents are copied only to assigned scopes. */
+/** Knowledge base id shared by the app (see knowledgeAccess.ts). */
 export const knowledgeBaseIdFor = workspaceKnowledgeBaseId;
-
-type KnowledgeBase = { knowledge_base_id: string; documents: number; chunks: number };
 
 /**
  * Knowledge base used by the app. There is exactly one shared project base

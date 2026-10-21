@@ -34,7 +34,7 @@ export function sanitizeAnswer(raw: string, maxSentences = 12, maxChars = 1800):
     .trim();
 
   // Remove a leading meta label such as "Jawaban:" / "Answer:".
-  text = text.replace(/^(jawaban|answer)\s*[:\-]\s*/i, '');
+  text = text.replace(/^(jawaban|answer)\s*[:-]\s*/i, '');
 
   // Protect thousand separators (e.g. "1.250.000") so they are not mistaken
   // for sentence boundaries while splitting.
