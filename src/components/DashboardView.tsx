@@ -192,11 +192,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       {d.format === 'brief_visual' && 'Grafis Visual'}
                     </td>
                     <td style={{ padding: '12px 14px' }}>
-                      <span className={`status-pill ${d.status === 'diarsipkan' ? 'diarsipkan' : 'draft'}`}>
-                        {d.status === 'diarsipkan' ? 'Diarsipkan' : 'Draf'}
-                      </span>
-                    </td>
-                    <td style={{ padding: '12px 14px' }}>
                       {latestVer?.unsupportedClaims?.length === 0 ? (
                         <span className="grounding-badge verified">
                           <CheckCircle2 size={12} /> {latestVer.citations.length} Referensi

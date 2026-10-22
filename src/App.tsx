@@ -22,6 +22,7 @@ import { AppSettings, DEFAULT_SETTINGS, normalizeSettings } from './services/app
 // Components
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
+import { BriefHistoryRail } from './components/BriefHistoryRail';
 import { DashboardView } from './components/DashboardView';
 import { BriefStudioView } from './components/BriefStudioView';
 import { EditorWorkspaceView } from './components/EditorWorkspaceView';
@@ -511,6 +512,24 @@ export function App() {
           activeWorkspace={activeWorkspace}
           onLogout={handleLogout}
         />}
+
+        {/* Brief history rail — chat-style thread list, only on the Brief tab */}
+        {safeTab === 'brief_studio' && (
+          <BriefHistoryRail
+            drafts={drafts}
+            activeWorkspace={activeWorkspace}
+            selectedDraftId={selectedDraftId}
+            onNewBrief={() => { setSelectedDraftId(undefined); setCurrentTab('brief_studio'); }}
+            onOpenDraft={(id) => { setSelectedDraftId(id); setCurrentTab('editor'); }}
+            onDeleteDraft={async (id) => {
+              if (window.confirm('Hapus brief ini beserta drafnya?')) {
+                await apiService.deleteDraft(activeWorkspace.id, id);
+                await loadData(activeWorkspace.id);
+                showToast('Brief dihapus.');
+              }
+            }}
+          />
+        )}
 
         {/* Dynamic Viewport */}
         <main key={activeWorkspace.id} className={`content-viewport ${authUser.role === 'creator' ? 'creator-content' : ''}`}>

@@ -511,9 +511,6 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
                     )}
                   </div>
                 </div>
-                <div>
-                  <span className={`status-pill ${draft.status}`} style={{ fontSize: '0.62rem' }}>{draft.status.replace('_', ' ')}</span>
-                </div>
               </div>
             ))}
           </div>

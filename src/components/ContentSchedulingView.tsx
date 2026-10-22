@@ -1539,7 +1539,7 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
                   if (draft && !formTitle.trim()) setFormTitle(draft.title);
                 }}>
                   <option value="">— Tidak ada —</option>
-                  {drafts.map(d => <option key={d.id} value={d.id}>{d.title} · {d.status === 'diarsipkan' ? 'Diarsipkan' : 'Draf'}</option>)}
+                  {drafts.map(d => <option key={d.id} value={d.id}>{d.title}</option>)}
                 </select>
                 <small style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Status jadwal tidak memerlukan persetujuan draf.</small>
               </div>
@@ -1814,7 +1814,7 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
                 <p style={{ color: WARN, fontSize: '0.8rem' }}>Draf yang ditautkan tidak ditemukan.</p>
               ) : (
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                  Draf: <strong>{selectedDraft.title}</strong> · {selectedDraft.status === 'diarsipkan' ? 'Diarsipkan' : 'Draf'}
+                  Draf: <strong>{selectedDraft.title}</strong>
 
                 </p>
               )}

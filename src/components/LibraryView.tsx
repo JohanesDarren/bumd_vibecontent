@@ -85,8 +85,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value as any)}
             >
-              <option value="all">Semua Status Draf</option>
-              <option value="draft">Draf</option>
+              <option value="all">Semua Konten</option>
               <option value="diarsipkan">Diarsipkan</option>
             </select>
           </div>
@@ -134,10 +133,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 }}
               >
                 <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <span className={`status-pill ${draft.status === 'diarsipkan' ? 'diarsipkan' : 'draft'}`}>
-                      {draft.status === 'diarsipkan' ? 'Diarsipkan' : 'Draf'}
-                    </span>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '8px' }}>
                     <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
                       v{draft.currentVersionon}
                     </span>

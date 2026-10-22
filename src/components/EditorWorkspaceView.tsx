@@ -339,9 +339,6 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
       <div className="page-header-row" style={{ alignItems: 'center' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-            <span className={`status-pill ${draft.status === 'diarsipkan' ? 'diarsipkan' : 'draft'}`}>
-              {draft.status === 'diarsipkan' ? 'Diarsipkan' : 'Draf'}
-            </span>
             <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
               Versi: <strong>v{draft.currentVersionon}</strong> ({draft.versions.length} versi tersimpan)
             </span>
@@ -371,14 +368,6 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
             <span>Lanjut ke Studio Visual</span>
           </button>
         </div>
-      </div>
-
-      {/* Watermark Banner if Draft (PRD F-06 / F-08 requirement) */}
-      <div className="draft-watermark" style={{ marginBottom: '20px' }}>
-        <AlertTriangle size={16} />
-        <span>
-          STATUS: <strong>DRAF</strong> — Sempurnakan naskah, simpan versinya, lalu lanjutkan ke Studio Visual tanpa approval brief.
-        </span>
       </div>
 
       {/* Main Split View: Left (Editor + Quick Refinements) | Right (Grounding, Scorecard, Versionon Diff) */}
