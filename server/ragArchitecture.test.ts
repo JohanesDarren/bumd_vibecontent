@@ -58,3 +58,13 @@ test('the schedule endpoint falls back to deterministic search when the model fa
   assert.match(src, /freeScheduleSlot\(/);
   assert.match(src, /source:'fallback'/);
 });
+
+test('the writer receives channel, tone and format, not only facts', async () => {
+  // Regression: sending only facts made captions come out as fragments
+  // ("6 semester. Gelar A.Md.Kom. Akreditasi Unggul.") instead of flowing prose.
+  const src = await readFile(new URL('./rag.ts', import.meta.url), 'utf8');
+  assert.match(src, /INSTRUKSI GAYA \(wajib dipatuhi\)/);
+  assert.match(src, /function styleFrom/);
+  assert.match(src, /DILARANG menulis deretan fragmen/);
+  assert.match(src, /CONTOH GAYA YANG BENAR/);
+});

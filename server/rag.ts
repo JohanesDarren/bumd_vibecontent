@@ -276,12 +276,17 @@ async function writeCopyFromExcerpts(briefFacts: string, excerpts: string, fetch
       role: 'system',
       content: [
         'Kamu copywriter senior untuk konten korporat Indonesia.',
+        'CONTOH GAYA YANG BENAR (perhatikan kalimatnya mengalir, bukan daftar):',
+        '"Industri digital butuh orang yang bisa langsung kerja, bukan cuma teori. Program ini menjawabnya lewat enam semester yang padat: teori, praktik, proyek, lalu magang industri di akhir. Ada juga jalur beasiswa hingga lulus. Daftar sekarang di portal resmi kami."',
+        'CONTOH GAYA YANG SALAH (dilarang): "Enam semester. Gelar A.Md.Kom. Akreditasi Unggul. Kampus Bandung."',
         'Tulis satu naskah siap terbit sesuai data brief.',
         'Fakta hanya boleh berasal dari KUTIPAN DOKUMEN di bawah. Jangan menambah angka, harga, tanggal, atau nama yang tidak ada di sana.',
         'Jangan menyalin kalimat brief kata per kata; susun kalimat baru.',
         'Keluarkan TEPAT SATU naskah final dan langsung mulai dari kalimat pertama naskah.',
         'DILARANG menulis label apa pun di awal, seperti "Versi 1", "Opsi A", "Pilihan 1", "Caption Utama", atau "Rekomendasi".',
-        'DILARANG memberi judul, penjelasan, sitasi, atau beberapa alternatif.'
+        'DILARANG memberi judul, penjelasan, sitasi, atau beberapa alternatif.',
+        'Tulis prosa yang mengalir dan enak dibaca; DILARANG menyusun fakta sebagai deretan fragmen pendek berpola "A. B. C." seperti daftar.',
+        'Sesuaikan gaya dengan format, kanal, nada, dan audiens pada INSTRUKSI GAYA.'
       ].join(' ')
     },
     {
@@ -328,6 +333,17 @@ async function writeCopyFromExcerpts(briefFacts: string, excerpts: string, fetch
   return singleDraft(pick).slice(0, 4000);
 }
 
+/** Pull channel/format/tone/audience lines out of the brief so the writer can match them. */
+function styleFrom(query: string): string {
+  const wanted = /^(Format|Kanal|Target Audiens|Audiens|Nada|Nada Suara)\b/i;
+  const parts = query
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => wanted.test(line))
+    .map(line => line.replace(/^([^:]+):\s*/, '$1: '));
+  return parts.length ? parts.join('; ') : 'caption media sosial yang santai dan ramah';
+}
+
 export async function ragQuery(scopeId: string, query: string, options?: unknown): Promise<RagQueryResult> {
   const clean = sanitizeOptions(options) || { top_k: 6, strict_grounding: true, include_sources: true };
   const retrievalQuery = retrievalTextFrom(query);
@@ -357,7 +373,21 @@ export async function ragQuery(scopeId: string, query: string, options?: unknown
     .map((hit, index) => `[${index + 1}] ${hit.document_name || hit.document_id}${hit.section ? ` — ${hit.section}` : ''}\n${hit.content.trim().slice(0, 1200)}`)
     .join('\n\n');
 
-  const answer = await writeCopyFromExcerpts(retrievalQuery, excerpts);
+  // The writer needs the *style* brief too, not just facts. Sending only facts made
+  // the model emit a list of fragments ("6 semester. Gelar A.Md.Kom.") instead of
+  // flowing caption prose, because it had no idea which channel or tone to target.
+  const styleBrief = [
+    retrievalQuery,
+    '',
+    'INSTRUKSI GAYA (wajib dipatuhi):',
+    `- Format/kanal: ${styleFrom(query)}`,
+    '- Tulis sebagai prosa yang mengalir dalam 2-3 paragraf pendek; DILARANG menulis deretan fragmen berpola "X. Y. Z."',
+    '- Kalimat pembuka harus memikat, bukan mengulang judul brief.',
+    '- Rangkai fakta menjadi kalimat utuh; jangan menumpuk angka atau label berturut-turut.',
+    '- Akhiri dengan ajakan bertindak yang natural.'
+  ].join('\n');
+
+  const answer = await writeCopyFromExcerpts(styleBrief, excerpts);
   if (!answer.trim()) {
     return { answer: '', grounded: false, sources: usable, no_answer_reason: 'Model tidak menghasilkan naskah.' };
   }
