@@ -429,7 +429,7 @@ export type RagRefineResult = {
   model?: string;
 };
 
-export async function ragRefine(scopeId: string, draftContent: string, promptAction: string) {
+export async function ragRefine(scopeId: string, draftContent: string, promptAction: string, kind?: string) {
   // Rewriting an existing draft needs no retrieval, so it runs on the writer model
   // directly. Routing it through RAG /query made caption generation slow and
   // prone to "AI tidak menghasilkan caption" when that endpoint throttled.
@@ -482,25 +482,72 @@ export async function ragRefine(scopeId: string, draftContent: string, promptAct
     return singleDraft(pick).slice(0, 4000);
   };
 
-  // A variation must not silently destroy the draft. Short or truncated answers
-  // (a stray heading, a single closing line) are retried before failing loudly.
-  const usable = (text: string) => {
-    if (!text) return false;
-    if (/^(?:the user|i |we |let me|berikut|catatan:)/i.test(text)) return false;
-    const minLen = Math.max(120, Math.floor(draftContent.trim().length * 0.3));
-    if (text.length < minLen) return false;
-    // A single line is almost always a heading, not a rewritten draft.
-    if (!/\n/.test(text) && text.length < draftContent.length * 0.5) return false;
-    return true;
+  // Each variation has its own definition of "good", so quality is judged per kind
+  // instead of one generic length rule.
+  const baseLen = draftContent.trim().length;
+  const quality = (text: string, kind?: string): string | null => {
+    if (!text) return 'kosong';
+    if (/^(?:the user|i |we |let me|berikut|catatan:|tentu,)/i.test(text)) return 'berisi rencana model, bukan naskah';
+    const len = text.length;
+    const tags = (text.match(/#[\p{L}\p{N}_]+/gu) || []).length;
+    const bullets = (text.match(/^\s*[-*•]\s+/gm) || []).length;
+    const threadParts = (text.match(/\b\d+\s*\/\s*\d+\b/g) || []).length;
+
+    switch (kind) {
+      case 'instagram':
+        if (len < Math.max(120, baseLen * 0.25)) return 'terlalu pendek untuk caption';
+        if (len > 2200) return 'melebihi batas 2.200 karakter Instagram';
+        if (tags < 3) return 'tagar kurang dari 3';
+        return null;
+      case 'whatsapp':
+        if (len < Math.max(100, baseLen * 0.2)) return 'terlalu pendek untuk broadcast';
+        if (len > 900) return 'terlalu panjang untuk pesan WhatsApp';
+        return null;
+      case 'bullets':
+        if (bullets < 3) return 'tidak berbentuk daftar poin';
+        return null;
+      case 'thread':
+        if (threadParts < 2) return 'tidak memakai penomoran thread 1/N';
+        if (/(?:^|\n)[^\n]{281,}/.test(text)) return 'ada bagian melebihi 280 karakter';
+        return null;
+      case 'concise':
+        if (len < Math.max(100, baseLen * 0.3)) return 'terlalu pendek';
+        if (len > baseLen * 0.85) return 'tidak cukup ringkas';
+        return null;
+      case 'expand':
+        if (len < baseLen * 1.05) return 'tidak lebih panjang dari aslinya';
+        // Long expansions are trimmed to the useful part instead of discarded.
+        return null;
+      default:
+        if (len < Math.max(120, baseLen * 0.3)) return 'terlalu pendek';
+        if (!/\n/.test(text) && len < baseLen * 0.5) return 'hanya satu baris';
+        return null;
+    }
   };
 
+  const usable = (text: string) => quality(text, kind) === null;
+
   let last = '';
-  for (let round = 0; round < 2; round++) {
+  let reason = '';
+  for (let round = 0; round < 3; round++) {
     last = await callModel();
-    if (usable(last)) return { answer: last, model: config.model };
+    const problem = quality(last, kind);
+    if (!problem) {
+      // An over-long expansion keeps its first useful paragraphs rather than
+      // failing outright: the extra text is usually repetition.
+      if (kind === 'expand' && last.length > baseLen * 2.2) {
+        const keep = Math.round(baseLen * 1.8);
+        const cut = last.slice(0, keep);
+        const boundary = Math.max(cut.lastIndexOf('\n\n'), cut.lastIndexOf('. '));
+        last = (boundary > baseLen ? cut.slice(0, boundary + 1) : cut).trim();
+      }
+      return { answer: last, model: config.model };
+    }
+    reason = problem;
+    // Tell the model what was wrong so the retry can actually fix it.
+    messages.push({ role: 'user', content: `Hasil sebelumnya ditolak karena: ${problem}. Tulis ulang dan penuhi ketentuan itu.` });
   }
-  // Never replace the user's draft with a broken result.
-  throw new Error('Variasi gagal: hasil AI tidak memuat isi utama draf. Coba lagi.');
+  throw new Error(`Variasi gagal: ${reason || 'hasil tidak memenuhi standar'}. Coba lagi.`);
 }
 
 export type ScheduleSlotSuggestion = {

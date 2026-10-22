@@ -73,8 +73,29 @@ test('quick variations reject truncated output instead of replacing the draft', 
   // Regression: a variation could return only a heading or closing line and the
   // editor would swap the whole draft for it, looking like corrupted context.
   const src = await readFile(new URL('./rag.ts', import.meta.url), 'utf8');
-  assert.match(src, /const usable = \(text: string\)/);
-  assert.match(src, /Math\.floor\(draftContent\.trim\(\)\.length \* 0\.3\)/);
-  assert.match(src, /Never replace the user's draft with a broken result/);
-  assert.match(src, /round < 2/);
+  assert.match(src, /const quality = \(text: string, kind\?: string\)/);
+  assert.match(src, /const usable = \(text: string\) => quality\(text, kind\) === null/);
+  assert.match(src, /round < 3/);
+  assert.match(src, /Variasi gagal:/);
+});
+
+test('each variation kind enforces its own quality rules', async () => {
+  const src = await readFile(new URL('./rag.ts', import.meta.url), 'utf8');
+  assert.match(src, /const quality = \(text: string, kind\?: string\)/);
+  assert.match(src, /case 'instagram':/);
+  assert.match(src, /case 'whatsapp':/);
+  assert.match(src, /case 'bullets':/);
+  assert.match(src, /case 'thread':/);
+  assert.match(src, /case 'expand':/);
+  // A rejected result is fed back so the retry can correct itself.
+  assert.match(src, /Hasil sebelumnya ditolak karena/);
+  // Over-long expansions are trimmed, not discarded.
+  assert.match(src, /kind === 'expand' && last\.length > baseLen \* 2\.2/);
+});
+
+test('variations run on the writer model, not the KMS chat endpoint', async () => {
+  const src = await readFile(new URL('./index.ts', import.meta.url), 'utf8');
+  const refine = src.slice(src.indexOf("app.post('/api/rag/refine'"), src.indexOf("app.post('/api/rag/plan'"));
+  assert.match(refine, /ragRefine\(/);
+  assert.ok(!/queryKnowledge\(/.test(refine), 'refine must not use the KMS chat path');
 });

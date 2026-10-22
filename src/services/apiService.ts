@@ -147,16 +147,10 @@ export const apiService={
       return run();
     }
   },
-  ragRefine:async(workspaceId:string,draftContent:string,promptAction:string):Promise<{answer:string;model?:string}>=>{
-    const started=await request<{jobId:string}>(`/api/rag/jobs`,{method:'POST',body:JSON.stringify({workspaceId,query:`Perbaiki draf berikut sesuai instruksi. Pertahankan fakta dan jangan tambahkan fakta di luar dokumen. Instruksi: ${promptAction}\nDraf: ${draftContent}`})});
-    const deadline=Date.now()+10*60*1000;
-    while(Date.now()<deadline){
-      await new Promise(resolve=>setTimeout(resolve,2000));
-      const job=await request<{status:'running'|'done'|'error';answer?:{answer:string;model?:string};error?:string}>(`/api/rag/jobs/${encodeURIComponent(started.jobId)}`);
-      if(job.status==='done'&&job.answer)return job.answer;
-      if(job.status==='error')throw new Error(job.error||'KMS gagal memperbaiki draf');
-    }
-    throw new Error('KMS belum selesai memperbaiki draf setelah 10 menit');
+  ragRefine:async(workspaceId:string,draftContent:string,promptAction:string,kind?:string):Promise<{answer:string;model?:string}>=>{
+    // Runs on the writer model directly: the old job-based RAG path was slow and
+    // intermittently returned nothing, which showed up as corrupted variations.
+    return request<{answer:string;model?:string}>(`/api/rag/refine`,{method:'POST',body:JSON.stringify({workspaceId,draftContent,promptAction,kind})});
   },
   generateVisual:(input:import('./visualScene').VisualInput)=>request<{imageUrl:string;provider:string;model:string;llmModel:string;fallback:boolean;format:string;prompt:string;imagePrompt:string;dimensions:string;referenceUsed:boolean;referenceTitle?:string;referenceId?:string}>('/api/visual/generate',{method:'POST',body:JSON.stringify(input)}),
   saveDraft:(draft:ContentDraft,brief?:ContentBrief)=>request<ContentDraft>(`/api/drafts/${draft.id}`,{method:'PUT',body:JSON.stringify({...draft,brief})}),

@@ -47,71 +47,128 @@ interface EditorWorkspaceViewProps {
 }
 
 // ── Variation definitions ──────────────────────────────────────────────
-interface VariationOption {
+export interface VariationOption {
   id: string;
   label: string;
+  /** Tells the server which quality rules to enforce on the result. */
+  kind: 'concise' | 'whatsapp' | 'instagram' | 'formal' | 'bullets' | 'thread' | 'friendly' | 'expand' | 'rewrite';
   promptAction: string;
   group: 'primary' | 'format' | 'tone' | 'rag';
 }
 
 const VARIATIONS: VariationOption[] = [
-  // Primary (always visible as buttons)
   {
     id: 'concise',
     label: 'Lebih Ringkas',
+    kind: 'concise',
     group: 'primary',
-    promptAction: 'Ringkas teks ini agar lebih padat tanpa menghilangkan fakta atau data penting. Kurangi pengulangan kata dan kalimat, pertahankan makna inti dari setiap paragraf.'
+    promptAction: [
+      'Ringkas naskah ini menjadi versi yang lebih padat.',
+      'Pertahankan SEMUA fakta penting: angka, nama program, gelar, akreditasi, kanal pendaftaran, dan CTA.',
+      'Buang kalimat yang mengulang gagasan yang sama, bukan fakta yang berbeda.',
+      'Target panjang 50-65% dari asli, tetap mengalir sebagai prosa 2-3 paragraf pendek.',
+      'Jangan mengubah menjadi daftar poin.'
+    ].join(' ')
   },
   {
     id: 'broadcast_wa',
     label: 'Broadcast WA',
+    kind: 'whatsapp',
     group: 'primary',
-    promptAction: 'Format ulang teks ini menjadi pesan siaran WhatsApp (Broadcast). Gunakan sapaan yang ramah, buat kalimatnya to-the-point, berikan jarak antar paragraf (whitespace), dan tambahkan emoji yang relevan secukupnya.'
+    promptAction: [
+      'Ubah naskah ini menjadi pesan siaran WhatsApp.',
+      'Awali dengan sapaan ramah (mis. "Halo," atau "Hai,") lalu sampaikan inti dalam kalimat pendek.',
+      'Gunakan baris terpisah antar gagasan agar mudah dibaca di ponsel.',
+      'Maksimal 700 karakter, tanpa tagar, tanpa istilah teknis berlebihan.',
+      'Tutup dengan ajakan bertindak yang jelas beserta tautan/kanal resmi dari naskah.'
+    ].join(' ')
   },
   {
     id: 'caption_ig',
     label: 'Caption IG',
+    kind: 'instagram',
     group: 'primary',
-    promptAction: 'Ubah teks ini menjadi caption Instagram. Mulai dengan kalimat pembuka (hook) yang menarik, gunakan nada bicara santai tapi informatif, dan tambahkan 5 hashtag relevan di akhir teks.'
+    promptAction: [
+      'Ubah naskah ini menjadi caption Instagram.',
+      'Baris pertama harus berupa hook yang membuat orang berhenti scroll, maksimal 12 kata.',
+      'Isi 2-3 paragraf pendek dengan nada santai tapi informatif, sertakan fakta penting dari naskah.',
+      'Tambahkan 5-8 tagar relevan di baris terakhir, dipisahkan spasi.',
+      'Jangan menyalin seluruh naskah; ringkas agar nyaman dibaca di aplikasi.'
+    ].join(' ')
   },
   {
     id: 'formal',
     label: 'Formal Korporat',
+    kind: 'formal',
     group: 'primary',
-    promptAction: 'Tulis ulang teks ini menggunakan gaya bahasa formal korporat yang baku, sesuai dengan standar surat resmi . Gunakan diksi yang presisi dan profesional.'
+    promptAction: [
+      'Tulis ulang naskah ini dalam gaya formal korporat Indonesia yang baku.',
+      'Gunakan kalimat lengkap, diksi presisi, dan hindari kata percakapan, singkatan tidak resmi, serta emoji.',
+      'Pertahankan seluruh fakta, angka, nama, dan CTA tanpa perubahan nilai.',
+      'Susun dalam paragraf yang runtut dengan pembuka, isi, dan penutup.'
+    ].join(' ')
   },
-  // Format Distribusi (in overflow)
   {
     id: 'bullet_points',
     label: 'Jadikan Poin-poin',
+    kind: 'bullets',
     group: 'format',
-    promptAction: 'Ekstrak informasi penting dari teks ini dan susun ulang menjadi format bullet points atau daftar bernomor (numbered list) agar lebih mudah dipindai oleh pembaca.'
+    promptAction: [
+      'Susun ulang naskah ini menjadi daftar poin yang mudah dipindai.',
+      'Gunakan 4-7 butir, masing-masing satu gagasan, diawali tanda "-".',
+      'Setiap butir harus memuat fakta dari naskah; jangan menambah fakta baru.',
+      'Boleh menambahkan satu kalimat pengantar sebelum daftar dan satu CTA di akhir.'
+    ].join(' ')
   },
   {
     id: 'x_thread',
     label: 'Ubah ke Format Thread',
+    kind: 'thread',
     group: 'format',
-    promptAction: 'Pecah teks ini menjadi format thread media sosial (X/Twitter). Setiap bagian thread tidak boleh lebih dari 280 karakter, gunakan penomoran 1/N di awal setiap bagian.'
+    promptAction: [
+      'Pecah naskah ini menjadi thread X/Twitter.',
+      'Gunakan penomoran "1/N", "2/N", dan seterusnya pada awal setiap bagian.',
+      'Setiap bagian maksimal 280 karakter dan berisi satu gagasan utuh.',
+      'Bagian pertama harus memikat, bagian terakhir berisi CTA.',
+      'Jangan menambah fakta di luar naskah.'
+    ].join(' ')
   },
-  // Gaya Bahasa & Nada (in overflow)
   {
     id: 'friendly_edu',
     label: 'Lebih Ramah & Edukatif',
+    kind: 'friendly',
     group: 'tone',
-    promptAction: 'Tulis ulang teks ini dengan mengurangi nada birokratis. Gunakan gaya bahasa yang hangat, empatik, dan berfokus pada edukasi pelanggan layaknya seorang rekan.'
+    promptAction: [
+      'Tulis ulang naskah ini dengan nada hangat, empatik, dan edukatif seperti seorang rekan.',
+      'Hilangkan kesan birokratis dan kalimat perintah yang kaku.',
+      'Jelaskan manfaat bagi pembaca, bukan sekadar menyebut fakta.',
+      'Pertahankan seluruh fakta, angka, nama, dan CTA.'
+    ].join(' ')
   },
-  // Koreksi RAG (in overflow)
   {
     id: 'expand',
     label: 'Perluas Penjelasan',
+    kind: 'expand',
     group: 'rag',
-    promptAction: 'Kembangkan teks ini menjadi lebih detail. Tambahkan konteks, contoh konkret, atau penjelasan lebih lanjut tanpa mengubah makna dari draf aslinya.'
+    promptAction: [
+      'Kembangkan naskah ini menjadi lebih detail dan meyakinkan.',
+      'Tambahkan penjelasan manfaat, konteks, atau contoh yang MASIH bersumber dari fakta pada naskah.',
+      'DILARANG menambah angka, tanggal, harga, nama, atau janji baru.',
+      'Tulis TEPAT 3 paragraf: pembuka, penjelasan manfaat, dan penutup berisi CTA.',
+      'Panjang total sekitar 1,5 kali naskah asli; jangan bertele-tele atau mengulang gagasan.'
+    ].join(' ')
   },
   {
     id: 'rewrite_no_rag',
     label: 'Tulis Ulang (Tanpa RAG)',
+    kind: 'rewrite',
     group: 'rag',
-    promptAction: 'Abaikan dokumen referensi (RAG context) sebelumnya jika ada. Tulis ulang draf ini murni berdasarkan brief awal menggunakan pengetahuan umum (General Knowledge) Anda tentang topik ini.'
+    promptAction: [
+      'Tulis ulang naskah ini dengan susunan kalimat dan urutan penyampaian yang baru.',
+      'Pertahankan seluruh fakta, angka, nama, dan CTA persis seperti aslinya.',
+      'Ubah gaya penyampaian agar terasa segar, bukan sekadar mengganti sinonim.',
+      'Jangan menambah klaim baru di luar naskah.'
+    ].join(' ')
   }
 ];
 
@@ -199,13 +256,13 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
       const result = await apiService.ragRefine(
         draft.workspaceId,
         variationBase,
-        variation.promptAction
+        variation.promptAction,
+        variation.kind
       );
       const next = sanitizeRagAnswer(result.answer || '');
       if (!next) throw new Error('AI tidak mengembalikan naskah.');
-      // Guard the editor: never replace a full draft with a fragment.
-      const minLen = Math.max(120, Math.floor(variationBase.trim().length * 0.3));
-      if (next.length < minLen) {
+      // Server already validated per-kind quality; keep only a sanity floor here.
+      if (next.trim().length < 60) {
         throw new Error('Hasil variasi terlalu pendek dan berisiko menghilangkan isi utama. Coba lagi.');
       }
       setEditedContent(next);
