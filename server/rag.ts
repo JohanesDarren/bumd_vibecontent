@@ -444,8 +444,10 @@ export async function ragRefine(scopeId: string, draftContent: string, promptAct
         'Kamu editor copywriting senior untuk konten korporat Indonesia.',
         'Tulis ulang DRAF ASLI sesuai INSTRUKSI.',
         'Pertahankan seluruh fakta, angka, nama, dan CTA; jangan menambah fakta baru.',
+        'Pertahankan cakupan isi: setiap gagasan utama pada draf asli harus tetap ada di hasil.',
         'Keluarkan hanya naskah final dalam Bahasa Indonesia, tanpa label, judul, sitasi, atau penjelasan.',
-        'DILARANG membalas dengan rencana atau komentar tentang tugas ini.'
+        'DILARANG membalas dengan rencana, ringkasan proses, atau komentar tentang tugas ini.',
+        'DILARANG membalas hanya dengan judul atau kalimat penutup.'
       ].join(' ')
     },
     { role: 'user', content: `INSTRUKSI:\n${promptAction}\n\nDRAF ASLI:\n${draftContent}` }
@@ -454,72 +456,51 @@ export async function ragRefine(scopeId: string, draftContent: string, promptAct
   const models = [config.model, ...(process.env['9ROUTER_WRITER_FALLBACKS'] || 'ocg/deepseek-flash,ocg/glm-5.3-flash')
     .split(',').map(m => m.trim()).filter(Boolean)].filter((m, i, all) => m && all.indexOf(m) === i);
 
-  let response: Response | undefined;
-  let raw = '';
-  outer: for (const model of models) {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      response = await fetch(`${config.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model, temperature: 0.5, max_tokens: 900, reasoning_effort: 'none', messages }),
-        signal: AbortSignal.timeout(Number(process.env['9ROUTER_TIMEOUT_MS'] || 120000))
-      });
-      raw = await response.text();
-      if (response.ok) break outer;
-      if (![429, 500, 502, 503, 504].includes(response.status)) break outer;
-      await new Promise(resolve => setTimeout(resolve, 900 * (attempt + 1)));
+  const callModel = async (): Promise<string> => {
+    let response: Response | undefined;
+    let raw = '';
+    outer: for (const model of models) {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        response = await fetch(`${config.baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model, temperature: 0.5, max_tokens: 1200, reasoning_effort: 'none', messages }),
+          signal: AbortSignal.timeout(Number(process.env['9ROUTER_TIMEOUT_MS'] || 120000))
+        });
+        raw = await response.text();
+        if (response.ok) break outer;
+        if (![429, 500, 502, 503, 504].includes(response.status)) break outer;
+        await new Promise(resolve => setTimeout(resolve, 900 * (attempt + 1)));
+      }
     }
+    if (!response?.ok) throw new Error(`Penyusun caption gagal (HTTP ${response?.status})`);
+    const body = parseFirstJson(raw) as { choices?: Array<{ message?: { content?: unknown; reasoning_content?: unknown } }> };
+    const message = body.choices?.[0]?.message;
+    const content = typeof message?.content === 'string' ? message.content.trim() : '';
+    const reasoning = typeof message?.reasoning_content === 'string' ? message.reasoning_content.trim() : '';
+    const pick = content || (/^(?:the user|i |we |let me|okay|first,|to )/i.test(reasoning) ? '' : reasoning);
+    return singleDraft(pick).slice(0, 4000);
+  };
+
+  // A variation must not silently destroy the draft. Short or truncated answers
+  // (a stray heading, a single closing line) are retried before failing loudly.
+  const usable = (text: string) => {
+    if (!text) return false;
+    if (/^(?:the user|i |we |let me|berikut|catatan:)/i.test(text)) return false;
+    const minLen = Math.max(120, Math.floor(draftContent.trim().length * 0.3));
+    if (text.length < minLen) return false;
+    // A single line is almost always a heading, not a rewritten draft.
+    if (!/\n/.test(text) && text.length < draftContent.length * 0.5) return false;
+    return true;
+  };
+
+  let last = '';
+  for (let round = 0; round < 2; round++) {
+    last = await callModel();
+    if (usable(last)) return { answer: last, model: config.model };
   }
-  if (!response?.ok) throw new Error(`Penyusun caption gagal (HTTP ${response?.status})`);
-
-  const body = parseFirstJson(raw) as { choices?: Array<{ message?: { content?: unknown; reasoning_content?: unknown } }> };
-  const message = body.choices?.[0]?.message;
-  const content = typeof message?.content === 'string' ? message.content.trim() : '';
-  const reasoning = typeof message?.reasoning_content === 'string' ? message.reasoning_content.trim() : '';
-  const pick = content || (/^(?:the user|i |we |let me|okay|first,|to )/i.test(reasoning) ? '' : reasoning);
-  return { answer: singleDraft(pick).slice(0, 4000), model: config.model };
-}
-
-/**
- * Rewrites the brief into fresh copy WITHOUT document grounding. Used when the
- * knowledge base has no matching source, so the draft is still composed (not
- * echoed from the brief) while the app keeps flagging it as "needs verification".
- */
-export async function ragCompose(scopeId: string, briefText: string, feedback?: string) {
-  const composeQuery = [
-    'PERAN: kamu adalah copywriter senior korporat BUMD.',
-    'TUGAS: analisis data brief di bawah, lalu tulis copywriting BARU yang siap pakai, bukan salinan input.',
-    '',
-    'CARA MENULIS:',
-    '1. Pahami inti pesan, siapa audiensnya, dan apa yang harus mereka lakukan; tulis ulang dengan kalimat dan urutan yang baru.',
-    '2. DILARANG menyalin kalimat, daftar bernomor, atau frasa pesan kunci kata per kata. Ubah daftar fakta menjadi narasi yang mengalir.',
-    '3. Buka dengan kalimat pembuka yang menarik dan relevan bagi target audiens serta kanal distribusi; ikuti nada suara dan format output pada brief.',
-    '4. Tulis Bahasa Indonesia yang natural, hangat, dan jelas; tonjolkan manfaat bagi audiens.',
-    '',
-    'ATURAN FAKTA (LANGGAR = GAGAL):',
-    '5. Semua angka, tanggal, harga, nama, dan syarat pada pesan kunci HARUS muncul dengan nilai yang sama persis.',
-    '6. Dilarang menambah fakta, angka, tanggal, janji, atau kanal yang tidak ada pada brief.',
-    '7. Jangan mengulang bagian "Batasan/Syarat Penting" secara utuh dan jangan menulis CTA; aplikasi menambahkannya terpisah.',
-    '',
-    '',
-    ...FORMAT_GUIDE,
-    '',
-    ...LANGUAGE_RULES,
-    '',
-    'KELUARAN: tepat satu naskah final berupa prosa/paragraf pendek. Tanpa judul, label, CTA, tagar, sitasi, penjelasan, atau versi alternatif.',
-    ...(feedback ? ['', `PERBAIKAN WAJIB: percobaan sebelumnya ditolak karena: ${feedback} Tulis ulang dari awal tanpa kesalahan itu.`] : []),
-    '',
-    BRIEF_DATA_HEADER,
-    briefText
-  ].join('\n');
-  return call<RagRefineResult>('/query', {
-    method: 'POST',
-    body: JSON.stringify({
-      query: composeQuery,
-      knowledge_base_id: await resolveKnowledgeBaseId(scopeId),
-      options: { top_k: 1, strict_grounding: false, include_sources: false }
-    })
-  });
+  // Never replace the user's draft with a broken result.
+  throw new Error('Variasi gagal: hasil AI tidak memuat isi utama draf. Coba lagi.');
 }
 
 export type ScheduleSlotSuggestion = {
@@ -648,6 +629,47 @@ export function ragListDocuments(scopeId: string) {
 }
 
 /** Content-plan proposal grounded on the company knowledge base (prompt built in plan.ts). */
+/**
+ * Rewrites the brief into fresh copy WITHOUT document grounding. Used when the
+ * knowledge base has no matching source, so the draft is still composed (not
+ * echoed from the brief) while the app keeps flagging it as "needs verification".
+ */
+export async function ragCompose(scopeId: string, briefText: string, feedback?: string) {
+  const composeQuery = [
+    'PERAN: kamu adalah copywriter senior korporat BUMD.',
+    'TUGAS: analisis data brief di bawah, lalu tulis copywriting BARU yang siap pakai, bukan salinan input.',
+    '',
+    'CARA MENULIS:',
+    '1. Pahami inti pesan, siapa audiensnya, dan apa yang harus mereka lakukan; tulis ulang dengan kalimat dan urutan yang baru.',
+    '2. DILARANG menyalin kalimat, daftar bernomor, atau frasa pesan kunci kata per kata. Ubah daftar fakta menjadi narasi yang mengalir.',
+    '3. Buka dengan kalimat pembuka yang menarik dan relevan bagi target audiens serta kanal distribusi; ikuti nada suara dan format output pada brief.',
+    '4. Tulis Bahasa Indonesia yang natural, hangat, dan jelas; tonjolkan manfaat bagi audiens.',
+    '',
+    'ATURAN FAKTA (LANGGAR = GAGAL):',
+    '5. Semua angka, tanggal, harga, nama, dan syarat pada pesan kunci HARUS muncul dengan nilai yang sama persis.',
+    '6. Dilarang menambah fakta, angka, tanggal, janji, atau kanal yang tidak ada pada brief.',
+    '7. Jangan mengulang bagian "Batasan/Syarat Penting" secara utuh dan jangan menulis CTA; aplikasi menambahkannya terpisah.',
+    '',
+    ...FORMAT_GUIDE,
+    '',
+    ...LANGUAGE_RULES,
+    '',
+    'KELUARAN: tepat satu naskah final berupa prosa/paragraf pendek. Tanpa judul, label, CTA, tagar, sitasi, penjelasan, atau versi alternatif.',
+    ...(feedback ? ['', `PERBAIKAN WAJIB: percobaan sebelumnya ditolak karena: ${feedback} Tulis ulang dari awal tanpa kesalahan itu.`] : []),
+    '',
+    BRIEF_DATA_HEADER,
+    briefText
+  ].join('\n');
+  return call<RagRefineResult>('/query', {
+    method: 'POST',
+    body: JSON.stringify({
+      query: composeQuery,
+      knowledge_base_id: await resolveKnowledgeBaseId(scopeId),
+      options: { top_k: 1, strict_grounding: false, include_sources: false }
+    })
+  });
+}
+
 export async function ragPlan(scopeId: string, prompt: string) {
   return call<RagQueryResult>('/query', {
     method: 'POST',

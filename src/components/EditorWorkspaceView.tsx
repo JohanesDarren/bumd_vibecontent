@@ -143,6 +143,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
   // switching variations clean instead of stacking one format inside another.
   const [variationBase, setVariationBase] = useState(currentVer?.content || '');
   const [activeVariationId, setActiveVariationId] = useState<string | null>(null);
+  const [variationError, setVariationError] = useState<string | null>(null);
 
   // Keep state updated if selected draft changes
   useEffect(() => {
@@ -201,12 +202,18 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
         variation.promptAction
       );
       const next = sanitizeRagAnswer(result.answer || '');
-      if (!next) throw new Error('RAG tidak mengembalikan naskah.');
+      if (!next) throw new Error('AI tidak mengembalikan naskah.');
+      // Guard the editor: never replace a full draft with a fragment.
+      const minLen = Math.max(120, Math.floor(variationBase.trim().length * 0.3));
+      if (next.length < minLen) {
+        throw new Error('Hasil variasi terlalu pendek dan berisiko menghilangkan isi utama. Coba lagi.');
+      }
       setEditedContent(next);
       setActiveVariationId(variation.id);
+      setVariationError(null);
     } catch (error) {
       console.error('Refine failed:', error);
-      alert(`Gagal memproses variasi "${variation.label}": ${error instanceof Error ? error.message : 'kesalahan tidak diketahui'}`);
+      setVariationError(`Gagal memproses variasi "${variation.label}": ${error instanceof Error ? error.message : 'kesalahan tidak diketahui'}`);
     } finally {
       setRefiningId(null);
     }
@@ -216,6 +223,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
   const handleResetVariation = () => {
     setEditedContent(variationBase);
     setActiveVariationId(null);
+    setVariationError(null);
   };
 
   // Save new version
@@ -326,6 +334,11 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)' }}>
                 <Sparkles size={14} />
                 <span>Variasi Cepat (F-08):</span>
+                {variationError && (
+                  <span style={{ fontSize: '0.7rem', fontWeight: 500, color: 'var(--danger, #c0392b)' }}>
+                    {variationError}
+                  </span>
+                )}
                 {activeVariationId && (
                   <button
                     type="button"

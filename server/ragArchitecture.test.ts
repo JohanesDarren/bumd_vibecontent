@@ -68,3 +68,13 @@ test('the writer receives channel, tone and format, not only facts', async () =>
   assert.match(src, /DILARANG menulis deretan fragmen/);
   assert.match(src, /CONTOH GAYA YANG BENAR/);
 });
+
+test('quick variations reject truncated output instead of replacing the draft', async () => {
+  // Regression: a variation could return only a heading or closing line and the
+  // editor would swap the whole draft for it, looking like corrupted context.
+  const src = await readFile(new URL('./rag.ts', import.meta.url), 'utf8');
+  assert.match(src, /const usable = \(text: string\)/);
+  assert.match(src, /Math\.floor\(draftContent\.trim\(\)\.length \* 0\.3\)/);
+  assert.match(src, /Never replace the user's draft with a broken result/);
+  assert.match(src, /round < 2/);
+});
