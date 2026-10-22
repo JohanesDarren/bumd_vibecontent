@@ -134,12 +134,15 @@ test('creator saves generated draft, then opens that exact draft in editor witho
 });
 
 test('generation workflow opens any saved active draft in visual studio', async () => {
-  const [brief, visual] = await Promise.all([
+  const [brief, rail, visual] = await Promise.all([
     readFile(new URL('../components/BriefStudioView.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../components/BriefHistoryRail.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../components/VisualStudioView.tsx', import.meta.url), 'utf8')
   ]);
-  assert.match(brief, /drafts\.map/);
-  assert.match(brief, /onOpenEditor\(draft\.id\)/);
+  // Brief selection moved from an inline card bar to the history sidebar.
+  assert.match(rail, /drafts\.filter/);
+  assert.match(rail, /onOpenDraft/);
+  assert.doesNotMatch(brief, /Konten Hasil Generasi/);
   assert.match(visual, /availableDrafts/);
   assert.match(visual, /status !== 'diarsipkan'/);
   assert.match(visual, /Creative Direction|Arahan Kreatif/);

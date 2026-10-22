@@ -45,7 +45,6 @@ import {
   Zap,
   AlertTriangle,
   ExternalLink,
-  MoreVertical,
   ShieldCheck,
   SlidersHorizontal,
   Lock
@@ -98,12 +97,12 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
 
   activeWorkspace,
   activeUser,
-  drafts,
+  drafts: _drafts,
   settings,
   onOpenEditor,
   onGenerateDraft,
   onNavigate,
-  onDeleteDraft
+  onDeleteDraft: _onDeleteDraft
 }) => {
   const [title, setTitle] = useState('');
   const [campaign, setCampaign] = useState('');
@@ -118,7 +117,6 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
   const [limitations, setLimitations] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
-  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [savedBrief, setSavedBrief] = useState<{ id: string; key: string } | null>(null);
   const cta = ctaMode === 'custom' ? customCta : selectedCta;
   const briefKey = JSON.stringify([title, campaign, targetAudience, format, channel, tone, keyMessage, cta, limitations]);
@@ -461,61 +459,6 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
         </div>
       )}
 
-      <div className="card-panel" style={{ marginBottom: '20px', padding: '16px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-          <h3 style={{ fontSize: '0.95rem', fontWeight: 700 }}>Konten Hasil Generasi</h3>
-          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{drafts.length} tersimpan</span>
-        </div>
-        {drafts.length === 0 ? (
-          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Belum ada konten hasil generasi. Lengkapi brief di bawah untuk membuatnya.</p>
-        ) : (
-          <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
-            {drafts.map(draft => (
-              <div key={draft.id} style={{ minWidth: '220px', padding: '10px', border: '1px solid var(--border-subtle)', borderRadius: '10px', background: 'var(--bg-tertiary)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '5px' }}>
-                  <div style={{ fontSize: '0.82rem', fontWeight: 700, paddingRight: '8px' }}>{draft.title}</div>
-                  <div style={{ position: 'relative' }}>
-                    <button 
-                      type="button" 
-                      style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px', color: 'var(--text-muted)' }}
-                      onClick={() => setOpenDropdownId(openDropdownId === draft.id ? null : draft.id)}
-                    >
-                      <MoreVertical size={16} />
-                    </button>
-                    {openDropdownId === draft.id && (
-                      <div style={{ 
-                        position: 'absolute', right: 0, top: '24px', background: 'var(--bg-secondary)', 
-                        border: '1px solid var(--border-subtle)', borderRadius: '6px', padding: '4px', 
-                        display: 'flex', flexDirection: 'column', gap: '4px', zIndex: 50, minWidth: '130px',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-                      }}>
-                        <button 
-                          type="button" 
-                          className="btn btn-secondary btn-sm" 
-                          style={{ width: '100%', justifyContent: 'flex-start', border: 'none', background: 'transparent' }} 
-                          onClick={() => { setOpenDropdownId(null); onOpenEditor(draft.id); }}
-                        >
-                          Buka di Editor
-                        </button>
-                        {draft.status === 'draft' && onDeleteDraft && (
-                          <button 
-                            type="button" 
-                            className="btn btn-secondary btn-sm" 
-                            style={{ width: '100%', justifyContent: 'flex-start', border: 'none', background: 'transparent', color: 'var(--accent-red)' }} 
-                            onClick={() => { setOpenDropdownId(null); onDeleteDraft(draft.id); }}
-                          >
-                            Hapus
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.5fr) minmax(400px, 1fr)', gap: '24px', alignItems: 'start' }}>
         {/* ─── Left: Brief Form (preserved) ─── */}
