@@ -624,6 +624,7 @@ body {
 .content-viewport {
   flex: 1 1 auto;
   min-width: 320px;
+  max-width: 100%;
   padding: 28px 32px;
   overflow-y: auto;
   width: 100%;
@@ -2905,7 +2906,9 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   gap: 10px;
   padding: 16px 12px;
   border-right: 1px solid var(--border-subtle);
-  background: var(--bg-card);
+  /* Opaque: a translucent rail let the form text bleed through behind the list. */
+  background: #ffffff;
+  z-index: 3;
   /* Sticky and full height: the list scrolls inside the rail while the page scrolls. */
   position: sticky;
   top: 0;
@@ -3002,6 +3005,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 /* ── Brief workspace: form left, AI editor right, no outer gap ─────────── */
 .brief-workspace {
   display: grid;
+  width: 100%;
+  min-width: 0;
   grid-template-columns: minmax(0, 1.15fr) minmax(340px, 1fr);
   gap: 0;
   align-items: stretch;
