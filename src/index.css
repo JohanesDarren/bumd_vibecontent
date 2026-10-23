@@ -113,8 +113,11 @@ body {
 
 .main-layout {
   display: flex;
-  flex: 1;
-  min-height: calc(100vh - 72px);
+  flex: 1 1 auto;
+  /* No forced min-height: it pushed the viewport down and left a huge blank
+     gap above the page content. Height comes from the content itself. */
+  align-items: flex-start;
+  min-height: 0;
 }
 
 /* Top Header */
@@ -623,11 +626,10 @@ body {
    cap and no auto-centering, so the workspace body spans the full width. */
 .content-viewport {
   flex: 1 1 auto;
-  min-width: 320px;
+  min-width: 0;
   max-width: 100%;
   padding: 28px 32px;
-  overflow-y: auto;
-  width: 100%;
+  overflow-x: hidden;
 }
 
 /* Page Header */
@@ -2912,7 +2914,6 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   /* Sticky and full height: the list scrolls inside the rail while the page scrolls. */
   position: sticky;
   top: 0;
-  height: calc(100vh - 72px);
   max-height: calc(100vh - 72px);
   overflow: hidden;
   align-self: flex-start;
