@@ -34,8 +34,19 @@ if(process.env.NODE_ENV === 'production' && !allowedOrigins.length) throw new Er
 app.use(cors({ origin: (origin, callback) => callback(null, !origin || allowedOrigins.includes(origin)), credentials: true, exposedHeaders: ['X-Session-Idle-Seconds'] }));
 app.use(express.json({ limit: '8mb' }));
 const distDir = resolve(dirname(fileURLToPath(import.meta.url)), '../dist');
-app.use(express.static(distDir,{setHeaders:(res,filePath)=>{if(filePath.endsWith('index.html'))res.setHeader('Cache-Control','no-store, must-revalidate');}}));
-app.get(/.*/, (req, res, next) => req.path.startsWith('/api/') ? next() : res.sendFile(resolve(distDir, 'index.html')));
+// Hashed assets may be cached forever, but the shell must always be revalidated so
+// a new deploy is picked up. A stale shell was serving an old bundle to the user
+// even though the release had already switched.
+app.use(express.static(distDir,{setHeaders:(res,filePath)=>{
+  if(filePath.endsWith('index.html')){
+    res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');
+    res.setHeader('Pragma','no-cache');
+    res.setHeader('Expires','0');
+  }
+}}));
+app.get(/.*/, (req, res, next) => req.path.startsWith('/api/') ? next() : res.sendFile(resolve(distDir, 'index.html'), {
+  headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0', Pragma: 'no-cache', Expires: '0' }
+}));
 // ponytail: same-site cookie requires an Origin check on writes; configure API_ALLOWED_ORIGIN for deployments.
 app.use('/api',(req,res,next)=>{if(['GET','HEAD','OPTIONS'].includes(req.method))return next();const origin=req.headers.origin;if(origin&&!allowedOrigins.includes(origin))return res.status(403).json({error:'Origin denied'});next();});
 
