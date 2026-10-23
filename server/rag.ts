@@ -57,10 +57,30 @@ async function call<T>(path: string, init: RequestInit = {}, options: { ignoreNo
   // draft immediately. 502/503/504 are treated the same way.
   const gatewayError = () => [502, 503, 504, 530].includes(response.status)
     && /<html|<!doctype html|bad gateway|origin is unreachable/i.test(raw);
+
+  // The gateway also enforces a per-key concurrency cap ("This key already has 2
+  // queries running"). That is backpressure, not a real failure: waiting briefly
+  // almost always succeeds. Treat it as transient so the user never sees it.
+  const concurrencyError = () => {
+    if (response.ok) return false;
+    const message = `${body?.error?.message ?? body?.detail ?? body?.error ?? ''} ${raw}`;
+    return /queries? running|concurren|too many requests|rate limit|limit \d+ per key/i.test(message)
+      || response.status === 429;
+  };
+
   const retryDelays = [2000, 5000, 10000, 15000];
   for (const delay of retryDelays) {
     if (!gatewayError()) break;
     await new Promise(resolve => setTimeout(resolve, delay));
+    ({ res: response, text: raw, parsed: body } = await send());
+  }
+
+  // Shorter, jittered backoff: contention clears as soon as an in-flight query
+  // finishes, so a long wait would be wasted.
+  const busyDelays = [800, 1500, 2500, 4000, 6000];
+  for (const delay of busyDelays) {
+    if (!concurrencyError()) break;
+    await new Promise(resolve => setTimeout(resolve, delay + Math.random() * 300));
     ({ res: response, text: raw, parsed: body } = await send());
   }
 
@@ -429,6 +449,64 @@ export type RagRefineResult = {
   model?: string;
 };
 
+/**
+ * Single-turn writer call that does NOT touch the RAG gateway.
+ *
+ * Anything that only needs prose (compose without grounding, rewrites) must not
+ * go through /query: that endpoint holds one of just two per-key RAG slots for
+ * the whole generation, which surfaced as "This key already has 2 queries
+ * running" while the request was actually fine.
+ */
+async function callWriterJson(prompt: string, temperature = 0.6): Promise<RagRefineResult> {
+  const config = writerConfig();
+  if (!config.apiKey) throw new Error('Penulis naskah belum dikonfigurasi (9ROUTER_API_KEY)');
+
+  const models = [config.model, ...(process.env['9ROUTER_WRITER_FALLBACKS'] || 'ocg/deepseek-flash,ocg/glm-5.3-flash')
+    .split(',').map(m => m.trim()).filter(Boolean)].filter((m, i, all) => m && all.indexOf(m) === i);
+
+  let lastError: Error | undefined;
+  for (const model of models) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      let response: Response;
+      try {
+        response = await fetch(`${config.baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model,
+            temperature,
+            max_tokens: 1600,
+            reasoning_effort: 'none',
+            messages: [
+              {
+                role: 'system',
+                content: 'Kamu copywriter senior korporat Indonesia. Balas hanya dengan naskah final, tanpa label, judul, sitasi, atau penjelasan.'
+              },
+              { role: 'user', content: prompt }
+            ]
+          }),
+          signal: AbortSignal.timeout(Number(process.env['9ROUTER_TIMEOUT_MS'] || 120000))
+        });
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        continue;
+      }
+      const raw = await response.text();
+      if (response.ok) {
+        const parsed = (() => { try { return JSON.parse(raw); } catch { return null; } })();
+        const answer = parsed?.choices?.[0]?.message?.content;
+        if (typeof answer === 'string' && answer.trim()) return { answer: answer.trim(), model };
+        lastError = new Error('Model tidak mengembalikan naskah');
+        continue;
+      }
+      lastError = new Error(`Writer responded ${response.status}`);
+      if (![429, 500, 502, 503, 504].includes(response.status)) break;
+      await new Promise(resolve => setTimeout(resolve, 800 * (attempt + 1)));
+    }
+  }
+  throw lastError || new Error('Penulis naskah tidak merespons');
+}
+
 export async function ragRefine(scopeId: string, draftContent: string, promptAction: string, kind?: string) {
   // Rewriting an existing draft needs no retrieval, so it runs on the writer model
   // directly. Routing it through RAG /query made caption generation slow and
@@ -707,14 +785,11 @@ export async function ragCompose(scopeId: string, briefText: string, feedback?: 
     BRIEF_DATA_HEADER,
     briefText
   ].join('\n');
-  return call<RagRefineResult>('/query', {
-    method: 'POST',
-    body: JSON.stringify({
-      query: composeQuery,
-      knowledge_base_id: await resolveKnowledgeBaseId(scopeId),
-      options: { top_k: 1, strict_grounding: false, include_sources: false }
-    })
-  });
+  // Compose via the writer LLM directly. Routing this through the RAG /query
+  // endpoint burned one of only two per-key RAG slots for a call that retrieves
+  // nothing (top_k: 1), which is what triggered "2 queries running" errors.
+  void scopeId;
+  return callWriterJson(composeQuery);
 }
 
 export async function ragPlan(scopeId: string, prompt: string) {
