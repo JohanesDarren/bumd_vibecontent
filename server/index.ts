@@ -395,6 +395,25 @@ function freeScheduleSlot(platform:string,todayStr:string,booked:Array<{date:str
   return fallback||{date:todayStr,time:baseTime,reason:'Semua slot mendekati penuh; pilih manual.'};
 }
 
+/**
+ * Two backup slots on different days, so the UI always has alternatives to show
+ * even when the model is unavailable and we fall back to deterministic search.
+ */
+function freeScheduleAlternatives(platform:string,todayStr:string,booked:Array<{date:string;time:string}>,chosen:{date:string;time:string}){
+  const out:Array<{date:string;time:string;reason:string}>=[];
+  const taken=[...booked,{date:chosen.date,time:chosen.time}];
+  let cursor=todayStr;
+  while(out.length<2){
+    const slot=freeScheduleSlot(platform,cursor,taken);
+    if(!slot||out.some(o=>o.date===slot.date)||slot.date===chosen.date)break;
+    out.push(slot);
+    taken.push({date:slot.date,time:slot.time});
+    // move the cursor past the found day so the next slot lands on a new date
+    cursor=slot.date;
+  }
+  return out;
+}
+
 app.post('/api/workspaces/:workspaceId/schedule-suggestion',requireMember(req=>String(req.params.workspaceId)),async(req,res,next)=>{
   try{
     const workspaceId=String(req.params.workspaceId);
@@ -422,7 +441,9 @@ app.post('/api/workspaces/:workspaceId/schedule-suggestion',requireMember(req=>S
       // the provider is throttled. Deterministic free-slot search is the fallback.
       console.warn('[schedule] model suggestion failed:',error instanceof Error?error.message:error);
       const slot=freeScheduleSlot(platform,todayStr,booked);
-      res.json({...slot,source:'fallback'});
+      // The client renders alternatives.map(); never return a shape without it.
+      const alternatives=freeScheduleAlternatives(platform,todayStr,booked,slot);
+      res.json({...slot,alternatives,source:'fallback'});
     }
   }catch(error){next(error);}
 });

@@ -444,9 +444,21 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
         caption: currentVersion(draft)?.content?.slice(0, 600),
         today: todayStr
       });
-      setSuggestion(result);
-      setFormDate(result.date);
-      setFormTime(result.time);
+      // Defensive: the API contract includes alternatives, but a partial or
+      // legacy payload must never blank the whole page.
+      const safe = {
+        date: typeof result?.date === 'string' ? result.date : todayStr,
+        time: typeof result?.time === 'string' ? result.time : '09:00',
+        reason: typeof result?.reason === 'string' ? result.reason : '',
+        alternatives: Array.isArray(result?.alternatives)
+          ? result.alternatives.filter((a): a is { date: string; time: string; reason: string } =>
+              Boolean(a) && typeof a.date === 'string' && typeof a.time === 'string')
+          : [],
+        source: typeof result?.source === 'string' ? result.source : 'model'
+      };
+      setSuggestion(safe);
+      setFormDate(safe.date);
+      setFormTime(safe.time);
     } catch (error) {
       setFormError(`Gagal meminta saran jadwal: ${error instanceof Error ? error.message : error}`);
     } finally {
@@ -1632,7 +1644,7 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
                     {suggestion && (
                       <>
                         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                          {suggestion.alternatives.map(alt => (
+                          {(suggestion.alternatives ?? []).map(alt => (
                             <button
                               key={`${alt.date}-${alt.time}`}
                               type="button"
