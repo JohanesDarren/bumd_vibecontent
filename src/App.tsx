@@ -544,11 +544,11 @@ export function App() {
             />
           )}
 
-          {safeTab === 'brief_studio' && draftActor && (
+          {safeTab === 'brief_studio' && (
             <BriefStudioView 
               brandProfile={effectiveBrandProfile}
               activeWorkspace={activeWorkspace}
-              activeUser={draftActor}
+              activeUser={draftActor || activeUser || { id: authUser.id, name: authUser.name, email: authUser.email, role: authUser.role, workspaceId: activeWorkspace.id, avatar: '', title: '', department: '' }}
               drafts={drafts}
               settings={appSettings}
               onOpenEditor={(id) => { setSelectedDraftId(id); setCurrentTab('editor'); }}
