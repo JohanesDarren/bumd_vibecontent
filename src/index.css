@@ -629,7 +629,9 @@ body {
   min-width: 0;
   max-width: 100%;
   padding: 28px 32px;
-  overflow-x: hidden;
+  /* Let the document scroll. A nested scroll container clipped the lower half
+     of the brief form and made it look truncated. */
+  overflow: visible;
 }
 
 /* Page Header */
@@ -2916,7 +2918,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   top: 0;
   max-height: calc(100vh - 72px);
   overflow: hidden;
-  align-self: flex-start;
+  align-self: stretch;
 }
 .brief-rail.collapsed {
   width: 56px;
@@ -3029,10 +3031,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   min-width: 0;
   display: flex;
   flex-direction: column;
-  position: sticky;
-  top: 0;
-  align-self: start;
-  max-height: calc(100vh - 96px);
+  align-self: stretch;
+  min-height: 520px;
 }
 .brief-workspace .brief-editor-canvas-wrapper {
   border: none;
@@ -3043,8 +3043,9 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   overflow: hidden;
 }
 .brief-workspace .brief-editor-content {
+  flex: 1 1 auto;
+  min-height: 320px;
   overflow-y: auto;
-  max-height: calc(100vh - 220px);
 }
 .brief-editor-actions {
   display: flex;
