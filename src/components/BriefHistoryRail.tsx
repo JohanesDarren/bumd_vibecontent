@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { ContentDraft, Workspace } from '../types';
-import { MessageSquare, Search, Trash2, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { MessageSquare, Search, Trash2 } from 'lucide-react';
 
 interface BriefHistoryRailProps {
   drafts: ContentDraft[];
@@ -36,7 +36,6 @@ export const BriefHistoryRail: React.FC<BriefHistoryRailProps> = ({
   onOpenDraft,
   onDeleteDraft
 }) => {
-  const [collapsed, setCollapsed] = useState(false);
   const [query, setQuery] = useState('');
 
   const rows = useMemo(() => {
@@ -47,22 +46,6 @@ export const BriefHistoryRail: React.FC<BriefHistoryRailProps> = ({
     return [...filtered].sort((a, b) => (b.updatedAt || b.createdAt).localeCompare(a.updatedAt || a.createdAt));
   }, [drafts, query]);
 
-  if (collapsed) {
-    return (
-      <aside className="brief-rail collapsed" aria-label="Riwayat brief">
-        <button
-          type="button"
-          className="brief-rail-toggle"
-          onClick={() => setCollapsed(false)}
-          title="Tampilkan riwayat brief"
-          aria-label="Tampilkan riwayat brief"
-        >
-          <PanelLeftOpen size={18} />
-        </button>
-      </aside>
-    );
-  }
-
   return (
     <aside className="brief-rail" aria-label="Riwayat brief">
       <div className="brief-rail-head">
@@ -70,15 +53,6 @@ export const BriefHistoryRail: React.FC<BriefHistoryRailProps> = ({
           <MessageSquare size={16} />
           <span>Riwayat Brief</span>
         </div>
-        <button
-          type="button"
-          className="brief-rail-toggle"
-          onClick={() => setCollapsed(true)}
-          title="Sembunyikan riwayat"
-          aria-label="Sembunyikan riwayat brief"
-        >
-          <PanelLeftClose size={16} />
-        </button>
       </div>
 
       <div className="brief-rail-search">

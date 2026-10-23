@@ -258,8 +258,18 @@ body {
   border-color: rgba(239, 68, 68, 0.6);
   color: #ffffff;
 }
-.creator-layout { display: block; min-height: calc(100vh - 54px); }
-.creator-content { width: 100%; min-width: 0; padding: 22px 28px; }
+.creator-layout {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: flex-start;
+  min-height: 0;
+}
+.creator-content {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+  padding: 22px 28px;
+}
 @media (max-width: 1024px) {
   .creator-top-header { padding: 0 8px; }
   .creator-top-header .header-left { gap: 8px; }
@@ -2907,175 +2917,205 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 16px 12px;
+  gap: 12px;
+  padding: 16px 14px;
   border-right: 1px solid var(--border-subtle);
-  /* Opaque: a translucent rail let the form text bleed through behind the list. */
-  background: #ffffff;
-  z-index: 3;
-  /* Sticky and full height: the list scrolls inside the rail while the page scrolls. */
+  background: var(--bg-card, #ffffff);
+  z-index: 10;
+  /* Sticky straight to the bottom of the viewport */
   position: sticky;
-  top: 0;
+  top: 72px;
+  height: calc(100vh - 72px);
   max-height: calc(100vh - 72px);
   overflow: hidden;
   align-self: stretch;
 }
-.brief-rail.collapsed {
-  width: 56px;
-  flex: 0 0 56px;
+.creator-layout .brief-rail {
+  top: 56px;
+  height: calc(100vh - 56px);
+  max-height: calc(100vh - 56px);
+}
+.brief-rail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 0 4px;
+}
+.brief-rail-title {
+  display: flex;
   align-items: center;
   gap: 8px;
-  padding: 14px 8px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-primary);
 }
-.brief-rail-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.brief-rail-title { display: flex; align-items: center; gap: 7px; font-size: 0.82rem; font-weight: 700; color: var(--text-primary); }
-.brief-rail-toggle {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 28px; height: 28px; border-radius: 8px; cursor: pointer;
-  border: 1px solid var(--border-subtle); background: transparent; color: var(--text-muted);
-}
-.brief-rail-toggle:hover { color: var(--text-primary); border-color: var(--border-strong, var(--border-subtle)); }
-.brief-rail-new {
-  display: flex; align-items: center; justify-content: center; gap: 6px;
-  width: 100%; padding: 8px 10px; border-radius: 10px; cursor: pointer;
-  border: 1px solid transparent; font-size: 0.78rem; font-weight: 600;
-  color: #fff; background: var(--accent-primary, #2563eb);
-}
-.brief-rail-new:hover { filter: brightness(1.08); }
-.brief-rail.collapsed .brief-rail-new { width: 40px; height: 40px; padding: 0; border-radius: 10px; }
 .brief-rail-search {
-  display: flex; align-items: center; gap: 6px;
-  padding: 6px 9px; border-radius: 9px;
-  border: 1px solid var(--border-subtle); background: var(--bg-tertiary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-tertiary);
   color: var(--text-muted);
+  flex-shrink: 0;
 }
 .brief-rail-search input {
-  flex: 1; min-width: 0; border: none; outline: none; background: transparent;
-  color: var(--text-primary); font-size: 0.78rem;
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.8rem;
 }
 .brief-rail-list {
-  display: flex; flex-direction: column; gap: 4px;
-  flex: 1 1 auto; min-height: 0;
-  overflow-y: auto; overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding-right: 4px;
   scrollbar-width: thin;
 }
 .brief-rail-list::-webkit-scrollbar { width: 6px; }
 .brief-rail-list::-webkit-scrollbar-thumb { background: var(--border-subtle); border-radius: 3px; }
-.brief-rail-empty { font-size: 0.75rem; color: var(--text-muted); line-height: 1.5; padding: 6px 4px; }
+.brief-rail-empty { font-size: 0.78rem; color: var(--text-muted); line-height: 1.5; padding: 12px 6px; }
 .brief-rail-item {
-  display: flex; align-items: stretch; gap: 2px;
-  border-radius: 10px; border: 1px solid transparent;
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  transition: all 120ms ease;
 }
 .brief-rail-item:hover { background: var(--bg-tertiary); }
 .brief-rail-item.active { background: var(--bg-tertiary); border-color: var(--accent-primary, #2563eb); }
 .brief-rail-item-main {
-  flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;
-  padding: 8px 9px; border: none; background: transparent; cursor: pointer; text-align: left;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
 }
 .brief-rail-item-title {
-  font-size: 0.79rem; font-weight: 600; color: var(--text-primary);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .brief-rail-item-meta { font-size: 0.68rem; color: var(--text-muted); }
 .brief-rail-item-delete {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 26px; border: none; background: transparent; cursor: pointer;
-  color: var(--text-muted); opacity: 0; transition: opacity 120ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity 120ms ease;
 }
 .brief-rail-item:hover .brief-rail-item-delete { opacity: 1; }
 .brief-rail-item-delete:hover { color: var(--danger, #c0392b); }
 
-@media (max-width: 900px) {
-  /* Stacked layout: the rail becomes a bounded strip ABOVE the form. Without a
-     max-width it claimed the full row and squeezed the viewport to a few pixels. */
+@media (max-width: 600px) {
+  /* Only narrow mobile phones stack the layout */
   .main-layout.has-brief-rail { flex-direction: column; }
-  .brief-rail, .brief-rail.collapsed {
-    width: 100%; flex: 0 0 auto;
+  .brief-rail {
+    width: 100%;
+    flex: 0 0 auto;
     max-width: 100%;
-    height: auto; max-height: 200px;
-    border-right: none; border-bottom: 1px solid var(--border-subtle);
+    height: auto;
+    max-height: 200px;
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle);
     position: static;
   }
-  .brief-rail.collapsed { flex-direction: row; width: 100%; }
   .brief-rail-list { max-height: 130px; }
   .main-layout.has-brief-rail > .content-viewport {
-    width: 100%; flex: 1 1 auto;
-    padding-left: 16px; padding-right: 16px;
+    width: 100%;
+    flex: 1 1 auto;
+    padding: 16px;
   }
 }
 
-/* ── Brief workspace: form left, AI editor right, no outer gap ─────────── */
+/* ── Content viewport next to brief rail: flush side-by-side without gap ─ */
+.main-layout.has-brief-rail > .content-viewport {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* ── Brief workspace: form left, AI editor right, no gap next to sidebar ── */
 .brief-workspace {
   display: grid;
   width: 100%;
   min-width: 0;
-  grid-template-columns: minmax(0, 1.15fr) minmax(340px, 1fr);
+  grid-template-columns: minmax(0, 1.2fr) minmax(350px, 1fr);
   gap: 0;
   align-items: stretch;
-  border: 1px solid var(--border-subtle);
-  border-radius: 16px;
-  overflow: hidden;
+  border-top: 1px solid var(--border-subtle);
   background: var(--bg-card);
+  flex: 1 1 auto;
 }
 .brief-workspace > form {
   border: none;
   border-radius: 0;
   box-shadow: none;
   border-right: 1px solid var(--border-subtle);
-  padding: 22px;
+  padding: 24px 28px;
   min-width: 0;
 }
-.brief-workspace > div:last-child {
-  padding: 0;
+.brief-workspace .brief-editor-column {
+  padding: 24px 28px;
   min-width: 0;
   display: flex;
   flex-direction: column;
   align-self: stretch;
-  min-height: 520px;
 }
 .brief-workspace .brief-editor-canvas-wrapper {
-  border: none;
-  border-radius: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
   box-shadow: none;
   flex: 1 1 auto;
-  min-height: 0;
+  min-height: 380px;
+  max-height: calc(100vh - 280px);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card);
 }
 .brief-workspace .brief-editor-content {
   flex: 1 1 auto;
-  min-height: 320px;
+  min-height: 260px;
   overflow-y: auto;
+  padding: 16px;
 }
 .brief-editor-actions {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   justify-content: flex-end;
-  padding: 12px 16px;
-  border-top: 1px solid var(--border-subtle);
-  background: var(--bg-tertiary);
-  /* Pinned to the bottom of the editor column so it is always reachable. */
-  position: sticky;
-  bottom: 0;
-  z-index: 2;
+  align-items: center;
+  padding: 14px 0 0;
 }
 @media (max-width: 1180px) {
-  /* With the rail open, two columns get too narrow below this width. */
   .brief-workspace { grid-template-columns: 1fr; }
-  .brief-workspace > div:last-child {
+  .brief-workspace > form { border-right: none; border-bottom: 1px solid var(--border-subtle); }
+  .brief-workspace .brief-editor-column {
     position: static; max-height: none;
   }
   .brief-workspace .brief-editor-content { max-height: 420px; }
-}
-@media (max-width: 1100px) {
-  .brief-workspace { grid-template-columns: 1fr; }
-  .brief-workspace > form { border-right: none; border-bottom: 1px solid var(--border-subtle); }
-}
-
-/* Content keeps a normal gutter next to the rail; the rail is its own column. */
-.main-layout.has-brief-rail > .content-viewport {
-  padding: 24px 28px;
-}
-@media (max-width: 900px) {
-  .main-layout.has-brief-rail > .content-viewport { padding: 16px; }
 }

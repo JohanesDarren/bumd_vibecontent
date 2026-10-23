@@ -415,59 +415,61 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
 
 
   return (
-    <div>
-      <div className="page-header-row">
-        <div>
-          <h2 className="page-title">Brief & Generasi Konten</h2>
-          <p className="page-subtitle">
-            Susun panduan konten yang terstruktur. Sistem hanya menggunakan fakta dari knowledge base resmi <strong>{activeWorkspace.name}</strong>.
-          </p>
-        </div>
-      </div>
-
-      {/* Status of the live settings that generation will use */}
-      <div className="card-panel" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '20px', padding: '14px 18px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <SlidersHorizontal size={18} color="var(--accent-cyan)" />
+    <div style={{ display: 'flex', flexDirection: 'column', width: '100%', minWidth: 0 }}>
+      {/* Top Header & Settings Strip */}
+      <div style={{ padding: '20px 28px 16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <div className="page-header-row" style={{ margin: 0 }}>
           <div>
-            <div style={{ fontSize: '0.8rem', fontWeight: 700 }}>Skala Grounding: {GROUNDING_LEVEL_LABELS[groundingLevel] || 'Kustom'}</div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-              {privacyHigh
-                ? 'Mode privasi tinggi — generasi lokal tanpa layanan eksternal.'
-                : `Konteks RAG: ${ragService ? (ragService.ready ? 'Online' : ragService.configured ? 'Degraded' : 'Offline') : 'memeriksa…'}${ragModel ? ` · ${ragModel}` : ''}`}
-            </div>
+            <h2 className="page-title">Brief &amp; Generasi Konten</h2>
+            <p className="page-subtitle">
+              Susun panduan konten yang terstruktur. Sistem hanya menggunakan fakta dari knowledge base resmi <strong>{activeWorkspace.name}</strong>.
+            </p>
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-          <span className="status-pill draft" style={{ fontSize: '0.66rem' }}>
-            {privacyHigh ? 'Privasi Tinggi' : usedRemoteRag ? 'Grounded live' : 'Siap Digunakan'}
-          </span>
-          {onNavigate && (
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => onNavigate('settings_help')}>
-              <ShieldCheck size={13} /> Atur di Pengaturan
-            </button>
-          )}
+
+        {/* Status of the live settings that generation will use */}
+        <div className="card-panel" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '12px 18px', margin: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <SlidersHorizontal size={18} color="var(--accent-cyan)" />
+            <div>
+              <div style={{ fontSize: '0.8rem', fontWeight: 700 }}>Skala Grounding: {GROUNDING_LEVEL_LABELS[groundingLevel] || 'Kustom'}</div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                {privacyHigh
+                  ? 'Mode privasi tinggi — generasi lokal tanpa layanan eksternal.'
+                  : `Konteks RAG: ${ragService ? (ragService.ready ? 'Online' : ragService.configured ? 'Degraded' : 'Offline') : 'memeriksa…'}${ragModel ? ` · ${ragModel}` : ''}`}
+              </div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <span className="status-pill draft" style={{ fontSize: '0.66rem' }}>
+              {privacyHigh ? 'Privasi Tinggi' : usedRemoteRag ? 'Grounded live' : 'Siap Digunakan'}
+            </span>
+            {onNavigate && (
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => onNavigate('settings_help')}>
+                <ShieldCheck size={13} /> Atur di Pengaturan
+              </button>
+            )}
+          </div>
         </div>
+
+        {privacyNotice && (
+          <div className="card-panel" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 16px', borderColor: 'var(--accent-amber)', margin: 0 }}>
+            <Lock size={16} color="var(--accent-amber)" />
+            <span style={{ fontSize: '0.8rem' }}>{privacyNotice}</span>
+          </div>
+        )}
+
+        {ragNotice && (
+          <div className="card-panel" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 16px', borderColor: 'var(--accent-cyan)', margin: 0 }}>
+            <ShieldCheck size={16} color="var(--accent-cyan)" />
+            <span style={{ fontSize: '0.8rem' }}>{ragNotice}</span>
+          </div>
+        )}
       </div>
 
-      {privacyNotice && (
-        <div className="card-panel" style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px', padding: '12px 16px', borderColor: 'var(--accent-amber)' }}>
-          <Lock size={16} color="var(--accent-amber)" />
-          <span style={{ fontSize: '0.8rem' }}>{privacyNotice}</span>
-        </div>
-      )}
-
-      {ragNotice && (
-        <div className="card-panel" style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px', padding: '12px 16px', borderColor: 'var(--accent-cyan)' }}>
-          <ShieldCheck size={16} color="var(--accent-cyan)" />
-          <span style={{ fontSize: '0.8rem' }}>{ragNotice}</span>
-        </div>
-      )}
-
-
       <div className="brief-workspace">
-        {/* ─── Left: Brief Form (preserved) ─── */}
-        <form onSubmit={handleSubmit} className="card-panel" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        {/* ─── Left: Brief Form ─── */}
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '14px' }}>
             <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Parameter Brief Konten </h3>
           </div>
@@ -632,10 +634,10 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
 
         </form>
 
-        {/* ─── Right: Editor Canvas ─── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0', position: 'sticky', top: '92px' }}>
+        {/* ─── Right: Editor Canvas & Actions ─── */}
+        <div className="brief-editor-column" style={{ display: 'flex', flexDirection: 'column', gap: '14px', position: 'sticky', top: '72px', alignSelf: 'start' }}>
           {generationError && (
-            <div role="alert" className="card-panel" style={{ marginBottom: '12px', padding: '12px 16px', color: 'var(--status-warning-text, #92400e)', borderColor: 'var(--status-warning-border, #f59e0b)' }}>
+            <div role="alert" className="card-panel" style={{ padding: '12px 16px', color: 'var(--status-warning-text, #92400e)', borderColor: 'var(--status-warning-border, #f59e0b)' }}>
               {generationError}
             </div>
           )}
@@ -696,28 +698,28 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
               } : undefined}
               data-placeholder="Hasil draf AI akan muncul di sini. Anda dapat mengeditnya langsung..."
             />
+          </div>
 
-            {/* Actions live directly under the editor, where the result is reviewed. */}
-            <div className="brief-editor-actions">
-              <button
-                type="button"
-                className="btn btn-secondary"
-                disabled={isGenerating || isStreaming || savedBrief?.key === briefKey}
-                onClick={handleSaveOnly}
-              >
-                <Save size={16} />
-                <span>{savedBrief?.key === briefKey ? 'Draf Tersimpan' : 'Simpan Draf'}</span>
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                disabled={isGenerating}
-                onClick={handleContinueToEditor}
-              >
-                {isGenerating ? <ClipLoader size={16} color="currentColor" speedMultiplier={0.8} /> : <ExternalLink size={16} />}
-                <span>{isGenerating ? 'Menyimpan Draf…' : 'Lanjut ke Editor'}</span>
-              </button>
-            </div>
+          {/* Actions live below the Editor Draf AI */}
+          <div className="brief-editor-actions">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={isGenerating || isStreaming || savedBrief?.key === briefKey}
+              onClick={handleSaveOnly}
+            >
+              <Save size={16} />
+              <span>{savedBrief?.key === briefKey ? 'Draf Tersimpan' : 'Simpan Draf'}</span>
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={isGenerating}
+              onClick={handleContinueToEditor}
+            >
+              {isGenerating ? <ClipLoader size={16} color="currentColor" speedMultiplier={0.8} /> : <ExternalLink size={16} />}
+              <span>{isGenerating ? 'Menyimpan Draf…' : 'Lanjut ke Editor'}</span>
+            </button>
           </div>
         </div>
       </div>
