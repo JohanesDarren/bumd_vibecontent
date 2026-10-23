@@ -1,12 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { ContentDraft, Workspace } from '../types';
-import { MessageSquare, Plus, Search, Trash2, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { MessageSquare, Search, Trash2, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 
 interface BriefHistoryRailProps {
   drafts: ContentDraft[];
   activeWorkspace: Workspace;
   selectedDraftId?: string | null;
-  onNewBrief: () => void;
   onOpenDraft: (draftId: string) => void;
   onDeleteDraft?: (draftId: string) => void;
 }
@@ -34,7 +33,6 @@ export const BriefHistoryRail: React.FC<BriefHistoryRailProps> = ({
   drafts,
   activeWorkspace,
   selectedDraftId,
-  onNewBrief,
   onOpenDraft,
   onDeleteDraft
 }) => {
@@ -61,9 +59,6 @@ export const BriefHistoryRail: React.FC<BriefHistoryRailProps> = ({
         >
           <PanelLeftOpen size={18} />
         </button>
-        <button type="button" className="brief-rail-new" onClick={onNewBrief} title="Brief baru" aria-label="Brief baru">
-          <Plus size={18} />
-        </button>
       </aside>
     );
   }
@@ -86,10 +81,6 @@ export const BriefHistoryRail: React.FC<BriefHistoryRailProps> = ({
         </button>
       </div>
 
-      <button type="button" className="brief-rail-new" onClick={onNewBrief}>
-        <Plus size={15} /> Brief Baru
-      </button>
-
       <div className="brief-rail-search">
         <Search size={14} />
         <input
@@ -103,7 +94,7 @@ export const BriefHistoryRail: React.FC<BriefHistoryRailProps> = ({
       <div className="brief-rail-list" role="list">
         {rows.length === 0 ? (
           <p className="brief-rail-empty">
-            Belum ada brief di workspace {activeWorkspace.code}. Mulai dari “Brief Baru”.
+            Belum ada brief di workspace {activeWorkspace.code}.
           </p>
         ) : rows.map(draft => {
           const active = draft.id === selectedDraftId;

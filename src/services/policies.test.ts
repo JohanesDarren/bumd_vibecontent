@@ -124,7 +124,9 @@ test('creator saves generated draft, then opens that exact draft in editor witho
     readFile(new URL('../components/EditorWorkspaceView.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../App.tsx', import.meta.url), 'utf8')
   ]);
-  assert.match(brief, /Buat & Simpan Draf/);
+  assert.match(brief, /Simpan Draf/);
+  // The actions live under the AI editor, not inside the form.
+  assert.match(brief, /brief-editor-actions/);
   assert.match(brief, /Lanjut ke Editor/);
   assert.match(brief, /savedBrief\.id/);
   assert.match(brief, /onOpenEditor\(savedBrief\.id\)/);

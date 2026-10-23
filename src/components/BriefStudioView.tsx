@@ -402,6 +402,11 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
     }
   };
 
+  const handleSaveOnly = () => {
+    if (savedBrief?.key === briefKey) return;
+    void handleSubmit(undefined, false);
+  };
+
   const handleContinueToEditor = () => {
     if (savedBrief?.key === briefKey) onOpenEditor(savedBrief.id);
     else void handleSubmit(undefined, true);
@@ -460,7 +465,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
       )}
 
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.5fr) minmax(400px, 1fr)', gap: '24px', alignItems: 'start' }}>
+      <div className="brief-workspace">
         {/* ─── Left: Brief Form (preserved) ─── */}
         <form onSubmit={handleSubmit} className="card-panel" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '14px' }}>
@@ -625,28 +630,6 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
             />
           </div>
 
-          {/* Submit Action */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '10px' }}>
-            <button
-              type="submit"
-              className="btn btn-secondary"
-              disabled={isGenerating || isStreaming || savedBrief?.key === briefKey}
-              style={{ padding: '12px 24px', fontSize: '0.95rem' }}
-            >
-              <Save size={18} />
-              <span>{savedBrief?.key === briefKey ? 'Draf Tersimpan' : 'Buat & Simpan Draf'}</span>
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={isGenerating}
-              style={{ padding: '12px 24px', fontSize: '0.95rem' }}
-              onClick={handleContinueToEditor}
-            >
-              {isGenerating ? <ClipLoader size={18} color="currentColor" speedMultiplier={0.8} /> : <ExternalLink size={18} />}
-              <span>{isGenerating ? 'Menyimpan Draf…' : 'Lanjut ke Editor'}</span>
-            </button>
-          </div>
         </form>
 
         {/* ─── Right: Editor Canvas ─── */}
@@ -714,7 +697,27 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
               data-placeholder="Hasil draf AI akan muncul di sini. Anda dapat mengeditnya langsung..."
             />
 
-
+            {/* Actions live directly under the editor, where the result is reviewed. */}
+            <div className="brief-editor-actions">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={isGenerating || isStreaming || savedBrief?.key === briefKey}
+                onClick={handleSaveOnly}
+              >
+                <Save size={16} />
+                <span>{savedBrief?.key === briefKey ? 'Draf Tersimpan' : 'Simpan Draf'}</span>
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={isGenerating}
+                onClick={handleContinueToEditor}
+              >
+                {isGenerating ? <ClipLoader size={16} color="currentColor" speedMultiplier={0.8} /> : <ExternalLink size={16} />}
+                <span>{isGenerating ? 'Menyimpan Draf…' : 'Lanjut ke Editor'}</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>

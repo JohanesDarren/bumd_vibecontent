@@ -42,9 +42,12 @@ test('save button is disabled after the current brief was saved, preventing dupl
     const page=await browser.newPage();
     await page.goto(`http://127.0.0.1:${(server.httpServer!.address() as import('node:net').AddressInfo).port}/brief-save-check.html`);
     await page.waitForSelector('form');
-    const save='button[type="submit"]';
+    // The save/continue actions moved under the AI editor, outside the form.
+    await page.waitForSelector('.brief-editor-actions');
+    const save='.brief-editor-actions button:first-child';
     assert.equal(await page.$eval(save,el=>(el as HTMLButtonElement).disabled),false);
-    assert.match(await page.$eval(save,el=>el.textContent||''),/Buat & Simpan Draf/);
+    assert.match(await page.$eval(save,el=>el.textContent||''),/Simpan Draf/);
+    assert.match(await page.$eval('.brief-editor-actions button:last-child',el=>el.textContent||''),/Lanjut ke Editor/);
   } finally {
     await browser?.close();await server.close();await unlink(html);await unlink(entry);
   }

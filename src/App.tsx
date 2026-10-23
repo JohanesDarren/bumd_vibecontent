@@ -519,7 +519,6 @@ export function App() {
             drafts={drafts}
             activeWorkspace={activeWorkspace}
             selectedDraftId={selectedDraftId}
-            onNewBrief={() => { setSelectedDraftId(undefined); setCurrentTab('brief_studio'); }}
             onOpenDraft={(id) => { setSelectedDraftId(id); setCurrentTab('editor'); }}
             onDeleteDraft={async (id) => {
               if (window.confirm('Hapus brief ini beserta drafnya?')) {
