@@ -622,8 +622,8 @@ body {
    Fills all horizontal space freed by the narrow icon-only rail — no max-width
    cap and no auto-centering, so the workspace body spans the full width. */
 .content-viewport {
-  flex: 1;
-  min-width: 0;
+  flex: 1 1 auto;
+  min-width: 320px;
   padding: 28px 32px;
   overflow-y: auto;
   width: 100%;
@@ -2898,6 +2898,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .brief-rail {
   width: 264px;
   flex: 0 0 264px;
+  min-width: 0;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -2979,18 +2981,28 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .brief-rail-item-delete:hover { color: var(--danger, #c0392b); }
 
 @media (max-width: 900px) {
+  /* Stacked layout: the rail becomes a bounded strip ABOVE the form. Without a
+     max-width it claimed the full row and squeezed the viewport to a few pixels. */
+  .main-layout.has-brief-rail { flex-direction: column; }
   .brief-rail, .brief-rail.collapsed {
-    width: 100%; flex: 0 0 auto; max-height: 220px;
+    width: 100%; flex: 0 0 auto;
+    max-width: 100%;
+    height: auto; max-height: 200px;
     border-right: none; border-bottom: 1px solid var(--border-subtle);
     position: static;
   }
   .brief-rail.collapsed { flex-direction: row; width: 100%; }
+  .brief-rail-list { max-height: 130px; }
+  .main-layout.has-brief-rail > .content-viewport {
+    width: 100%; flex: 1 1 auto;
+    padding-left: 16px; padding-right: 16px;
+  }
 }
 
 /* ── Brief workspace: form left, AI editor right, no outer gap ─────────── */
 .brief-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(380px, 1fr);
+  grid-template-columns: minmax(0, 1.15fr) minmax(340px, 1fr);
   gap: 0;
   align-items: stretch;
   border: 1px solid var(--border-subtle);
@@ -3040,17 +3052,25 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   bottom: 0;
   z-index: 2;
 }
+@media (max-width: 1180px) {
+  /* With the rail open, two columns get too narrow below this width. */
+  .brief-workspace { grid-template-columns: 1fr; }
+  .brief-workspace > div:last-child {
+    position: static; max-height: none;
+  }
+  .brief-workspace .brief-editor-content { max-height: 420px; }
+}
 @media (max-width: 1100px) {
   .brief-workspace { grid-template-columns: 1fr; }
   .brief-workspace > form { border-right: none; border-bottom: 1px solid var(--border-subtle); }
 }
 
 /* The brief rail sits flush against the viewport: no gutter between them. */
-.main-layout:has(.brief-rail) > .content-viewport {
+.main-layout.has-brief-rail > .content-viewport {
   padding-left: 0;
   padding-right: 24px;
   padding-top: 20px;
 }
 @media (max-width: 900px) {
-  .main-layout:has(.brief-rail) > .content-viewport { padding-left: 16px; padding-right: 16px; }
+  .main-layout.has-brief-rail > .content-viewport { padding-left: 16px; padding-right: 16px; }
 }

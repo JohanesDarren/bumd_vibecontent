@@ -502,7 +502,7 @@ export function App() {
         onLogout={handleLogout}
       />
 
-      <div className={`main-layout ${authUser.role === 'creator' ? 'creator-layout' : ''}`}>
+      <div className={`main-layout ${authUser.role === 'creator' ? 'creator-layout' : ''} ${safeTab === 'brief_studio' ? 'has-brief-rail' : ''}`}>
         {/* Navigation Sidebar */}
         {authUser.role !== 'creator' && <Sidebar
           currentTab={currentTab}
