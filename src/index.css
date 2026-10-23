@@ -3072,12 +3072,10 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   .brief-workspace > form { border-right: none; border-bottom: 1px solid var(--border-subtle); }
 }
 
-/* The brief rail sits flush against the viewport: no gutter between them. */
+/* Content keeps a normal gutter next to the rail; the rail is its own column. */
 .main-layout.has-brief-rail > .content-viewport {
-  padding-left: 0;
-  padding-right: 24px;
-  padding-top: 20px;
+  padding: 24px 28px;
 }
 @media (max-width: 900px) {
-  .main-layout.has-brief-rail > .content-viewport { padding-left: 16px; padding-right: 16px; }
+  .main-layout.has-brief-rail > .content-viewport { padding: 16px; }
 }
