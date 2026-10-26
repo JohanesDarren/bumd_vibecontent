@@ -81,7 +81,6 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
   const clearOutput = () => { version.current++; setGeneratedImageUrl(null); setImageLoaded(false); setMetadata(''); };
   const [imageLoaded, setImageLoaded] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [visualTab, setVisualTab] = useState<'core' | 'classic'>('core');
   const [generationError, setGenerationError] = useState('');
   const [mediaError, setMediaError] = useState('');
   const availableDrafts = drafts.filter(item => item.status !== 'diarsipkan');
@@ -187,29 +186,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
         <textarea className="form-textarea" rows={4} value={selectedVersion?.content ?? ''} readOnly aria-label="Isi versi konten yang dipilih" />
       </div>
 
-      <div className="visual-tabs" role="tablist" aria-label="Mode studio visual">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={visualTab === 'core'}
-          className={`visual-tab ${visualTab === 'core' ? 'is-active' : ''}`}
-          onClick={() => setVisualTab('core')}
-        >
-          Brief → Referensi → Gambar
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={visualTab === 'classic'}
-          className={`visual-tab ${visualTab === 'classic' ? 'is-active' : ''}`}
-          onClick={() => setVisualTab('classic')}
-        >
-          Studio klasik
-        </button>
-      </div>
-
-      {visualTab === 'core' ? (
-        <CoreVisualStudio
+      <CoreVisualStudio
           workspaceId={activeWorkspace.id}
           draftTitle={draft.title}
           headline={visual.headline}
@@ -219,137 +196,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
             setMetadata('Visual inti · disimpan ke draf');
           }}
         />
-      ) : (
-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.8fr', gap: '32px', alignItems: 'start' }}>
-        {/* Left Column: Visual Customizer Form */}
-        <div className="card-panel" style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '12px' }}>
-            <Layout size={18} color="var(--primary)" />
-            <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>Pengaturan Tata Letak & Elemen</h3>
-          </div>
-
-          {/* Aspect Ratio Switcher */}
-          <div className="form-group">
-            <label className="form-label">Aspect Ratio</label>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-              <button 
-                type="button"
-                className={`btn btn-sm ${visual.aspectRatio === '1:1' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => updateVisual({ aspectRatio: '1:1' })}
-              >
-                <Square size={14} />
-                <span>1:1 Feed</span>
-              </button>
-              <button 
-                type="button"
-                className={`btn btn-sm ${visual.aspectRatio === '9:16' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => updateVisual({ aspectRatio: '9:16' })}
-              >
-                <Smartphone size={14} />
-                <span>9:16 Story</span>
-              </button>
-              <button 
-                type="button"
-                className={`btn btn-sm ${visual.aspectRatio === '16:9' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => updateVisual({ aspectRatio: '16:9' })}
-              >
-                <Monitor size={14} />
-                <span>16:9 Banner</span>
-              </button>
-            </div>
-          </div>
-
-
-
-          <div className="form-group">
-            <label className="form-label" htmlFor="visual-style-reference">Referensi gaya dari KMS</label>
-            <select id="visual-style-reference" className="form-select" value={referenceId} onChange={event=>{setReferenceId(event.target.value);clearOutput();setReferenceError('');}}>
-              <option value="">Otomatis cocokkan judul dengan arahan kreatif</option>
-              {references.map(ref=><option key={ref.id} value={ref.id}>{ref.title} ({ref.mediaType==='video'?'frame video':'foto'})</option>)}
-            </select>
-            {referenceError&&<p role="status" style={{color:'var(--text-muted)'}}>{referenceError}</p>}
-          </div>
-          {/* Free-form creative direction */}
-          <div className="form-group">
-            <label className="form-label">Arahan Kreatif</label>
-            <textarea
-              className="form-textarea"
-              rows={5}
-              value={visual.visualPrompt}
-              onChange={e => updateVisual({ visualPrompt: e.target.value })}
-              placeholder="Jelaskan visual yang Anda inginkan: suasana, komposisi, subjek, pencahayaan, arah seni, sudut kamera, dan warna…"
-            />
-            <div style={{ marginTop: '6px', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-              Llama 3.2 3B menyusun arahan visual; FLUX.1 schnell membuat gambar. Maksimal arahan 4000 karakter. Teks pada gambar tidak dijamin akurat; periksa sebelum dipublikasikan.
-            </div>
-          </div>
-
-          {/* Brand Compliance Checklist */}
-          <div style={{ padding: '14px', borderRadius: '12px', background: 'var(--bg-tertiary)', border: '1px solid var(--border-subtle)', fontSize: '0.78rem' }}>
-            <div style={{ fontWeight: 700, color: 'var(--accent-emerald)', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-              <ShieldCheck size={16} />
-              <span>Brand Asset Compliance:</span>
-            </div>
-            <ul style={{ paddingLeft: '18px', display: 'flex', flexDirection: 'column', gap: '4px', color: 'var(--text-secondary)' }}>
-              <li>Gambar raster yang dihasilkan AI; tidak ada penempatan logo resmi otomatis.</li>
-              <li>Sistem menerima palet warna yang diminta ({activeWorkspace.primaryColor}).</li>
-              <li>Periksa kesesuaian merek dengan panduan visual  sebelum digunakan.</li>
-            </ul>
-          </div>
-        </div>
-
-        {/* Right Column: Live Visual Canvas Preview */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
-          <div 
-            style={{
-              ...getPreviewDimensions(),
-              borderRadius: '20px',
-              padding: '24px',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'space-between',
-              position: 'relative',
-              overflow: 'hidden',
-              boxShadow: '0 20px 40px -15px rgba(0,0,0,0.7)',
-              border: '2px solid rgba(255,255,255,0.15)',
-              backgroundColor: visual.primaryColor || '#0f172a',
-              transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
-            }}
-          >
-            {generatedImageUrl ? <img src={generatedImageUrl} alt={visual.visualPrompt || 'Cloudflare FLUX generated image'} onLoad={() => setImageLoaded(true)} onError={() => {setMediaError('Gagal memuat pratinjau gambar.');setImageLoaded(false);}} style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'contain'}} /> : <p style={{color:'#fff', textAlign: 'center'}}>Belum ada artwork. Masukkan arahan kreatif, lalu buat gambar AI.</p>}
-
-          </div>
-
-          <div style={{ display: 'flex', gap: '10px', width: '100%', justifyContent: 'center', flexWrap: 'wrap' }}>
-            <button className="btn btn-secondary" onClick={handleCopyPrompt}>
-              <Copy size={16} />
-              <span>{copiedPrompt ? 'Prompt Tersalin!' : 'Salin Prompt AI'}</span>
-            </button>
-            <button className="btn btn-primary" onClick={handleGenerate} disabled={isGenerating}>
-              <span>{isGenerating ? 'Membuat gambar AI…' : generatedImageUrl ? 'Desain Ulang' : 'Buat Gambar AI'}</span>
-            </button>
-          </div>
-          {generationError && <div style={{ color: '#fb7185', fontSize: '0.8rem' }}>{generationError}</div>}
-          {mediaError && <div style={{ color: '#fb7185', fontSize: '0.8rem' }}>{mediaError}</div>}
-          {generatedImageUrl && !imageLoaded && <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Loading preview…</div>}
-          {generatedImageUrl && imageLoaded && <a className="btn btn-secondary" href={generatedImageUrl} download="flux-image.jpg"><Download size={16}/> Download Image JPEG</a>}
-          {generatedImageUrl && imageLoaded && draft && onSaveVisual && (
-            <button className="btn btn-primary" disabled={savingVisual || draft.visualAsset?.generatedImageUrl === generatedImageUrl} onClick={async () => {
-              setSavingVisual(true);
-              try { await onSaveVisual(draft.id, { ...visual, generatedImageUrl }); }
-              catch (error) { setMediaError(`Gagal menyimpan gambar ke draf: ${error instanceof Error ? error.message : error}`); }
-              finally { setSavingVisual(false); }
-            }}>
-              {draft.visualAsset?.generatedImageUrl === generatedImageUrl ? 'Tersimpan di Draf' : savingVisual ? 'Menyimpan…' : 'Simpan ke Draf (dipakai di Penjadwalan)'}
-            </button>
-          )}
-          <p role="status">Video tidak tersedia: FLUX.1 schnell hanya dapat menghasilkan gambar statis.</p>
-          {metadata && <p style={{fontSize:12}}>{metadata}</p>}
-          <div style={{fontSize:'0.8rem',color:'var(--text-muted)'}}>Cloudflare Workers AI · FLUX.1 schnell. Kuota gratis berlaku; tidak ada sistem retri otomatis. Proporsi gambar mengatur komposisi karya; JPEG yang diunduh mempertahankan dimensi asli dari model. Hasil hanya tersimpan dalam sesi ini; segera unduh untuk menyimpannya.</div>
-
-        </div>
-      </div>
-      )}
+      {metadata && <p style={{ fontSize: 12 }}>{metadata}</p>}
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Image as ImageIcon, Loader2, Sparkles, Upload, X, Download, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 /**
@@ -15,7 +15,16 @@ import { Image as ImageIcon, Loader2, Sparkles, Upload, X, Download, AlertCircle
 type Mode = 'product' | 'human';
 type Slot = 'model' | 'font' | 'color' | 'pose' | 'lighting';
 
-type Reference = { slot: Slot; filename: string; dataUrl: string };
+type KmsPicture = { id: string; title: string; mediaType: string; visionDescription?: string; filename: string };
+
+/**
+ * A reference is either a file the user just picked or a picture already stored
+ * in the workspace knowledge base. `kmsId` is sent instead of bytes, so the
+ * server reads the stored frame and the browser never has to download it first.
+ */
+type Reference =
+  | { slot: Slot; source: 'upload'; filename: string; dataUrl: string }
+  | { slot: Slot; source: 'kms'; kmsId: string; filename: string; previewUrl: string };
 
 const SLOT_META: Record<Slot, { label: string; hint: string }> = {
   model: { label: 'Model reference', hint: 'Foto orang/model acuan' },
@@ -66,10 +75,52 @@ export function CoreVisualStudio({
   const [error, setError] = useState('');
   const [result, setResult] = useState<CoreVisualResult | null>(null);
   const [savingImage, setSavingImage] = useState(false);
+  const [kmsPictures, setKmsPictures] = useState<KmsPicture[]>([]);
+  const [kmsState, setKmsState] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [openPicker, setOpenPicker] = useState<Slot | null>(null);
   const inputs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const requiredSlots = mode === 'human' ? HUMAN_SLOTS : PRODUCT_SLOTS;
   const missingSlots = requiredSlots.filter(slot => !references.some(r => r.slot === slot));
+
+  // Knowledge-base pictures are the default source: the workspace already owns
+  // approved imagery, so uploading again is the exception, not the rule.
+  const loadKmsPictures = async () => {
+    if (kmsState === 'loading') return;
+    setKmsState('loading');
+    try {
+      const response = await fetch(`/api/visual/references?workspaceId=${encodeURIComponent(workspaceId)}`, {
+        credentials: 'include'
+      });
+      if (!response.ok) throw new Error('failed');
+      const rows = (await response.json()) as KmsPicture[];
+      setKmsPictures(Array.isArray(rows) ? rows : []);
+      setKmsState('idle');
+    } catch {
+      setKmsPictures([]);
+      setKmsState('error');
+    }
+  };
+
+  useEffect(() => {
+    void loadKmsPictures();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceId]);
+
+  const chooseKms = (slot: Slot, picture: KmsPicture) => {
+    setError('');
+    setReferences(prev => [
+      ...prev.filter(r => r.slot !== slot),
+      {
+        slot,
+        source: 'kms',
+        kmsId: picture.id,
+        filename: picture.title || picture.filename,
+        previewUrl: `/api/visual/references/${encodeURIComponent(picture.id)}/thumbnail?workspaceId=${encodeURIComponent(workspaceId)}`
+      }
+    ]);
+    setOpenPicker(null);
+  };
 
   const pickFile = (slot: Slot, file: File | null) => {
     setError('');
@@ -90,7 +141,8 @@ export function CoreVisualStudio({
         setError(`${SLOT_META[slot].label}: file bukan gambar PNG/JPEG yang valid.`);
         return;
       }
-      setReferences(prev => [...prev.filter(r => r.slot !== slot), { slot, filename: file.name, dataUrl }]);
+      setReferences(prev => [...prev.filter(r => r.slot !== slot), { slot, source: 'upload', filename: file.name, dataUrl }]);
+      setOpenPicker(null);
     };
     reader.onerror = () => setError(`${SLOT_META[slot].label}: gagal membaca file.`);
     reader.readAsDataURL(file);
@@ -123,7 +175,11 @@ export function CoreVisualStudio({
           headline,
           ctaText,
           sizeChoice,
-          references: references.map(({ slot, filename, dataUrl }) => ({ slot, filename, dataUrl }))
+          references: references.map(ref =>
+            ref.source === 'kms'
+              ? { slot: ref.slot, kmsId: ref.kmsId, filename: ref.filename }
+              : { slot: ref.slot, filename: ref.filename, dataUrl: ref.dataUrl }
+          )
         })
       });
       const body = await response.json().catch(() => ({}));
@@ -267,8 +323,13 @@ export function CoreVisualStudio({
 
                 {current ? (
                   <div className="core-ref-file">
-                    <CheckCircle2 size={14} />
+                    {current.source === 'kms' ? (
+                      <img src={current.previewUrl} alt="" className="core-ref-thumb" />
+                    ) : (
+                      <img src={current.dataUrl} alt="" className="core-ref-thumb" />
+                    )}
                     <span title={current.filename}>{current.filename}</span>
+                    <em className="core-ref-origin">{current.source === 'kms' ? 'Knowledge base' : 'Unggahan'}</em>
                   </div>
                 ) : (
                   <>
@@ -279,9 +340,55 @@ export function CoreVisualStudio({
                       hidden
                       onChange={e => pickFile(slot, e.target.files?.[0] ?? null)}
                     />
-                    <button type="button" className="core-ref-upload" onClick={() => inputs.current[slot]?.click()}>
-                      <Upload size={14} /> Pilih file PNG / JPG
-                    </button>
+                    <div className="core-ref-actions">
+                      <button
+                        type="button"
+                        className="core-ref-upload"
+                        onClick={() => {
+                          if (!kmsPictures.length) void loadKmsPictures();
+                          setOpenPicker(openPicker === slot ? null : slot);
+                        }}
+                      >
+                        <ImageIcon size={14} /> Pilih dari knowledge base
+                      </button>
+                      <button type="button" className="core-ref-upload is-quiet" onClick={() => inputs.current[slot]?.click()}>
+                        <Upload size={14} /> Unggah PNG / JPG
+                      </button>
+                    </div>
+
+                    {openPicker === slot ? (
+                      <div className="core-kms-picker">
+                        {kmsState === 'loading' ? (
+                          <p className="core-kms-note"><Loader2 size={13} className="core-spin" /> Memuat gambar…</p>
+                        ) : kmsState === 'error' ? (
+                          <p className="core-kms-note">Gagal memuat knowledge base. Coba lagi.</p>
+                        ) : kmsPictures.length === 0 ? (
+                          <p className="core-kms-note">
+                            Belum ada gambar .png / .jpg / .jpeg di knowledge base workspace ini.
+                          </p>
+                        ) : (
+                          <ul className="core-kms-grid">
+                            {kmsPictures.map(picture => (
+                              <li key={picture.id}>
+                                <button
+                                  type="button"
+                                  className="core-kms-item"
+                                  title={picture.title}
+                                  onClick={() => chooseKms(slot, picture)}
+                                >
+                                  <img
+                                    src={`/api/visual/references/${encodeURIComponent(picture.id)}/thumbnail?workspaceId=${encodeURIComponent(workspaceId)}`}
+                                    alt={picture.title}
+                                    loading="lazy"
+                                  />
+                                  <span>{picture.title}</span>
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    ) : null}
                   </>
                 )}
               </div>

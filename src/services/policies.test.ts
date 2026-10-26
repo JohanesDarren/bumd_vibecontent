@@ -147,7 +147,11 @@ test('generation workflow opens any saved active draft in visual studio', async 
   assert.doesNotMatch(brief, /Konten Hasil Generasi/);
   assert.match(visual, /availableDrafts/);
   assert.match(visual, /status !== 'diarsipkan'/);
-  assert.match(visual, /Creative Direction|Arahan Kreatif/);
+  // The visual page is now the core studio only: no classic panel, no creative
+  // direction textarea. References come from the knowledge base or an upload.
+  assert.match(visual, /CoreVisualStudio/);
+  assert.doesNotMatch(visual, /Arahan Kreatif/);
+  assert.doesNotMatch(visual, /Studio klasik/);
   assert.doesNotMatch(visual, /Visual Style Theme/);
 });
 

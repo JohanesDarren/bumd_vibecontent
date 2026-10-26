@@ -8,7 +8,7 @@ import { knowledgeBaseIdFor, RagNotConfiguredError, ragDeleteDocument, ragIndexD
 import express from 'express';
 import cors from 'cors';
 import { resolve } from 'node:path';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 import { 
@@ -64,14 +64,28 @@ function isBuiltShell(dir: string): boolean {
   }
 }
 
+// The zero-downtime deployer activates a release directory holding the built
+// shell (index.html + assets/). A stale ./dist next to the sources can also look
+// like a valid build, so the release must win: it is the one the deployer just
+// wrote. STATIC_DIR remains the explicit escape hatch for other layouts.
+const releaseDir = resolve(moduleDir, '..');
 const distCandidates = [
   process.env['STATIC_DIR'],
+  releaseDir,
   resolve(moduleDir, '../dist'),
-  resolve(moduleDir, '..'),
   resolve(process.cwd(), 'dist'),
   process.cwd()
 ].filter((value): value is string => typeof value === 'string' && value.length > 0);
-const distDir = distCandidates.find(isBuiltShell) ?? resolve(moduleDir, '../dist');
+
+// Prefer a candidate whose shell is the freshest: the release is written last,
+// so when several directories qualify the newest index.html wins.
+function shellMtime(dir: string): number {
+  try { return statSync(resolve(dir, 'index.html')).mtimeMs; } catch { return 0; }
+}
+const usable = distCandidates.filter(isBuiltShell);
+const distDir = usable.length
+  ? usable.sort((a, b) => shellMtime(b) - shellMtime(a))[0]!
+  : resolve(moduleDir, '../dist');
 // Hashed assets may be cached forever, but the shell must always be revalidated so
 // a new deploy is picked up. A stale shell was serving an old bundle to the user
 // even though the release had already switched.
@@ -135,7 +149,9 @@ app.post('/api/visual/core', authenticate, contentOnly, requireWorkspace(req=>re
       return res.status(400).json({ error: 'Invalid workspace' });
     }
 
-    // ── References: only .png/.jpg/.jpeg, and each required slot must be present.
+    // ── References: either an uploaded .png/.jpg/.jpeg or a picture already in
+    // the knowledge base. Both paths converge on validated bytes, so the vision
+    // layer never cares where the reference came from.
     const rawRefs = Array.isArray(body.references) ? body.references : [];
     const references: ReferenceUpload[] = [];
     const seen = new Set<string>();
@@ -146,6 +162,32 @@ app.post('/api/visual/core', authenticate, contentOnly, requireWorkspace(req=>re
         return res.status(400).json({ error: `Unknown reference slot: ${slot}` });
       }
       if (seen.has(slot)) return res.status(400).json({ error: `Duplicate reference for ${slot}` });
+
+      // Source A — a picture already stored in the workspace knowledge base.
+      if (typeof item.kmsId === 'string' && item.kmsId) {
+        if (!/^[A-Za-z0-9_-]{1,190}$/.test(item.kmsId)) {
+          return res.status(400).json({ error: `Invalid knowledge base reference for ${slot}` });
+        }
+        const row = await pool.query(
+          `SELECT k.style_frame FROM kms_documents k
+             JOIN kms_document_workspaces a ON a.document_id = k.id
+            WHERE a.workspace_id = $1 AND k.id = $2
+              AND k.media_type IN ('photo','video') AND k.style_frame IS NOT NULL`,
+          [workspaceId, item.kmsId]
+        );
+        const frame = row.rows[0]?.style_frame as Buffer | undefined;
+        if (!frame || !frame.length) {
+          return res.status(404).json({ error: `Referensi knowledge base untuk ${slot} tidak ditemukan` });
+        }
+        if (frame.length > 8 * 1024 * 1024) {
+          return res.status(413).json({ error: `Reference ${slot} exceeds 8 MB` });
+        }
+        seen.add(slot);
+        references.push({ slot: slot as ReferenceUpload['slot'], mime: 'jpeg', bytes: Buffer.from(frame) });
+        continue;
+      }
+
+      // Source B — a file the user just picked.
       const filename = typeof item.filename === 'string' ? item.filename : '';
       if (!hasAcceptedExtension(filename)) {
         return res.status(415).json({ error: 'Reference must be a .png, .jpg or .jpeg file' });
@@ -215,8 +257,36 @@ app.post('/api/visual/core', authenticate, contentOnly, requireWorkspace(req=>re
 });
 
 app.get('/api/visual/references',authenticate,contentOnly,requireWorkspace(req=>req.query.workspaceId),async(req,res,next)=>{try{
-  const rows=await pool.query(`SELECT k.id,k.title,k.media_type AS "mediaType",k.vision_description AS "visionDescription" FROM kms_documents k JOIN kms_document_workspaces a ON a.document_id=k.id WHERE a.workspace_id=$1 AND k.media_type IN ('photo','video') ORDER BY k.created_at DESC LIMIT 100`,[req.query.workspaceId]);
+  // Only pictures can be a visual reference, and only ones that carry a frame we
+  // can actually show. Returning an entry without a thumbnail would give the user
+  // a blank card they cannot judge before choosing it.
+  const rows=await pool.query(
+    `SELECT k.id,k.title,k.media_type AS "mediaType",k.vision_description AS "visionDescription",
+            k.filename,k.created_at AS "createdAt"
+       FROM kms_documents k
+       JOIN kms_document_workspaces a ON a.document_id=k.id
+      WHERE a.workspace_id=$1 AND k.media_type IN ('photo','video')
+        AND k.style_frame IS NOT NULL
+      ORDER BY k.created_at DESC LIMIT 100`,
+    [req.query.workspaceId]
+  );
   res.json(rows.rows);
+}catch(error){next(error);}});
+
+// Thumbnail for a knowledge-base picture, used by the reference picker.
+// Kept separate from the list so the grid stays light on large corpora.
+app.get('/api/visual/references/:id/thumbnail',authenticate,contentOnly,requireWorkspace(req=>req.query.workspaceId),async(req,res,next)=>{try{
+  const rows=await pool.query(
+    `SELECT k.style_frame FROM kms_documents k
+       JOIN kms_document_workspaces a ON a.document_id=k.id
+      WHERE a.workspace_id=$1 AND k.id=$2 AND k.style_frame IS NOT NULL`,
+    [req.query.workspaceId,String(req.params.id)]
+  );
+  const frame=rows.rows[0]?.style_frame as Buffer|undefined;
+  if(!frame?.length)return res.status(404).json({error:'Referensi tidak ditemukan'});
+  res.setHeader('Content-Type','image/jpeg');
+  res.setHeader('Cache-Control','private, max-age=300');
+  res.end(frame);
 }catch(error){next(error);}});
 
 // ── RAG service integration (best-effort: the app must keep working when the service is down) ──

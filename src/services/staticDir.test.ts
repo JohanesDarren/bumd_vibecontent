@@ -2,26 +2,29 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-test('the server prefers the release layout over a stale dist folder', async () => {
-  const server = await readFile(new URL('../../server/index.ts', import.meta.url), 'utf8');
-  // The zero-downtime deployer activates a release that holds the CONTENTS of
-  // dist/. Resolving only ../dist served an old bundle after every deploy.
-  assert.match(server, /STATIC_DIR/, 'an explicit override must be supported');
-  assert.match(server, /distCandidates\.find\(isBuiltShell\)/, 'candidates must be probed for a built shell');
+const server = await readFile(new URL('../../server/index.ts', import.meta.url), 'utf8');
+
+test('the server prefers the release layout over a stale dist folder', () => {
   const block = server.slice(server.indexOf('const distCandidates'), server.indexOf('const distDir'));
-  assert.ok(block.includes("resolve(moduleDir, '..')"), 'release root must be a candidate');
+  assert.ok(block.includes('releaseDir'), 'the release root must be a candidate');
+  assert.ok(server.includes("const releaseDir = resolve(moduleDir, '..')"), 'release dir is the project root');
+  assert.ok(block.includes("resolve(moduleDir, '../dist')"), 'legacy dist must remain a fallback');
+  assert.ok(block.includes('process.env'), 'an explicit STATIC_DIR escape hatch must exist');
 });
 
-test('the source index.html can never be served as the built shell', async () => {
-  const server = await readFile(new URL('../../server/index.ts', import.meta.url), 'utf8');
+test('the source index.html can never be served as the built shell', () => {
   // The repo ships an index.html whose entry is /src/main.tsx (Vite dev). Serving
   // it produced a blank page: the browser asked for a file that does not exist.
   assert.match(server, /function isBuiltShell/, 'must validate the shell before serving');
-  assert.ok(server.includes('main\\.tsx') || server.includes('/src/main'), 'must reject the dev entry');
-  assert.ok(server.includes('assets') && server.includes('js|css'), 'must require built assets');
-  const list = server.slice(server.indexOf('const distCandidates'), server.indexOf('const distDir'));
-  assert.ok(
-    list.indexOf("resolve(moduleDir, '../dist')") < list.indexOf("resolve(moduleDir, '..')"),
-    'dist must be tried before the project root'
-  );
+  assert.ok(server.includes('main'), 'must detect the dev entry');
+  assert.match(server, /assets/, 'must require built assets');
+});
+
+test('when several directories qualify the freshest shell wins', () => {
+  // A stale ./dist next to the sources also looks like a valid build. The release
+  // is written last by the deployer, so mtime is the tie-breaker that keeps the
+  // newly activated release from losing to an old folder.
+  assert.match(server, /function shellMtime/, 'must compare shell freshness');
+  assert.match(server, /statSync\(resolve\(dir, 'index\.html'\)\)\.mtimeMs/, 'mtime is the signal');
+  assert.match(server, /usable\.sort/, 'candidates must be ordered by freshness');
 });

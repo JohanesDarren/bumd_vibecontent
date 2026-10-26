@@ -83,3 +83,27 @@ test('the endpoint never returns the prompt', async () => {
   assert.match(body, /REQUIRED_SLOTS\[mode\]/, 'mode rules must be enforced server-side');
   assert.match(body, /hasAcceptedExtension/, 'extensions must be validated');
 });
+
+test('a reference may come from the knowledge base, not only an upload', async () => {
+  const server = await readFile(new URL('../../server/index.ts', import.meta.url), 'utf8');
+  // Stored pictures must be accepted as a reference source: the workspace already
+  // owns approved imagery, so re-uploading the same file is pointless friction.
+  assert.ok(server.includes('kmsId'), 'the core endpoint must accept a knowledge-base id');
+  assert.match(server, /k\.style_frame/, 'the stored frame is the reference bytes');
+  assert.match(server, /a\.workspace_id = \$1 AND k\.id = \$2/, 'the picture must belong to the workspace');
+});
+
+test('the knowledge-base picker only lists real pictures', async () => {
+  const server = await readFile(new URL('../../server/index.ts', import.meta.url), 'utf8');
+  const route = server.slice(server.indexOf("app.get('/api/visual/references'"));
+  const head = route.slice(0, route.indexOf('}catch(error)'));
+  assert.ok(head.includes("k.media_type IN ('photo','video')"), 'documents are not references');
+  assert.ok(head.includes('k.style_frame IS NOT NULL'), 'an entry without a thumbnail is unusable');
+});
+
+test('the classic studio is gone, only the core studio remains', async () => {
+  const view = await readFile(new URL('../components/VisualStudioView.tsx', import.meta.url), 'utf8');
+  assert.ok(!view.includes('Studio klasik'), 'the legacy studio tab must be removed');
+  assert.ok(!view.includes('visualTab'), 'no dead tab state may remain');
+  assert.ok(view.includes('CoreVisualStudio'), 'the core studio must be rendered directly');
+});
