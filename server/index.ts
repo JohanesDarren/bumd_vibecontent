@@ -227,14 +227,24 @@ app.post('/api/visual/core', authenticate, contentOnly, requireWorkspace(req=>re
       body.disclaimer ? `Disclaimer text (exact): ${JSON.stringify(String(body.disclaimer).slice(0, 200))}` : ''
     ].filter(Boolean).join('\n');
 
+    // The copy fields are *optional decoration* on the artwork, not the request
+    // itself. A long draft title must never fail the whole generation: clamp each
+    // field to the model limit instead of rejecting the call.
+    const clampCopy = (value: unknown, limit: number): string | undefined => {
+      if (typeof value !== 'string') return undefined;
+      const text = value.trim();
+      if (!text) return undefined;
+      return text.length > limit ? text.slice(0, limit) : text;
+    };
+
     const result = await generateVisual(
       {
         workspaceId,
         prompt: plan.prompt,
         aspectRatio,
-        headline: body.headline,
-        ctaText: body.ctaText,
-        disclaimer: body.disclaimer,
+        headline: clampCopy(body.headline, 200),
+        ctaText: clampCopy(body.ctaText, 120),
+        disclaimer: clampCopy(body.disclaimer, 200),
         primaryColor: body.primaryColor,
         accentColor: body.accentColor
       },
@@ -257,6 +267,14 @@ app.post('/api/visual/core', authenticate, contentOnly, requireWorkspace(req=>re
     });
   } catch (error) {
     const e = error as VisualError;
+    // Log the real cause: a bare 500 with no trace made this failure
+    // undiagnosable from the browser console alone.
+    console.error('[visual/core] generation failed', {
+      status: e.status,
+      code: e.code,
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack?.split('\n').slice(0, 4).join(' | ') : undefined
+    });
     res.status(e.status || 500).json({ error: e.status ? e.message : 'Visual generation failed', code: e.code || 'VISUAL_ERROR' });
   }
 });

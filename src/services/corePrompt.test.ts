@@ -107,3 +107,20 @@ test('the classic studio is gone, only the core studio remains', async () => {
   assert.ok(!view.includes('visualTab'), 'no dead tab state may remain');
   assert.ok(view.includes('CoreVisualStudio'), 'the core studio must be rendered directly');
 });
+
+test('a long draft title never fails the generation', async () => {
+  const server = await readFile(new URL('../../server/index.ts', import.meta.url), 'utf8');
+  // The draft title is decoration on the artwork, not the request. A 760-char
+  // title used to be rejected by validateVisualInput, producing an opaque 500.
+  assert.match(server, /const clampCopy/, 'copy fields must be clamped, not rejected');
+  assert.ok(server.includes('clampCopy(body.headline'), 'the title goes through the clamp');
+  assert.ok(!/headline:\s*body\.headline/.test(server), 'the raw title must never be forwarded');
+});
+
+test('generation failures are logged with their real cause', async () => {
+  const server = await readFile(new URL('../../server/index.ts', import.meta.url), 'utf8');
+  const route = server.slice(server.indexOf("app.post('/api/visual/core'"));
+  const tail = route.slice(0, route.indexOf('}catch(error){next(error);}});'));
+  assert.ok(tail.includes('[visual/core] generation failed'), 'the cause must reach the logs');
+  assert.ok(tail.includes('code: e.code'), 'the error code must be logged');
+});
