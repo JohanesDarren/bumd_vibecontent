@@ -8,7 +8,7 @@ import { knowledgeBaseIdFor, RagNotConfiguredError, ragDeleteDocument, ragIndexD
 import express from 'express';
 import cors from 'cors';
 import { resolve } from 'node:path';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 import { 
@@ -44,15 +44,34 @@ app.use(express.json({ limit: '8mb' }));
 // though the release had switched. Prefer an explicitly configured directory,
 // then the release layout, then the classic ../dist.
 const moduleDir = dirname(fileURLToPath(import.meta.url));
+
+/**
+ * A directory only counts as the built shell if its index.html is a PRODUCTION
+ * build. The repository also contains a source index.html whose entry is
+ * `/src/main.tsx`; serving that to a browser yields a blank page because Vite's
+ * dev entry does not exist on the server. Checking for built assets prevents the
+ * source file from ever winning the race.
+ */
+function isBuiltShell(dir: string): boolean {
+  const file = resolve(dir, 'index.html');
+  if (!existsSync(file)) return false;
+  try {
+    const html = readFileSync(file, 'utf8');
+    if (/\/src\/main\.tsx/.test(html)) return false;
+    return /\/assets\/[^"']+\.(js|css)/.test(html);
+  } catch {
+    return false;
+  }
+}
+
 const distCandidates = [
   process.env['STATIC_DIR'],
-  resolve(moduleDir, '..'),
   resolve(moduleDir, '../dist'),
+  resolve(moduleDir, '..'),
   resolve(process.cwd(), 'dist'),
   process.cwd()
 ].filter((value): value is string => typeof value === 'string' && value.length > 0);
-const distDir = distCandidates.find(candidate => existsSync(resolve(candidate, 'index.html')))
-  ?? resolve(moduleDir, '../dist');
+const distDir = distCandidates.find(isBuiltShell) ?? resolve(moduleDir, '../dist');
 // Hashed assets may be cached forever, but the shell must always be revalidated so
 // a new deploy is picked up. A stale shell was serving an old bundle to the user
 // even though the release had already switched.
