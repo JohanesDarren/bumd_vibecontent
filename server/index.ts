@@ -1,5 +1,7 @@
 import './env.ts';
 import { describeStyle, generateVisual, VisualError } from './visual.ts';
+import { buildCorePlan, type ReferenceUpload } from './visualCore.ts';
+import { REQUIRED_SLOTS, hasAcceptedExtension, type VisualMode } from './corePrompt.ts';
 import { chooseVisualReference } from './visualReferenceSelection.ts';
 import { env, ragConfigured } from './env.ts';
 import { knowledgeBaseIdFor, RagNotConfiguredError, ragDeleteDocument, ragIndexDocument, ragListDocuments, ragCompose, ragPlan, ragQuery, ragRefine, ragSearch, ragSuggestSchedule, ragStatus } from './rag.ts';
@@ -76,6 +78,106 @@ app.post('/api/visual/generate', authenticate, contentOnly, requireWorkspace(req
     const e=error as VisualError;res.status(e.status||500).json({error:e.status?e.message:'Visual generation failed',code:e.code||'VISUAL_ERROR'});
   }
 });
+/**
+ * Core-prompt generation (Developer Prompt Strategy).
+ *
+ * Flow: brief choices + references → vision analysis (layer 1) → fill the hidden
+ * core prompt → image model (layer 2). The core prompt is NEVER returned to the
+ * client; only the resulting image and non-secret metadata are.
+ *
+ * Body: { workspaceId, mode, remark?, aspectRatio, references: [{slot, filename, dataUrl}] }
+ */
+app.post('/api/visual/core', authenticate, contentOnly, requireWorkspace(req=>req.body?.workspaceId), async (req, res) => {
+  try {
+    const body = req.body || {};
+    const workspaceId = body.workspaceId;
+    const mode: VisualMode = body.mode === 'human' ? 'human' : 'product';
+    const aspectRatio = ['1:1', '9:16', '16:9'].includes(body.aspectRatio) ? body.aspectRatio : '1:1';
+    const remark = typeof body.remark === 'string' ? body.remark.slice(0, 600) : '';
+
+    if (typeof workspaceId !== 'string' || !/^[\w-]{1,180}$/.test(workspaceId)) {
+      return res.status(400).json({ error: 'Invalid workspace' });
+    }
+
+    // ── References: only .png/.jpg/.jpeg, and each required slot must be present.
+    const rawRefs = Array.isArray(body.references) ? body.references : [];
+    const references: ReferenceUpload[] = [];
+    const seen = new Set<string>();
+    for (const item of rawRefs) {
+      if (!item || typeof item !== 'object') continue;
+      const slot = String(item.slot || '');
+      if (!(REQUIRED_SLOTS as readonly string[]).includes(slot)) {
+        return res.status(400).json({ error: `Unknown reference slot: ${slot}` });
+      }
+      if (seen.has(slot)) return res.status(400).json({ error: `Duplicate reference for ${slot}` });
+      const filename = typeof item.filename === 'string' ? item.filename : '';
+      if (!hasAcceptedExtension(filename)) {
+        return res.status(415).json({ error: 'Reference must be a .png, .jpg or .jpeg file' });
+      }
+      const dataUrl = typeof item.dataUrl === 'string' ? item.dataUrl : '';
+      const match = dataUrl.match(/^data:image\/(png|jpeg|jpg);base64,([A-Za-z0-9+/=]+)$/);
+      if (!match) return res.status(415).json({ error: `Reference ${slot} is not a base64 PNG/JPEG` });
+      const bytes = Buffer.from(match[2]!, 'base64');
+      if (bytes.length < 1024) return res.status(413).json({ error: `Reference ${slot} is too small to be a photo` });
+      if (bytes.length > 8 * 1024 * 1024) return res.status(413).json({ error: `Reference ${slot} exceeds 8 MB` });
+      seen.add(slot);
+      references.push({ slot: slot as ReferenceUpload['slot'], mime: match[1]!, bytes });
+    }
+
+    const required = REQUIRED_SLOTS[mode];
+    const missing = required.filter(slot => !seen.has(slot));
+    if (missing.length) {
+      return res.status(400).json({
+        error: mode === 'human'
+          ? `Mode human model butuh semua referensi. Belum ada: ${missing.join(', ')}.`
+          : `Mode product only butuh referensi: ${required.join(', ')}. Belum ada: ${missing.join(', ')}.`,
+        missing
+      });
+    }
+
+    const plan = await buildCorePlan({ mode, remark, references });
+
+    // Layer 2 — the image model receives the filled core prompt plus exact copy.
+    const copyLines = [
+      body.headline ? `Headline text (exact): ${JSON.stringify(String(body.headline).slice(0, 200))}` : '',
+      body.ctaText ? `CTA text (exact): ${JSON.stringify(String(body.ctaText).slice(0, 120))}` : '',
+      body.disclaimer ? `Disclaimer text (exact): ${JSON.stringify(String(body.disclaimer).slice(0, 200))}` : ''
+    ].filter(Boolean).join('\n');
+
+    const result = await generateVisual(
+      {
+        workspaceId,
+        prompt: plan.prompt,
+        aspectRatio,
+        headline: body.headline,
+        ctaText: body.ctaText,
+        disclaimer: body.disclaimer,
+        primaryColor: body.primaryColor,
+        accentColor: body.accentColor
+      },
+      undefined
+    );
+
+    res.json({
+      imageUrl: result.imageUrl,
+      format: result.format,
+      provider: result.provider,
+      model: result.model,
+      dimensions: aspectRatio,
+      mode,
+      // Non-secret diagnostics only. The core prompt itself is intentionally absent.
+      referencesAnalyzed: plan.referencesAnalyzed,
+      referenceFailures: plan.referenceFailures,
+      slotsFromHuman: plan.filledFromHuman,
+      slotsDefaulted: plan.usedDefaults,
+      hasCopy: Boolean(copyLines)
+    });
+  } catch (error) {
+    const e = error as VisualError;
+    res.status(e.status || 500).json({ error: e.status ? e.message : 'Visual generation failed', code: e.code || 'VISUAL_ERROR' });
+  }
+});
+
 app.get('/api/visual/references',authenticate,contentOnly,requireWorkspace(req=>req.query.workspaceId),async(req,res,next)=>{try{
   const rows=await pool.query(`SELECT k.id,k.title,k.media_type AS "mediaType",k.vision_description AS "visionDescription" FROM kms_documents k JOIN kms_document_workspaces a ON a.document_id=k.id WHERE a.workspace_id=$1 AND k.media_type IN ('photo','video') ORDER BY k.created_at DESC LIMIT 100`,[req.query.workspaceId]);
   res.json(rows.rows);

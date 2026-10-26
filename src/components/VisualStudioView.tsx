@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { CoreVisualStudio } from './CoreVisualStudio';
 
 
 import { apiService } from '../services/apiService';
@@ -80,6 +81,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
   const clearOutput = () => { version.current++; setGeneratedImageUrl(null); setImageLoaded(false); setMetadata(''); };
   const [imageLoaded, setImageLoaded] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [visualTab, setVisualTab] = useState<'core' | 'classic'>('core');
   const [generationError, setGenerationError] = useState('');
   const [mediaError, setMediaError] = useState('');
   const availableDrafts = drafts.filter(item => item.status !== 'diarsipkan');
@@ -185,6 +187,39 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
         <textarea className="form-textarea" rows={4} value={selectedVersion?.content ?? ''} readOnly aria-label="Isi versi konten yang dipilih" />
       </div>
 
+      <div className="visual-tabs" role="tablist" aria-label="Mode studio visual">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={visualTab === 'core'}
+          className={`visual-tab ${visualTab === 'core' ? 'is-active' : ''}`}
+          onClick={() => setVisualTab('core')}
+        >
+          Brief → Referensi → Gambar
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={visualTab === 'classic'}
+          className={`visual-tab ${visualTab === 'classic' ? 'is-active' : ''}`}
+          onClick={() => setVisualTab('classic')}
+        >
+          Studio klasik
+        </button>
+      </div>
+
+      {visualTab === 'core' ? (
+        <CoreVisualStudio
+          workspaceId={activeWorkspace.id}
+          draftTitle={draft.title}
+          headline={visual.headline}
+          ctaText={visual.ctaText}
+          onSave={async imageUrl => {
+            setGeneratedImageUrl(imageUrl);
+            setMetadata('Visual inti · disimpan ke draf');
+          }}
+        />
+      ) : (
       <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.8fr', gap: '32px', alignItems: 'start' }}>
         {/* Left Column: Visual Customizer Form */}
         <div className="card-panel" style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
@@ -314,6 +349,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
 
         </div>
       </div>
+      )}
     </div>
   );
 };
