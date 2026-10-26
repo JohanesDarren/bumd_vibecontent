@@ -191,6 +191,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
           draftTitle={draft.title}
           headline={visual.headline}
           ctaText={visual.ctaText}
+          companyType={activeWorkspace.sector}
           onSave={async imageUrl => {
             setGeneratedImageUrl(imageUrl);
             setMetadata('Visual inti · disimpan ke draf');

@@ -223,7 +223,14 @@ app.post('/api/visual/core', authenticate, contentOnly, requireWorkspace(req=>re
       });
     }
 
-    const plan = await buildCorePlan({ mode, remark, references, publication });
+    // The document asks which topic the visual serves, whether it is commercial,
+    // and which kind of company publishes it.
+    const briefContext = {
+      topic: typeof body.topic === 'string' ? body.topic : (typeof body.draftTitle === 'string' ? body.draftTitle : ''),
+      companyType: typeof body.companyType === 'string' ? body.companyType : '',
+      commercial: body.commercial === true
+    };
+    const plan = await buildCorePlan({ mode, remark, references, publication, briefContext });
 
     // Layer 2 — the image model receives the filled core prompt plus exact copy.
     const copyLines = [
@@ -246,13 +253,14 @@ app.post('/api/visual/core', authenticate, contentOnly, requireWorkspace(req=>re
     // image (FLUX.2 image-to-image), not merely described in words: the document
     // requires every reference to be used in the result. If the provider cannot
     // serve image-to-image we degrade to text-to-image rather than failing.
-    const reference = references[0]?.bytes;
+    // Every reference must be used, so all of them travel to the image model.
+    const referenceImages = references.map(item => item.bytes);
     let result;
     let usedReferenceImage = false;
-    if (reference) {
+    if (referenceImages.length) {
       try {
         const accounts = (await import('./visual.ts')).configuredAccountsForGeneration();
-        const generated = await generateImageFromReference(accounts, 0, plan.prompt, reference);
+        const generated = await generateImageFromReference(accounts, 0, plan.prompt, referenceImages);
         result = {
           imageUrl: `data:image/jpeg;base64,${generated.image}`,
           format: 'image/jpeg',
@@ -291,6 +299,7 @@ app.post('/api/visual/core', authenticate, contentOnly, requireWorkspace(req=>re
       mode,
       publication,
       usedReferenceImage,
+      referencesUsed: usedReferenceImage ? references.length : 0,
       // Non-secret diagnostics only. The core prompt itself is intentionally absent.
       referencesAnalyzed: plan.referencesAnalyzed,
       referenceFailures: plan.referenceFailures,

@@ -75,7 +75,7 @@ async function generateImageFromReference(
   accounts: Account[],
   startAt: number,
   prompt: string,
-  reference: Buffer
+  references: Buffer[]
 ): Promise<ImageResult> {
   let lastError: VisualError | undefined;
   for (const accountIndex of accountOrder(accounts, startAt)) {
@@ -83,7 +83,12 @@ async function generateImageFromReference(
     try {
       const form = new FormData();
       form.set('prompt', prompt);
-      form.set('multipart', new Blob([new Uint8Array(reference)], { type: 'image/jpeg' }), 'reference.jpg');
+      // The document requires every reference to be used. FLUX.2 accepts several
+      // file parts under the `images` field, so all of them travel together
+      // instead of only the first one.
+      references.forEach((bytes, index) => {
+        form.append('images', new Blob([new Uint8Array(bytes)], { type: 'image/jpeg' }), `reference-${index}.jpg`);
+      });
       let response: Response;
       try {
         response = await fetch(

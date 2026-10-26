@@ -121,6 +121,48 @@ export function corePromptTemplate(mode: VisualMode, context: PublicationContext
   return CORE_PROMPTS[mode][context];
 }
 
+/**
+ * The document asks three framing questions that are NOT part of the template:
+ * which topic the brief covers, whether the piece is commercial, and which kind
+ * of company publishes it. Those are appended as a short context block so the
+ * visual stays anchored to the brief instead of drifting into generic stock art.
+ */
+export type BriefContext = {
+  /** The brief topic the visual must follow. */
+  topic?: string;
+  /** Issuing organisation type, e.g. a regional-owned enterprise. */
+  companyType?: string;
+  /** Commercial / promotional intent. */
+  commercial?: boolean;
+};
+
+const trimTo = (value: unknown, limit: number): string => {
+  if (typeof value !== 'string') return '';
+  return value.replace(/\s+/g, ' ').trim().slice(0, limit);
+};
+
+/**
+ * Build the context block appended after the filled template.
+ *
+ * Kept deliberately terse: the template already carries the art direction, so
+ * this only states *what the picture is about* and *who publishes it*. Anything
+ * that tries to issue instructions is stripped by sanitizeRemark-like rules.
+ */
+export function contextBlock(context: BriefContext, publication: PublicationContext): string {
+  const topic = trimTo(context.topic, 220);
+  const company = trimTo(context.companyType, 80);
+  const lines: string[] = [];
+  if (topic) lines.push(`Subject of the brief (must be visually recognisable): ${topic}.`);
+  if (company) lines.push(`Published by a ${company}.`);
+  lines.push(
+    publication === 'poster'
+      ? 'Intent: persuasive public-service campaign piece with a clear call to action.'
+      : 'Intent: elegant social media feed post, restrained and product/model focused.'
+  );
+  if (context.commercial) lines.push('Commercial intent: the subject is being promoted.');
+  return lines.join(' ');
+}
+
 /** Normalise an untrusted publication value; social is the safe default. */
 export function normalizePublication(value: unknown): PublicationContext {
   return value === 'poster' ? 'poster' : 'social';

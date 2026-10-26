@@ -50,6 +50,7 @@ export type CoreVisualResult = {
   mode: Mode;
   publication: Publication;
   usedReferenceImage: boolean;
+  referencesUsed: number;
   referencesAnalyzed: Slot[];
   referenceFailures: Slot[];
   slotsFromHuman: Slot[];
@@ -61,16 +62,20 @@ export function CoreVisualStudio({
   draftTitle,
   headline,
   ctaText,
+  companyType,
   onSave
 }: {
   workspaceId: string;
   draftTitle?: string;
   headline?: string;
   ctaText?: string;
+  /** Issuing organisation type, used to frame the visual. */
+  companyType?: string;
   onSave?: (imageUrl: string) => Promise<void> | void;
 }) {
   const [mode, setMode] = useState<Mode>('product');
   const [publication, setPublication] = useState<Publication>('social');
+  const [commercial, setCommercial] = useState(false);
   const [aspectRatio, setAspectRatio] = useState<'1:1' | '9:16' | '16:9'>('1:1');
   const [sizeChoice, setSizeChoice] = useState<'small' | 'medium' | 'large'>('medium');
   const [remark, setRemark] = useState('');
@@ -175,6 +180,9 @@ export function CoreVisualStudio({
           workspaceId,
           mode,
           publication,
+          commercial,
+          topic: draftTitle || headline || '',
+          companyType: companyType || '',
           aspectRatio,
           remark: remark.trim(),
           headline,
@@ -276,6 +284,10 @@ export function CoreVisualStudio({
                 <span>Persuasif, ajakan bertindak</span>
               </button>
             </div>
+            <label className="core-check">
+              <input type="checkbox" checked={commercial} onChange={e => setCommercial(e.target.checked)} />
+              <span>Konten komersial (produk dipromosikan)</span>
+            </label>
           </div>
 
           <div className="core-field">
@@ -486,7 +498,7 @@ export function CoreVisualStudio({
               <div><dt>Model</dt><dd>{result.model}</dd></div>
               <div><dt>Orientasi</dt><dd>{result.dimensions}</dd></div>
               <div><dt>Publikasi</dt><dd>{result.publication === 'poster' ? 'Poster / banner' : 'Social media'}</dd></div>
-              <div><dt>Referensi gambar</dt><dd>{result.usedReferenceImage ? 'Dipakai langsung' : 'Teks saja'}</dd></div>
+              <div><dt>Referensi gambar</dt><dd>{result.usedReferenceImage ? `Dipakai langsung (${result.referencesUsed})` : 'Teks saja'}</dd></div>
               <div><dt>Referensi terbaca</dt><dd>{result.referencesAnalyzed.length}/{requiredSlots.length}</dd></div>
               {result.slotsFromHuman.length ? (
                 <div><dt>Disesuaikan</dt><dd>{result.slotsFromHuman.join(', ')}</dd></div>

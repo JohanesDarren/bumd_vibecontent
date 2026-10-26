@@ -3,7 +3,9 @@ import {
   deriveSlotValues,
   fillCorePrompt,
   mergeSlotValues,
+  contextBlock,
   slotValuesFromReferences,
+  type BriefContext,
   type PublicationContext,
   type ReferenceSlot,
   type SlotValues,
@@ -106,6 +108,8 @@ export async function buildCorePlan(input: {
   references: ReferenceUpload[];
   /** Social feed post or persuasive poster/banner. */
   publication?: PublicationContext;
+  /** Brief topic, issuing company type and commercial intent. */
+  briefContext?: BriefContext;
 }): Promise<CoreGenerationPlan> {
   const described: Partial<Record<ReferenceSlot, string>> = {};
   const referencesAnalyzed: ReferenceSlot[] = [];
@@ -128,10 +132,14 @@ export async function buildCorePlan(input: {
   const fromRemark = deriveSlotValues(input.mode, input.remark ?? '');
   // Human remarks win over what the vision layer guessed.
   const merged = mergeSlotValues(fromReferences, fromRemark);
-  const filled = fillCorePrompt(input.mode, merged, input.publication ?? 'social');
+  const publication = input.publication ?? 'social';
+  const filled = fillCorePrompt(input.mode, merged, publication);
+  // Anchor the visual to the brief: the document requires the picture to match
+  // the brief's topic, not to be generic art.
+  const context = contextBlock(input.briefContext ?? {}, publication);
 
   return {
-    prompt: filled.prompt,
+    prompt: context ? `${filled.prompt} ${context}` : filled.prompt,
     mode: input.mode,
     filledFromHuman: filled.filledFromHuman,
     usedDefaults: filled.usedDefaults,

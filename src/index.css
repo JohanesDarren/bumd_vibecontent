@@ -3339,3 +3339,21 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* Commercial intent checkbox inside the publication field. */
+.core-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.core-check input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
