@@ -1,7 +1,7 @@
 import './env.ts';
 import { describeStyle, generateVisual, VisualError } from './visual.ts';
 import { buildCorePlan, type ReferenceUpload } from './visualCore.ts';
-import { REQUIRED_SLOTS, hasAcceptedExtension, type VisualMode } from './corePrompt.ts';
+import { REFERENCE_SLOTS, REQUIRED_SLOTS, hasAcceptedExtension, type VisualMode } from './corePrompt.ts';
 import { chooseVisualReference } from './visualReferenceSelection.ts';
 import { env, ragConfigured } from './env.ts';
 import { knowledgeBaseIdFor, RagNotConfiguredError, ragDeleteDocument, ragIndexDocument, ragListDocuments, ragCompose, ragPlan, ragQuery, ragRefine, ragSearch, ragSuggestSchedule, ragStatus } from './rag.ts';
@@ -163,7 +163,9 @@ app.post('/api/visual/core', authenticate, contentOnly, requireWorkspace(req=>re
     for (const item of rawRefs) {
       if (!item || typeof item !== 'object') continue;
       const slot = String(item.slot || '');
-      if (!(REQUIRED_SLOTS as readonly string[]).includes(slot)) {
+      // REQUIRED_SLOTS is a per-mode map, not a list: validate the slot against
+      // the full slot set, then check presence against the mode's requirements.
+      if (!(REFERENCE_SLOTS as readonly string[]).includes(slot)) {
         return res.status(400).json({ error: `Unknown reference slot: ${slot}` });
       }
       if (seen.has(slot)) return res.status(400).json({ error: `Duplicate reference for ${slot}` });

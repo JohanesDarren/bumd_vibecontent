@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import {
+  REFERENCE_SLOTS,
   REQUIRED_SLOTS,
   corePromptTemplate,
   deriveSlotValues,
@@ -123,4 +124,25 @@ test('generation failures are logged with their real cause', async () => {
   const tail = route.slice(0, route.indexOf('}catch(error){next(error);}});'));
   assert.ok(tail.includes('[visual/core] generation failed'), 'the cause must reach the logs');
   assert.ok(tail.includes('code: e.code'), 'the error code must be logged');
+});
+
+test('slot validation uses the slot list, not the per-mode map', () => {
+  // REQUIRED_SLOTS is a Record<VisualMode, ReferenceSlot[]>; calling .includes()
+  // on it threw "REQUIRED_SLOTS.includes is not a function" and surfaced to the
+  // user as a bare "Visual generation failed".
+  assert.ok(Array.isArray(REFERENCE_SLOTS), 'REFERENCE_SLOTS must be a list');
+  assert.ok(!Array.isArray(REQUIRED_SLOTS), 'REQUIRED_SLOTS is a per-mode map');
+  for (const slot of ['model', 'font', 'color', 'pose', 'lighting']) {
+    assert.ok((REFERENCE_SLOTS as readonly string[]).includes(slot), `${slot} must be valid`);
+  }
+  assert.equal(REQUIRED_SLOTS.product.length, 3);
+  assert.equal(REQUIRED_SLOTS.human.length, 5);
+});
+
+test('the endpoint validates slots against REFERENCE_SLOTS', async () => {
+  const server = await readFile(new URL('../../server/index.ts', import.meta.url), 'utf8');
+  assert.ok(!/REQUIRED_SLOTS as readonly string\[\]\)\.includes/.test(server),
+    'REQUIRED_SLOTS must never be treated as an array');
+  assert.ok(server.includes('REFERENCE_SLOTS as readonly string[]).includes(slot'),
+    'slot validation must use the flat slot list');
 });
