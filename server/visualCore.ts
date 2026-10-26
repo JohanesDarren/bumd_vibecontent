@@ -4,6 +4,7 @@ import {
   fillCorePrompt,
   mergeSlotValues,
   slotValuesFromReferences,
+  type PublicationContext,
   type ReferenceSlot,
   type SlotValues,
   type VisualMode
@@ -103,6 +104,8 @@ export async function buildCorePlan(input: {
   mode: VisualMode;
   remark?: string;
   references: ReferenceUpload[];
+  /** Social feed post or persuasive poster/banner. */
+  publication?: PublicationContext;
 }): Promise<CoreGenerationPlan> {
   const described: Partial<Record<ReferenceSlot, string>> = {};
   const referencesAnalyzed: ReferenceSlot[] = [];
@@ -125,7 +128,7 @@ export async function buildCorePlan(input: {
   const fromRemark = deriveSlotValues(input.mode, input.remark ?? '');
   // Human remarks win over what the vision layer guessed.
   const merged = mergeSlotValues(fromReferences, fromRemark);
-  const filled = fillCorePrompt(input.mode, merged);
+  const filled = fillCorePrompt(input.mode, merged, input.publication ?? 'social');
 
   return {
     prompt: filled.prompt,

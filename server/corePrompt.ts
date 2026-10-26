@@ -45,28 +45,71 @@ export type SlotValues = Partial<Record<ReferenceSlot, string>>;
  * Keep it declarative and visual only: no factual claims, no marketing copy that
  * could contradict the brief. Copy is added separately as exact text.
  */
-const CORE_PROMPT_PRODUCT = [
-  'Professional commercial photograph of the product as the single hero subject.',
-  'The product is presented on ___ background with ___ lighting setup.',
-  'Typography treatment uses ___ for any overlay text area, rendered as clean, legible type.',
+/**
+ * Publication context changes the whole visual language, so the template cannot
+ * be one-size-fits-all. The document is explicit:
+ *
+ *   Social media post  — elegant, clean, simple, minimal text, product/model focus
+ *   Poster / banner    — public-service announcement feel, persuasive, copy-led
+ *
+ * Both variants keep the same blank-slot contract, so slot filling is identical.
+ */
+export type PublicationContext = 'social' | 'poster';
+
+const CORE_PROMPT_PRODUCT_SOCIAL = [
+  'Professional commercial product photograph for a social media feed post.',
+  'The product is the single hero subject, centred with generous breathing room.',
+  'Background is ___ with ___ lighting setup, kept clean and uncluttered.',
+  'Typography is minimal: ___ used only where a short overlay is unavoidable.',
   'Color grading follows ___ palette, applied consistently to highlights and shadows.',
-  'Composition keeps generous negative space so overlay copy remains readable.',
+  'Elegant, modern and restrained: lots of negative space, no busy decoration.',
   'Shot on a full-frame camera with a 50mm lens at f/4, soft natural falloff, no harsh reflections.',
   'Ultra sharp product detail, realistic materials and texture, no distorted geometry.',
   'Absolutely no watermarks, no invented logos, no extra text, no collage, no split frames.'
 ].join(' ');
 
-const CORE_PROMPT_HUMAN = [
-  'Professional commercial lifestyle photograph featuring a human model as the main subject.',
-  'The model follows ___ pose reference, framed from mid-thigh up with natural body language.',
+const CORE_PROMPT_PRODUCT_POSTER = [
+  'Persuasive public-service announcement poster featuring the product as the hero subject.',
+  'The layout reads like a campaign poster: strong focal hierarchy and a clear call to action.',
+  'Background is ___ with ___ lighting setup, built to carry headline copy.',
+  'Typography is bold and poster-led: ___ for the headline block, high contrast and legible at a distance.',
+  'Color grading follows ___ palette, saturated enough to stop a scroll.',
+  'Composition reserves a clean copy zone for a headline, a short body line and a call to action.',
+  'Shot on a full-frame camera with a 35mm lens at f/5.6, deep focus so product and copy both read.',
+  'Ultra sharp product detail, realistic materials and texture, no distorted geometry.',
+  'Absolutely no watermarks, no invented logos, no gibberish text, no collage, no split frames.'
+].join(' ');
+
+const CORE_PROMPT_HUMAN_SOCIAL = [
+  'Professional commercial lifestyle photograph for a social media feed post featuring a human model.',
+  'The model follows ___ pose reference, framed from mid-thigh up with relaxed, natural body language.',
   'The model is lit with ___ lighting setup, producing soft directional shadows and clean skin tones.',
-  'Background is ___ with depth separation from the subject, no distracting elements.',
-  'Typography treatment uses ___ for any overlay text area, rendered as clean, legible type.',
+  'Background is ___ with depth separation from the subject, nothing distracting.',
+  'Typography is minimal: ___ used only where a short overlay is unavoidable.',
   'Color grading follows ___ palette, applied consistently across skin, wardrobe and background.',
+  'Elegant and clean: the model carries the frame, the scene stays simple.',
   'Shot on a full-frame camera with an 85mm lens at f/2, shallow depth of field, eye-level angle.',
   'Photorealistic detail, natural proportions, no extra limbs, no distorted hands or faces.',
   'Absolutely no watermarks, no invented logos, no extra text, no collage, no split frames.'
 ].join(' ');
+
+const CORE_PROMPT_HUMAN_POSTER = [
+  'Persuasive public-service announcement poster featuring a human model as the main subject.',
+  'The model follows ___ pose reference, positioned to leave a clear copy zone beside or above them.',
+  'The model is lit with ___ lighting setup, producing confident, campaign-grade contrast.',
+  'Background is ___ with depth separation from the subject, built to carry headline copy.',
+  'Typography is bold and poster-led: ___ for the headline block, high contrast and legible at a distance.',
+  'Color grading follows ___ palette, applied consistently across skin, wardrobe and background.',
+  'Composition reserves a clean copy zone for a headline, a short body line and a call to action.',
+  'Shot on a full-frame camera with a 50mm lens at f/4, enough depth for model and copy to both read.',
+  'Photorealistic detail, natural proportions, no extra limbs, no distorted hands or faces.',
+  'Absolutely no watermarks, no invented logos, no gibberish text, no collage, no split frames.'
+].join(' ');
+
+const CORE_PROMPTS: Record<VisualMode, Record<PublicationContext, string>> = {
+  product: { social: CORE_PROMPT_PRODUCT_SOCIAL, poster: CORE_PROMPT_PRODUCT_POSTER },
+  human: { social: CORE_PROMPT_HUMAN_SOCIAL, poster: CORE_PROMPT_HUMAN_POSTER }
+};
 
 /** Slots the human can influence, in template order. */
 const TEMPLATE_SLOTS: Record<VisualMode, ReferenceSlot[]> = {
@@ -74,8 +117,13 @@ const TEMPLATE_SLOTS: Record<VisualMode, ReferenceSlot[]> = {
   human: ['pose', 'lighting', 'color', 'font']
 };
 
-export function corePromptTemplate(mode: VisualMode): string {
-  return mode === 'human' ? CORE_PROMPT_HUMAN : CORE_PROMPT_PRODUCT;
+export function corePromptTemplate(mode: VisualMode, context: PublicationContext = 'social'): string {
+  return CORE_PROMPTS[mode][context];
+}
+
+/** Normalise an untrusted publication value; social is the safe default. */
+export function normalizePublication(value: unknown): PublicationContext {
+  return value === 'poster' ? 'poster' : 'social';
 }
 
 /** Defaults used when the human says nothing about a slot. */
@@ -103,13 +151,17 @@ export type FilledPrompt = {
  * lands in the blank it was designed for — the human cannot inject instructions
  * into the middle of the template.
  */
-export function fillCorePrompt(mode: VisualMode, values: SlotValues): FilledPrompt {
+export function fillCorePrompt(
+  mode: VisualMode,
+  values: SlotValues,
+  context: PublicationContext = 'social'
+): FilledPrompt {
   const order = TEMPLATE_SLOTS[mode];
   const filledFromHuman: ReferenceSlot[] = [];
   const usedDefaults: ReferenceSlot[] = [];
 
   let index = 0;
-  const template = corePromptTemplate(mode);
+  const template = corePromptTemplate(mode, context);
   const prompt = template.replace(/___/g, () => {
     const slot = order[index++];
     const raw = slot ? values[slot] : undefined;

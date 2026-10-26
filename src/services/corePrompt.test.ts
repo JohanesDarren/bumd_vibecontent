@@ -5,6 +5,7 @@ import {
   REFERENCE_SLOTS,
   REQUIRED_SLOTS,
   corePromptTemplate,
+  normalizePublication,
   deriveSlotValues,
   fillCorePrompt,
   hasAcceptedExtension,
@@ -145,4 +146,58 @@ test('the endpoint validates slots against REFERENCE_SLOTS', async () => {
     'REQUIRED_SLOTS must never be treated as an array');
   assert.ok(server.includes('REFERENCE_SLOTS as readonly string[]).includes(slot'),
     'slot validation must use the flat slot list');
+});
+
+test('publication context changes the visual language', () => {
+  // Document: social media post = elegant, clean, minimal text, product focus.
+  // Poster/banner = public-service announcement feel, persuasive, copy-led.
+  for (const mode of ['product', 'human'] as const) {
+    const social = corePromptTemplate(mode, 'social');
+    const poster = corePromptTemplate(mode, 'poster');
+    assert.notEqual(social, poster, `${mode}: the two contexts must differ`);
+    assert.match(social, /social media/i, `${mode}: social must name the context`);
+    assert.match(social, /minimal/i, `${mode}: social keeps text minimal`);
+    assert.match(poster, /poster|public-service/i, `${mode}: poster must name the context`);
+    assert.match(poster, /call to action|persuasive/i, `${mode}: poster is persuasive`);
+  }
+});
+
+test('both publication contexts still fill every blank', () => {
+  for (const mode of ['product', 'human'] as const) {
+    for (const context of ['social', 'poster'] as const) {
+      const filled = fillCorePrompt(mode, {}, context);
+      assert.equal((filled.prompt.match(/___/g) || []).length, 0, `${mode}/${context}: no blanks`);
+      assert.ok(filled.usedDefaults.length > 0, `${mode}/${context}: defaults fill the blanks`);
+    }
+  }
+});
+
+test('an unknown publication value falls back to social', () => {
+  assert.equal(normalizePublication('poster'), 'poster');
+  assert.equal(normalizePublication('social'), 'social');
+  assert.equal(normalizePublication('billboard'), 'social');
+  assert.equal(normalizePublication(undefined), 'social');
+  assert.equal(normalizePublication(42), 'social');
+});
+
+test('references are used as an actual image, not only described', async () => {
+  const [visual, server] = await Promise.all([
+    readFile(new URL('../../server/visual.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../../server/index.ts', import.meta.url), 'utf8')
+  ]);
+  // FLUX.1 schnell is text-to-image only; a reference could never shape the
+  // output. FLUX.2 accepts the image itself over multipart.
+  assert.match(visual, /flux-2-klein-4b/, 'an image-to-image model must exist');
+  assert.match(visual, /generateImageFromReference/, 'the img2img path must be implemented');
+  assert.match(visual, /new FormData\(\)/, 'FLUX.2 requires multipart, not JSON');
+  assert.ok(visual.includes("form.set('multipart'"), 'the reference travels as a real file part');
+  assert.ok(server.includes('generateImageFromReference('), 'the endpoint must call it');
+  assert.ok(server.includes('usedReferenceImage'), 'the response must report whether it was used');
+});
+
+test('image-to-image degrades instead of failing the request', async () => {
+  const server = await readFile(new URL('../../server/index.ts', import.meta.url), 'utf8');
+  const block = server.slice(server.indexOf('if (reference) {'), server.indexOf('if (!result) {'));
+  assert.ok(block.includes('catch'), 'a provider failure must be caught');
+  assert.ok(block.includes('falling back to text-to-image'), 'it must fall back, not throw');
 });

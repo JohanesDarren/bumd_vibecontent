@@ -1,7 +1,7 @@
 import './env.ts';
-import { describeStyle, generateVisual, VisualError } from './visual.ts';
+import { describeStyle, generateImageFromReference, generateVisual, visualModels, VisualError } from './visual.ts';
 import { buildCorePlan, type ReferenceUpload } from './visualCore.ts';
-import { REFERENCE_SLOTS, REQUIRED_SLOTS, hasAcceptedExtension, type VisualMode } from './corePrompt.ts';
+import { REFERENCE_SLOTS, REQUIRED_SLOTS, hasAcceptedExtension, normalizePublication, type VisualMode } from './corePrompt.ts';
 import { chooseVisualReference } from './visualReferenceSelection.ts';
 import { env, ragConfigured } from './env.ts';
 import { knowledgeBaseIdFor, RagNotConfiguredError, ragDeleteDocument, ragIndexDocument, ragListDocuments, ragCompose, ragPlan, ragQuery, ragRefine, ragSearch, ragSuggestSchedule, ragStatus } from './rag.ts';
@@ -147,6 +147,9 @@ app.post('/api/visual/core', authenticate, contentOnly, requireWorkspace(req=>re
     const body = req.body || {};
     const workspaceId = body.workspaceId;
     const mode: VisualMode = body.mode === 'human' ? 'human' : 'product';
+    // Social feed post or persuasive poster/banner: the document makes this a
+    // first-class choice, and it changes the whole visual language.
+    const publication = normalizePublication(body.publication);
     const aspectRatio = ['1:1', '9:16', '16:9'].includes(body.aspectRatio) ? body.aspectRatio : '1:1';
     const remark = typeof body.remark === 'string' ? body.remark.slice(0, 600) : '';
 
@@ -220,7 +223,7 @@ app.post('/api/visual/core', authenticate, contentOnly, requireWorkspace(req=>re
       });
     }
 
-    const plan = await buildCorePlan({ mode, remark, references });
+    const plan = await buildCorePlan({ mode, remark, references, publication });
 
     // Layer 2 — the image model receives the filled core prompt plus exact copy.
     const copyLines = [
@@ -239,19 +242,45 @@ app.post('/api/visual/core', authenticate, contentOnly, requireWorkspace(req=>re
       return text.length > limit ? text.slice(0, limit) : text;
     };
 
-    const result = await generateVisual(
-      {
-        workspaceId,
-        prompt: plan.prompt,
-        aspectRatio,
-        headline: clampCopy(body.headline, 200),
-        ctaText: clampCopy(body.ctaText, 120),
-        disclaimer: clampCopy(body.disclaimer, 200),
-        primaryColor: body.primaryColor,
-        accentColor: body.accentColor
-      },
-      undefined
-    );
+    // Layer 2 — the image model. When a reference exists it is sent as an actual
+    // image (FLUX.2 image-to-image), not merely described in words: the document
+    // requires every reference to be used in the result. If the provider cannot
+    // serve image-to-image we degrade to text-to-image rather than failing.
+    const reference = references[0]?.bytes;
+    let result;
+    let usedReferenceImage = false;
+    if (reference) {
+      try {
+        const accounts = (await import('./visual.ts')).configuredAccountsForGeneration();
+        const generated = await generateImageFromReference(accounts, 0, plan.prompt, reference);
+        result = {
+          imageUrl: `data:image/jpeg;base64,${generated.image}`,
+          format: 'image/jpeg',
+          provider: 'Cloudflare Workers AI',
+          model: '@cf/black-forest-labs/flux-2-klein-4b',
+          dimensions: aspectRatio
+        };
+        usedReferenceImage = true;
+      } catch (error) {
+        console.warn('[visual/core] image-to-image unavailable, falling back to text-to-image',
+          error instanceof Error ? error.message : error);
+      }
+    }
+    if (!result) {
+      result = await generateVisual(
+        {
+          workspaceId,
+          prompt: plan.prompt,
+          aspectRatio,
+          headline: clampCopy(body.headline, 200),
+          ctaText: clampCopy(body.ctaText, 120),
+          disclaimer: clampCopy(body.disclaimer, 200),
+          primaryColor: body.primaryColor,
+          accentColor: body.accentColor
+        },
+        undefined
+      );
+    }
 
     res.json({
       imageUrl: result.imageUrl,
@@ -260,6 +289,8 @@ app.post('/api/visual/core', authenticate, contentOnly, requireWorkspace(req=>re
       model: result.model,
       dimensions: aspectRatio,
       mode,
+      publication,
+      usedReferenceImage,
       // Non-secret diagnostics only. The core prompt itself is intentionally absent.
       referencesAnalyzed: plan.referencesAnalyzed,
       referenceFailures: plan.referenceFailures,

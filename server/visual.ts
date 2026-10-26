@@ -11,12 +11,23 @@ export class VisualError extends Error {
 }
 
 const IMAGE_MODEL = '@cf/black-forest-labs/flux-1-schnell';
+/**
+ * Image-to-image model. FLUX.1 schnell is text-to-image only, so a reference
+ * could never actually shape the picture — it was only described in words.
+ * FLUX.2 accepts the reference image itself over multipart, which is what the
+ * document requires: "every reference is must-be-used stuff".
+ */
+const IMAGE_MODEL_IMG2IMG = '@cf/black-forest-labs/flux-2-klein-4b';
 const LLM_MODEL = '@cf/meta/llama-3.2-3b-instruct';
 const ENDPOINT = 'https://api.cloudflare.com/client/v4/accounts';
 
 type Account = { id: string; token: string };
 type ImageResult = { image: string; account: Account; accountIndex: number };
 type PromptResult = { prompt: string; account: Account; accountIndex: number };
+
+export function configuredAccountsForGeneration(): Account[] {
+  return configuredAccounts();
+}
 
 function configuredAccounts(): Account[] {
   const candidates = [
@@ -52,6 +63,65 @@ async function postModel(account: Account, model: string, body: unknown): Promis
   const data = await response.json().catch(() => null);
   return { response, data };
 }
+
+/**
+ * Generate from a reference image plus the filled core prompt.
+ *
+ * FLUX.2 requires multipart (not JSON): the reference travels as a real file
+ * part. Falls back to the caller when no account can serve it, so a quota or
+ * permission problem degrades to text-to-image instead of failing the request.
+ */
+async function generateImageFromReference(
+  accounts: Account[],
+  startAt: number,
+  prompt: string,
+  reference: Buffer
+): Promise<ImageResult> {
+  let lastError: VisualError | undefined;
+  for (const accountIndex of accountOrder(accounts, startAt)) {
+    const account = accounts[accountIndex];
+    try {
+      const form = new FormData();
+      form.set('prompt', prompt);
+      form.set('multipart', new Blob([new Uint8Array(reference)], { type: 'image/jpeg' }), 'reference.jpg');
+      let response: Response;
+      try {
+        response = await fetch(
+          `${ENDPOINT}/${encodeURIComponent(account.id)}/ai/run/${IMAGE_MODEL_IMG2IMG}`,
+          {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${account.token}` },
+            body: form,
+            signal: AbortSignal.timeout(90000)
+          }
+        );
+      } catch {
+        lastError = new VisualError(502, 'CLOUDFLARE_UNAVAILABLE', 'Cloudflare request failed or timed out.');
+        continue;
+      }
+      const data = await response.json().catch(() => null);
+      if (!response.ok || data?.success === false) {
+        if (isQuota(response.status, data)) {
+          lastError = new VisualError(429, 'CLOUDFLARE_QUOTA_EXCEEDED', 'Cloudflare Workers AI quota or rate limit reached.');
+          continue;
+        }
+        lastError = new VisualError(502, 'CLOUDFLARE_PROVIDER_ERROR', `Cloudflare image generation failed (HTTP ${response.status}).`);
+        continue;
+      }
+      const image = data?.result?.image;
+      if (typeof image !== 'string' || !image || !/^[A-Za-z0-9+/]+={0,2}$/.test(image)) {
+        lastError = new VisualError(502, 'INVALID_CLOUDFLARE_IMAGE', 'Cloudflare returned missing or malformed image data.');
+        continue;
+      }
+      return { image, account, accountIndex };
+    } catch (error) {
+      lastError = error instanceof VisualError ? error : new VisualError(502, 'CLOUDFLARE_PROVIDER_ERROR', 'Image-to-image generation failed.');
+    }
+  }
+  throw lastError ?? new VisualError(502, 'CLOUDFLARE_PROVIDER_ERROR', 'Image-to-image generation failed.');
+}
+
+export { generateImageFromReference };
 
 export async function describeStyle(image:Buffer):Promise<string> {
   if(image.length<6||image.length>1024*1024||image[0]!==255||image[1]!==216||image.at(-2)!==255||image.at(-1)!==217)throw new VisualError(422,'INVALID_STYLE_FRAME','Reference frame is not a valid bounded JPEG.');

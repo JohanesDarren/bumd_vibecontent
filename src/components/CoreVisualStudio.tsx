@@ -13,6 +13,7 @@ import { Image as ImageIcon, Loader2, Sparkles, Upload, X, Download, AlertCircle
  */
 
 type Mode = 'product' | 'human';
+type Publication = 'social' | 'poster';
 type Slot = 'model' | 'font' | 'color' | 'pose' | 'lighting';
 
 type KmsPicture = { id: string; title: string; mediaType: string; visionDescription?: string; filename: string };
@@ -47,6 +48,8 @@ export type CoreVisualResult = {
   model: string;
   dimensions: string;
   mode: Mode;
+  publication: Publication;
+  usedReferenceImage: boolean;
   referencesAnalyzed: Slot[];
   referenceFailures: Slot[];
   slotsFromHuman: Slot[];
@@ -67,6 +70,7 @@ export function CoreVisualStudio({
   onSave?: (imageUrl: string) => Promise<void> | void;
 }) {
   const [mode, setMode] = useState<Mode>('product');
+  const [publication, setPublication] = useState<Publication>('social');
   const [aspectRatio, setAspectRatio] = useState<'1:1' | '9:16' | '16:9'>('1:1');
   const [sizeChoice, setSizeChoice] = useState<'small' | 'medium' | 'large'>('medium');
   const [remark, setRemark] = useState('');
@@ -170,6 +174,7 @@ export function CoreVisualStudio({
         body: JSON.stringify({
           workspaceId,
           mode,
+          publication,
           aspectRatio,
           remark: remark.trim(),
           headline,
@@ -247,6 +252,28 @@ export function CoreVisualStudio({
               >
                 <strong>Human model</strong>
                 <span>Dengan model & pose</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="core-field">
+            <label className="core-label">Jenis publikasi</label>
+            <div className="core-mode-row">
+              <button
+                type="button"
+                className={`core-mode ${publication === 'social' ? 'is-active' : ''}`}
+                onClick={() => setPublication('social')}
+              >
+                <strong>Social media post</strong>
+                <span>Rapi, bersih, teks minimal</span>
+              </button>
+              <button
+                type="button"
+                className={`core-mode ${publication === 'poster' ? 'is-active' : ''}`}
+                onClick={() => setPublication('poster')}
+              >
+                <strong>Poster / banner</strong>
+                <span>Persuasif, ajakan bertindak</span>
               </button>
             </div>
           </div>
@@ -458,6 +485,8 @@ export function CoreVisualStudio({
             <dl className="core-meta">
               <div><dt>Model</dt><dd>{result.model}</dd></div>
               <div><dt>Orientasi</dt><dd>{result.dimensions}</dd></div>
+              <div><dt>Publikasi</dt><dd>{result.publication === 'poster' ? 'Poster / banner' : 'Social media'}</dd></div>
+              <div><dt>Referensi gambar</dt><dd>{result.usedReferenceImage ? 'Dipakai langsung' : 'Teks saja'}</dd></div>
               <div><dt>Referensi terbaca</dt><dd>{result.referencesAnalyzed.length}/{requiredSlots.length}</dd></div>
               {result.slotsFromHuman.length ? (
                 <div><dt>Disesuaikan</dt><dd>{result.slotsFromHuman.join(', ')}</dd></div>
