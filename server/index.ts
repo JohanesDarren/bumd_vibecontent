@@ -8,6 +8,7 @@ import { knowledgeBaseIdFor, RagNotConfiguredError, ragDeleteDocument, ragIndexD
 import express from 'express';
 import cors from 'cors';
 import { resolve } from 'node:path';
+import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 import { 
@@ -35,7 +36,23 @@ const allowedOrigins=(process.env.API_ALLOWED_ORIGIN || (process.env.NODE_ENV ==
 if(process.env.NODE_ENV === 'production' && !allowedOrigins.length) throw new Error('API_ALLOWED_ORIGIN is required in production');
 app.use(cors({ origin: (origin, callback) => callback(null, !origin || allowedOrigins.includes(origin)), credentials: true, exposedHeaders: ['X-Session-Idle-Seconds'] }));
 app.use(express.json({ limit: '8mb' }));
-const distDir = resolve(dirname(fileURLToPath(import.meta.url)), '../dist');
+// Resolve the built shell defensively.
+//
+// The zero-downtime deployer activates a release directory that contains the
+// *contents* of dist/ (index.html + assets/), not a dist/ folder. Running from
+// the release therefore found a stale ../dist and served an old bundle even
+// though the release had switched. Prefer an explicitly configured directory,
+// then the release layout, then the classic ../dist.
+const moduleDir = dirname(fileURLToPath(import.meta.url));
+const distCandidates = [
+  process.env['STATIC_DIR'],
+  resolve(moduleDir, '..'),
+  resolve(moduleDir, '../dist'),
+  resolve(process.cwd(), 'dist'),
+  process.cwd()
+].filter((value): value is string => typeof value === 'string' && value.length > 0);
+const distDir = distCandidates.find(candidate => existsSync(resolve(candidate, 'index.html')))
+  ?? resolve(moduleDir, '../dist');
 // Hashed assets may be cached forever, but the shell must always be revalidated so
 // a new deploy is picked up. A stale shell was serving an old bundle to the user
 // even though the release had already switched.
