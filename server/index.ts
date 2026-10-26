@@ -71,9 +71,14 @@ function isBuiltShell(dir: string): boolean {
 const releaseDir = resolve(moduleDir, '..');
 const distCandidates = [
   process.env['STATIC_DIR'],
+  // The deployer activates `current -> releases/<stamp>` and puts the built shell
+  // there. The project root also holds the source index.html, so `current` must be
+  // probed explicitly; the root itself only qualifies when it really is a build.
+  resolve(releaseDir, 'current'),
   releaseDir,
   resolve(moduleDir, '../dist'),
   resolve(process.cwd(), 'dist'),
+  resolve(process.cwd(), 'current'),
   process.cwd()
 ].filter((value): value is string => typeof value === 'string' && value.length > 0);
 

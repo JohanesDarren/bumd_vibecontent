@@ -7,6 +7,7 @@ const server = await readFile(new URL('../../server/index.ts', import.meta.url),
 test('the server prefers the release layout over a stale dist folder', () => {
   const block = server.slice(server.indexOf('const distCandidates'), server.indexOf('const distDir'));
   assert.ok(block.includes('releaseDir'), 'the release root must be a candidate');
+  assert.ok(block.includes("resolve(releaseDir, 'current')"), 'the activated release symlink must be probed');
   assert.ok(server.includes("const releaseDir = resolve(moduleDir, '..')"), 'release dir is the project root');
   assert.ok(block.includes("resolve(moduleDir, '../dist')"), 'legacy dist must remain a fallback');
   assert.ok(block.includes('process.env'), 'an explicit STATIC_DIR escape hatch must exist');
