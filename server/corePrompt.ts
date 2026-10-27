@@ -136,15 +136,7 @@ const COPY_RULES: Record<PublicationContext, string> = {
 };
 
 /**
- * Rendered text is forbidden on purpose.
- *
- * Image diffusion models cannot spell: asking for a headline produces lettering
- * that looks like words but reads as gibberish ("Karya mahustata!"). The reliable
- * architecture is to let the model design the layout with clean copy zones, then
- * composite the real headline/CTA as crisp text in the app.
- */
-/**
- * Rendered text is forbidden, and the wording matters.
+ * Rendered text is forbidden on purpose, and the wording matters.
  *
  * Empirically FLUX adds invented lettering whenever a prompt mentions "text",
  * "typography", "headline" or "copy" — even in a negative sentence. The reliable
