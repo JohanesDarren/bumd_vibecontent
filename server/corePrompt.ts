@@ -59,51 +59,47 @@ export type PublicationContext = 'social' | 'poster';
 const CORE_PROMPT_PRODUCT_SOCIAL = [
   'Professional commercial product photograph for a social media feed post.',
   'The product is the single hero subject, centred with generous breathing room.',
-  'Background is ___ with ___ lighting setup, kept clean and uncluttered.',
-  'Typography is minimal: ___ used only where a short overlay is unavoidable.',
-  'Color grading follows ___ palette, applied consistently to highlights and shadows.',
+  'Background colour is ___ (colour taken from the colour reference), lit with ___ (lighting taken from the lighting reference).',
+  'A single flat empty colour field sits in the lower third; its proportions follow the letterform character of ___ (typeface taken from the font reference).',
   'Elegant, modern and restrained: lots of negative space, no busy decoration.',
   'Shot on a full-frame camera with a 50mm lens at f/4, soft natural falloff, no harsh reflections.',
   'Ultra sharp product detail, realistic materials and texture, no distorted geometry.',
-  'Absolutely no watermarks, no invented logos, no extra text, no collage, no split frames.'
+  'Absolutely no watermarks, no invented logos, no collage, no split frames, no signage.'
 ].join(' ');
 
 const CORE_PROMPT_PRODUCT_POSTER = [
   'Persuasive public-service announcement poster featuring the product as the hero subject.',
   'The layout reads like a campaign poster: strong focal hierarchy and a clear call to action.',
-  'Background is ___ with ___ lighting setup, built to carry headline copy.',
-  'Typography is bold and poster-led: ___ for the headline block, high contrast and legible at a distance.',
-  'Color grading follows ___ palette, saturated enough to stop a scroll.',
-  'Composition reserves a clean copy zone for a headline, a short body line and a call to action.',
+  'Background colour is ___ (colour taken from the colour reference), lit with ___ (lighting taken from the lighting reference), built to carry headline copy.',
+  'A large flat empty colour field fills the upper third; its proportions follow the letterform character of ___ (typeface taken from the font reference).',
+  'Composition reserves a clean copy zone for a headline, a supporting line and a call to action.',
   'Shot on a full-frame camera with a 35mm lens at f/5.6, deep focus so product and copy both read.',
   'Ultra sharp product detail, realistic materials and texture, no distorted geometry.',
-  'Absolutely no watermarks, no invented logos, no gibberish text, no collage, no split frames.'
+  'Absolutely no watermarks, no invented logos, no collage, no split frames, no signage.'
 ].join(' ');
 
 const CORE_PROMPT_HUMAN_SOCIAL = [
   'Professional commercial lifestyle photograph for a social media feed post featuring a human model.',
-  'The model follows ___ pose reference, framed from mid-thigh up with relaxed, natural body language.',
-  'The model is lit with ___ lighting setup, producing soft directional shadows and clean skin tones.',
-  'Background is ___ with depth separation from the subject, nothing distracting.',
-  'Typography is minimal: ___ used only where a short overlay is unavoidable.',
-  'Color grading follows ___ palette, applied consistently across skin, wardrobe and background.',
+  'The model follows ___ (pose and framing taken from the pose reference), framed from mid-thigh up with relaxed body language.',
+  'The model is lit with ___ (lighting taken from the lighting reference), producing soft directional shadows and clean skin tones.',
+  'Background colour is ___ (colour taken from the colour reference), kept separate from the subject with nothing distracting.',
+  'A single flat empty colour field sits in the lower third; its proportions follow the letterform character of ___ (typeface taken from the font reference).',
   'Elegant and clean: the model carries the frame, the scene stays simple.',
   'Shot on a full-frame camera with an 85mm lens at f/2, shallow depth of field, eye-level angle.',
   'Photorealistic detail, natural proportions, no extra limbs, no distorted hands or faces.',
-  'Absolutely no watermarks, no invented logos, no extra text, no collage, no split frames.'
+  'Absolutely no watermarks, no invented logos, no collage, no split frames, no signage.'
 ].join(' ');
 
 const CORE_PROMPT_HUMAN_POSTER = [
   'Persuasive public-service announcement poster featuring a human model as the main subject.',
-  'The model follows ___ pose reference, positioned to leave a clear copy zone beside or above them.',
-  'The model is lit with ___ lighting setup, producing confident, campaign-grade contrast.',
-  'Background is ___ with depth separation from the subject, built to carry headline copy.',
-  'Typography is bold and poster-led: ___ for the headline block, high contrast and legible at a distance.',
-  'Color grading follows ___ palette, applied consistently across skin, wardrobe and background.',
-  'Composition reserves a clean copy zone for a headline, a short body line and a call to action.',
+  'The model follows ___ (pose and framing taken from the pose reference), positioned to leave a clear copy zone beside or above them.',
+  'The model is lit with ___ (lighting taken from the lighting reference), producing confident, campaign-grade contrast.',
+  'Background colour is ___ (colour taken from the colour reference), built to carry headline copy.',
+  'A large flat empty colour field fills the upper third; its proportions follow the letterform character of ___ (typeface taken from the font reference).',
+  'Composition reserves a clean copy zone for a headline, a supporting line and a call to action.',
   'Shot on a full-frame camera with a 50mm lens at f/4, enough depth for model and copy to both read.',
   'Photorealistic detail, natural proportions, no extra limbs, no distorted hands or faces.',
-  'Absolutely no watermarks, no invented logos, no gibberish text, no collage, no split frames.'
+  'Absolutely no watermarks, no invented logos, no collage, no split frames, no signage.'
 ].join(' ');
 
 const CORE_PROMPTS: Record<VisualMode, Record<PublicationContext, string>> = {
@@ -117,8 +113,50 @@ const TEMPLATE_SLOTS: Record<VisualMode, ReferenceSlot[]> = {
   human: ['pose', 'lighting', 'color', 'font']
 };
 
+/**
+ * Hard exclusions. The document is explicit that product-only means no human
+ * model, so the negative constraint is stated in words as well as implied by
+ * the positive description — image models otherwise add people by default.
+ */
+const MODE_EXCLUSIONS: Record<VisualMode, string> = {
+  product: 'No human model, no person, no face, no hands, no body parts anywhere in the frame. The product alone is the subject.',
+  human: 'Exactly one human model as the subject; no additional people in the frame.'
+};
+
+/**
+ * Copy density. A poster/banner carries far more text than a social feed post:
+ * headline, supporting line and call to action versus a single short overlay.
+ */
+const COPY_RULES: Record<PublicationContext, string> = {
+  social:
+    'Composition: one flat empty colour field, roughly one fifth of the frame, held clear at the edge of the layout.',
+  poster:
+    'Composition: three flat empty colour fields — a wide band across the upper third, a narrower band ' +
+    'beneath it, and a rounded pill-shaped field at the bottom.'
+};
+
+/**
+ * Rendered text is forbidden on purpose.
+ *
+ * Image diffusion models cannot spell: asking for a headline produces lettering
+ * that looks like words but reads as gibberish ("Karya mahustata!"). The reliable
+ * architecture is to let the model design the layout with clean copy zones, then
+ * composite the real headline/CTA as crisp text in the app.
+ */
+/**
+ * Rendered text is forbidden, and the wording matters.
+ *
+ * Empirically FLUX adds invented lettering whenever a prompt mentions "text",
+ * "typography", "headline" or "copy" — even in a negative sentence. The reliable
+ * formulation describes the reserved areas as *empty colour fields* and avoids
+ * those trigger words entirely in the negative clause.
+ */
+const NO_RENDERED_TEXT =
+  'Plain empty colour fields only: no glyphs, no lettering, no numerals, no signage, ' +
+  'no captions, no labels and no writing of any kind. Nothing is written on the image.';
+
 export function corePromptTemplate(mode: VisualMode, context: PublicationContext = 'social'): string {
-  return CORE_PROMPTS[mode][context];
+  return `${CORE_PROMPTS[mode][context]} ${MODE_EXCLUSIONS[mode]} ${COPY_RULES[context]} ${NO_RENDERED_TEXT}`;
 }
 
 /**

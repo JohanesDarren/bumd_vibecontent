@@ -23,13 +23,22 @@ import {
 const VISION_MODEL = '@cf/llava-hf/llava-1.5-7b-hf';
 
 const SLOT_QUESTIONS: Record<ReferenceSlot, string> = {
-  model: 'Describe only the person: apparent age range, gender presentation, hair, wardrobe style and overall look. No names, no identity guesses.',
-  font: 'Describe only the typography: letterform family, weight, width, spacing and casing. Ignore the words themselves.',
-  color: 'Describe only the palette: dominant colors, accents and overall warmth or coolness.',
-  pose: 'Describe only the body pose and camera framing: stance, arm position, angle and crop.',
-  lighting: 'Describe only the lighting: direction, hardness, color temperature and shadow character.'
+  model:
+    'Extract ONLY the person from this image: apparent age range, gender presentation, hair, wardrobe style. ' +
+    'Ignore the background, the colours, the lighting and any text.',
+  font:
+    'Extract ONLY the typography from this image: letterform family, weight, width, spacing and casing. ' +
+    'Ignore the words themselves, the colours, the imagery and the layout.',
+  color:
+    'Extract ONLY the colour palette from this image: dominant colours, accent colours, and overall warmth or coolness. ' +
+    'Ignore any text, any person, any product and the composition.',
+  pose:
+    'Extract ONLY the body pose and camera framing from this image: stance, arm position, viewing angle and crop. ' +
+    'Ignore the identity, the clothing colours, the background and any text.',
+  lighting:
+    'Extract ONLY the lighting from this image: direction, hardness, colour temperature and shadow character. ' +
+    'Ignore the subject, the colours of the scene and any text.'
 };
-
 export type ReferenceUpload = { slot: ReferenceSlot; mime: string; bytes: Buffer };
 
 type Account = { id: string; token: string };

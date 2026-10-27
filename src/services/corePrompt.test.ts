@@ -157,7 +157,7 @@ test('publication context changes the visual language', () => {
     const poster = corePromptTemplate(mode, 'poster');
     assert.notEqual(social, poster, `${mode}: the two contexts must differ`);
     assert.match(social, /social media/i, `${mode}: social must name the context`);
-    assert.match(social, /minimal/i, `${mode}: social keeps text minimal`);
+    assert.match(social, /one flat empty colour field/i, `${mode}: social reserves a single copy area`);
     assert.match(poster, /poster|public-service/i, `${mode}: poster must name the context`);
     assert.match(poster, /call to action|persuasive/i, `${mode}: poster is persuasive`);
   }
@@ -235,4 +235,74 @@ test('every reference is sent to the image model, not only the first', async () 
   assert.ok(visual.includes('references: Buffer[]'), 'the generator takes a list, not one image');
   const server = await readFile(new URL('../../server/index.ts', import.meta.url), 'utf8');
   assert.ok(server.includes('references.map(item => item.bytes)'), 'the endpoint must pass all references');
+});
+
+test('product only explicitly forbids every human element', () => {
+  // "if product only, it means no human model needed" — the positive description
+  // alone is not enough; image models add people by default.
+  const product = corePromptTemplate('product', 'social');
+  assert.match(product, /No human model/i);
+  assert.match(product, /no person/i);
+  assert.match(product, /no face/i);
+  assert.match(product, /no hands/i);
+  assert.match(product, /no body parts/i);
+  // and it must never be phrased as a human shot
+  assert.doesNotMatch(product, /featuring a human model/i);
+});
+
+test('human model demands exactly one model, not a crowd', () => {
+  const human = corePromptTemplate('human', 'social');
+  assert.match(human, /Exactly one human model/i);
+  assert.match(human, /no additional people/i);
+});
+
+test('poster carries more copy zones than a social post', () => {
+  // "it gives more texts than the other one"
+  const social = corePromptTemplate('product', 'social');
+  const poster = corePromptTemplate('product', 'poster');
+  assert.match(social, /one flat empty colour field/i, 'social post reserves one area');
+  assert.match(poster, /three flat empty colour fields/i, 'poster reserves three areas');
+  assert.match(poster, /upper third/);
+  assert.match(poster, /pill-shaped/);
+});
+
+test('the image model is never asked to spell anything', () => {
+  // Diffusion models render gibberish when asked for text, so the prompt must
+  // reserve empty colour fields instead of requesting lettering.
+  for (const mode of ['product', 'human'] as const) {
+    for (const pub of ['social', 'poster'] as const) {
+      const p = corePromptTemplate(mode, pub);
+      assert.match(p, /no glyphs/i, `${mode}/${pub}: glyphs must be forbidden`);
+      assert.match(p, /no lettering/i, `${mode}/${pub}: lettering must be forbidden`);
+      assert.match(p, /Nothing is written/i, `${mode}/${pub}: must state nothing is written`);
+    }
+  }
+});
+
+test('each reference declares which element it contributes', () => {
+  // "font reference means font from that image file we would use"
+  for (const mode of ['product', 'human'] as const) {
+    const p = corePromptTemplate(mode, 'poster');
+    assert.match(p, /typeface taken from the font reference/i, `${mode}: font provenance`);
+    assert.match(p, /colour taken from the colour reference/i, `${mode}: colour provenance`);
+    assert.match(p, /lighting taken from the lighting reference/i, `${mode}: lighting provenance`);
+    if (mode === 'human') {
+      assert.match(p, /pose and framing taken from the pose reference/i, 'human: pose provenance');
+    }
+  }
+});
+
+test('vision extracts one element per reference, ignoring the rest', async () => {
+  const core = await readFile(new URL('../../server/visualCore.ts', import.meta.url), 'utf8');
+  // Each slot must instruct the vision model to ignore everything that is not
+  // its own element, otherwise a font image also contributes colour and mood.
+  const font = core.slice(core.indexOf('font:'), core.indexOf('color:'));
+  assert.match(font, /ONLY the typography/i);
+  assert.match(font, /Ignore the words/i);
+  const color = core.slice(core.indexOf('color:'), core.indexOf('pose:'));
+  assert.match(color, /ONLY the colour palette/i);
+  assert.match(color, /Ignore any text/i);
+  const lighting = core.slice(core.indexOf('lighting:'), core.indexOf('};', core.indexOf('lighting:')));
+  assert.match(lighting, /ONLY the lighting/i);
+  assert.match(lighting, /Ignore the subject/i);
 });
