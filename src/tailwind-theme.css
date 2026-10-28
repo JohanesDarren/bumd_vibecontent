@@ -1,5 +1,6 @@
 @theme {
   --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-serif: 'Cormorant Garamond', 'Playfair Display', Georgia, serif;
   --color-surface-container-lowest: #ffffff;
   --color-inverse-primary: #93ccff;
   --color-primary-container: #eef0ff;

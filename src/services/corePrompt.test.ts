@@ -284,7 +284,7 @@ test('each reference declares which element it contributes', () => {
   for (const mode of ['product', 'human'] as const) {
     const p = corePromptTemplate(mode, 'poster');
     assert.match(p, /typeface taken from the font reference/i, `${mode}: font provenance`);
-    assert.match(p, /colour taken from the colour reference/i, `${mode}: colour provenance`);
+    assert.match(p, /from the design system when a theme is set/i, `${mode}: colour provenance`);
     assert.match(p, /lighting taken from the lighting reference/i, `${mode}: lighting provenance`);
     if (mode === 'human') {
       assert.match(p, /pose and framing taken from the pose reference/i, 'human: pose provenance');

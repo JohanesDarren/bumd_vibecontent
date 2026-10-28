@@ -1,5 +1,5 @@
 import { VisualError } from './visual.ts';
-import { posterGuidelineBlock } from './posterGuidelines.ts';
+import { posterGuidelineBlock, themePalettePhrase } from './posterGuidelines.ts';
 import {
   deriveSlotValues,
   fillCorePrompt,
@@ -144,6 +144,16 @@ export async function buildCorePlan(input: {
   const fromRemark = deriveSlotValues(input.mode, input.remark ?? '');
   // Human remarks win over what the vision layer guessed.
   const merged = mergeSlotValues(fromReferences, fromRemark);
+  // The chosen theme owns the palette. Without this the colour slot would be
+  // filled from the reference photograph and a purple image would beat a Swiss
+  // theme, because the blank is structurally stronger than an appended sentence.
+  if (input.design) {
+    merged.color = themePalettePhrase({
+      theme: input.design.theme,
+      accent: input.design.accent,
+      accent2: input.design.accent2
+    });
+  }
   const publication = input.publication ?? 'social';
   const filled = fillCorePrompt(input.mode, merged, publication);
   // Anchor the visual to the brief: the document requires the picture to match

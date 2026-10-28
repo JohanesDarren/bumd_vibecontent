@@ -325,8 +325,25 @@ export function posterGuidelineBlock(input: {
     `Copy area: ${copy}.`,
     theme.dark ? `Ink ${theme.ink}, accent ${accent}, accent2 ${accent2}.` : '',
     `Canvas ${size.w}x${size.h} (${size.ratio}).`,
-    'Stay inside this palette.'
+    'This palette is authoritative: the background and accents must match it exactly.',
+    'Reference images inform typeface, lighting and subject only; they must not replace these colours.'
   ].filter(Boolean).join(' ');
+}
+
+/**
+ * A palette phrase for the `colour` blank of the core prompt.
+ *
+ * When a theme is chosen it becomes the authoritative colour source, so the
+ * filled template states the theme palette instead of the reference's colours.
+ * Without this, a purple reference would override a Swiss theme and the design
+ * system would lose to the photograph.
+ */
+export function themePalettePhrase(input: { theme?: unknown; accent?: unknown; accent2?: unknown }): string {
+  const themeKey = normalizeTheme(input.theme);
+  const theme = THEMES[themeKey];
+  const accent = typeof input.accent === 'string' && /^#[0-9a-f]{3,8}$/i.test(input.accent) ? input.accent : theme.accent;
+  const accent2 = typeof input.accent2 === 'string' && /^#[0-9a-f]{3,8}$/i.test(input.accent2) ? input.accent2 : theme.accent2;
+  return `${themeKey} system palette: background ${theme.background}, ink ${theme.ink}, accent ${accent}, secondary ${accent2}`;
 }
 
 /** The thirteen layout names, for validation and UI pickers. */

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   THEMES,
+  themePalettePhrase,
   LAYOUTS,
   SIZES,
   THEME_KEYS,
@@ -97,4 +98,42 @@ test('the guidelines reach the generation prompt', async () => {
   assert.ok(server.includes('briefContext, design }'), 'the endpoint must pass the design through');
   assert.ok(server.includes("theme: body.theme"), 'the client may pick a theme');
   assert.ok(server.includes("layout: body.layout"), 'the client may pick a layout');
+});
+
+test('the chosen theme owns the colour slot', () => {
+  // A reference photograph used to win over the theme because the colour blank
+  // was filled from the reference. The theme palette must now be the value.
+  const phrase = themePalettePhrase({ theme: 'swiss' });
+  assert.match(phrase, /swiss system palette/);
+  assert.match(phrase, /#fff/, 'background must be the theme background');
+  assert.match(phrase, /#e3000f/, 'accent must be the theme accent');
+  assert.doesNotMatch(phrase, /#7c3aed/, 'no reference colours may leak in');
+});
+
+test('a brand accent still overrides the theme palette phrase', () => {
+  const phrase = themePalettePhrase({ theme: 'korporat', accent: '#0284c7' });
+  assert.match(phrase, /#0284c7/);
+  assert.doesNotMatch(phrase, /#c8962e/);
+});
+
+test('the palette is declared authoritative over references', () => {
+  const block = posterGuidelineBlock({ theme: 'swiss', layout: 'stats' });
+  assert.match(block, /authoritative/i);
+  assert.match(block, /must not replace these colours/i);
+});
+
+test('the colour blank no longer claims it always comes from the reference', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const core = await readFile(new URL('../../server/corePrompt.ts', import.meta.url), 'utf8');
+  assert.ok(
+    core.includes('from the design system when a theme is set'),
+    'the blank must state the theme takes precedence'
+  );
+});
+
+test('the plan applies the theme palette when a design is supplied', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const plan = await readFile(new URL('../../server/visualCore.ts', import.meta.url), 'utf8');
+  assert.ok(plan.includes('themePalettePhrase'), 'the plan must use the theme palette');
+  assert.match(plan, /merged\.color = themePalettePhrase/, 'the colour slot must be overwritten');
 });

@@ -63,6 +63,46 @@
   --transition-smooth: 350ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* Vertical Carousel Sliding Animations */
+@keyframes verticalSlideUp {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(-50%);
+  }
+}
+
+@keyframes verticalSlideDown {
+  0% {
+    transform: translateY(-50%);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-up-slow {
+  animation: verticalSlideUp 48s linear infinite;
+  will-change: transform;
+}
+
+.animate-slide-down-slow {
+  animation: verticalSlideDown 54s linear infinite;
+  will-change: transform;
+}
+
+.animate-slide-up-medium {
+  animation: verticalSlideUp 42s linear infinite;
+  will-change: transform;
+}
+
+.carousel-hover-container:hover .animate-slide-up-slow,
+.carousel-hover-container:hover .animate-slide-down-slow,
+.carousel-hover-container:hover .animate-slide-up-medium {
+  animation-play-state: paused;
+}
+
 /* Keep the legacy reset below Tailwind utilities in the base layer. */
 @layer base {
   * {
