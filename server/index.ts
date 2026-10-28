@@ -230,7 +230,16 @@ app.post('/api/visual/core', authenticate, contentOnly, requireWorkspace(req=>re
       companyType: typeof body.companyType === 'string' ? body.companyType : '',
       commercial: body.commercial === true
     };
-    const plan = await buildCorePlan({ mode, remark, references, publication, briefContext });
+    // Poster design system: the client may name a theme/layout/size, otherwise
+    // the publication context picks a sensible archetype.
+    const design = {
+      theme: body.theme,
+      layout: body.layout ?? (publication === 'poster' ? 'hero' : 'product'),
+      size: body.size ?? (aspectRatio === '9:16' ? 'story' : aspectRatio === '1:1' ? 'square' : 'portrait'),
+      accent: body.primaryColor,
+      accent2: body.accentColor
+    };
+    const plan = await buildCorePlan({ mode, remark, references, publication, briefContext, design });
 
     // Layer 2 — the image model receives the filled core prompt plus exact copy.
     const copyLines = [
@@ -298,6 +307,7 @@ app.post('/api/visual/core', authenticate, contentOnly, requireWorkspace(req=>re
       dimensions: aspectRatio,
       mode,
       publication,
+      design: { theme: plan.prompt.includes('Design system:') ? design.theme ?? null : null, layout: design.layout, size: design.size },
       usedReferenceImage,
       referencesUsed: usedReferenceImage ? references.length : 0,
       // Non-secret diagnostics only. The core prompt itself is intentionally absent.

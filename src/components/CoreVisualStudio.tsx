@@ -14,6 +14,18 @@ import { Image as ImageIcon, Loader2, Sparkles, Upload, X, Download, AlertCircle
 
 type Mode = 'product' | 'human';
 type Publication = 'social' | 'poster';
+type Theme = 'korporat' | 'gelap' | 'editorial' | 'aurora' | 'alam' | 'blueprint' | 'ceria' | 'swiss';
+
+const THEME_OPTIONS: { key: Theme; label: string }[] = [
+  { key: 'korporat', label: 'Korporat' },
+  { key: 'gelap', label: 'Gelap' },
+  { key: 'editorial', label: 'Editorial' },
+  { key: 'aurora', label: 'Aurora' },
+  { key: 'alam', label: 'Alam' },
+  { key: 'blueprint', label: 'Blueprint' },
+  { key: 'ceria', label: 'Ceria' },
+  { key: 'swiss', label: 'Swiss' }
+];
 type Slot = 'model' | 'font' | 'color' | 'pose' | 'lighting';
 
 type KmsPicture = { id: string; title: string; mediaType: string; visionDescription?: string; filename: string };
@@ -76,6 +88,7 @@ export function CoreVisualStudio({
   const [mode, setMode] = useState<Mode>('product');
   const [publication, setPublication] = useState<Publication>('social');
   const [commercial, setCommercial] = useState(false);
+  const [theme, setTheme] = useState<Theme>('korporat');
   const [aspectRatio, setAspectRatio] = useState<'1:1' | '9:16' | '16:9'>('1:1');
   const [sizeChoice, setSizeChoice] = useState<'small' | 'medium' | 'large'>('medium');
   const [remark, setRemark] = useState('');
@@ -181,6 +194,7 @@ export function CoreVisualStudio({
           mode,
           publication,
           commercial,
+          theme,
           topic: draftTitle || headline || '',
           companyType: companyType || '',
           aspectRatio,
@@ -288,6 +302,25 @@ export function CoreVisualStudio({
               <input type="checkbox" checked={commercial} onChange={e => setCommercial(e.target.checked)} />
               <span>Konten komersial (produk dipromosikan)</span>
             </label>
+          </div>
+
+          <div className="core-field">
+            <label className="core-label">Tema desain</label>
+            <div className="core-theme-row">
+              {THEME_OPTIONS.map(option => (
+                <button
+                  key={option.key}
+                  type="button"
+                  className={`core-chip ${theme === option.key ? 'is-active' : ''}`}
+                  onClick={() => setTheme(option.key)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <p className="core-help">
+              Palet, tipografi, dan ornamen mengikuti sistem poster resmi.
+            </p>
           </div>
 
           <div className="core-field">

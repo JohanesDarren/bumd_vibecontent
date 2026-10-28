@@ -1,4 +1,5 @@
 import { VisualError } from './visual.ts';
+import { posterGuidelineBlock } from './posterGuidelines.ts';
 import {
   deriveSlotValues,
   fillCorePrompt,
@@ -119,6 +120,8 @@ export async function buildCorePlan(input: {
   publication?: PublicationContext;
   /** Brief topic, issuing company type and commercial intent. */
   briefContext?: BriefContext;
+  /** Poster design system: theme, layout archetype and canvas size. */
+  design?: { theme?: unknown; layout?: unknown; size?: unknown; accent?: unknown; accent2?: unknown };
 }): Promise<CoreGenerationPlan> {
   const described: Partial<Record<ReferenceSlot, string>> = {};
   const referencesAnalyzed: ReferenceSlot[] = [];
@@ -146,9 +149,12 @@ export async function buildCorePlan(input: {
   // Anchor the visual to the brief: the document requires the picture to match
   // the brief's topic, not to be generic art.
   const context = contextBlock(input.briefContext ?? {}, publication);
+  // The company's own poster system supplies the palette, typefaces, ornament and
+  // layout archetype — knowledge the image model would otherwise invent.
+  const design = input.design ? posterGuidelineBlock(input.design) : '';
 
   return {
-    prompt: context ? `${filled.prompt} ${context}` : filled.prompt,
+    prompt: [filled.prompt, context, design].filter(Boolean).join(' '),
     mode: input.mode,
     filledFromHuman: filled.filledFromHuman,
     usedDefaults: filled.usedDefaults,

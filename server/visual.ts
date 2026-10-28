@@ -226,7 +226,10 @@ export async function generateVisual(value: unknown, referenceStyle?:string) {
   const copyPrompt = (['headline', 'subheadline', 'badgeText', 'ctaText', 'disclaimer'] as const)
     .map(key => input[key] ? `${key} (exact text requested): ${JSON.stringify(input[key])}` : '')
     .filter(Boolean).join('\n');
-  if (basePrompt.length + copyPrompt.length > 2048) {
+  // The core prompt now carries the company poster guidelines (palette, type,
+  // ornament, layout, canvas), which is legitimately longer than a bare brief.
+  // The image model accepts far more, so the guard sits well above the real size.
+  if (basePrompt.length + copyPrompt.length > 3500) {
     throw new VisualError(400, 'INPUT_TOO_LONG', 'The visual direction and copy exceed the model prompt limit. Shorten the input; nothing was truncated.');
   }
 
@@ -237,7 +240,7 @@ export async function generateVisual(value: unknown, referenceStyle?:string) {
 
   const planned = await createImagePrompt(accounts, basePrompt, input.aspectRatio, input.primaryColor, input.accentColor);
   const imagePrompt = [planned.prompt, copyPrompt].filter(Boolean).join('\n');
-  if (imagePrompt.length > 2048) throw new VisualError(400, 'INPUT_TOO_LONG', 'The model-generated visual prompt plus copy exceeds the image model limit.');
+  if (imagePrompt.length > 3500) throw new VisualError(400, 'INPUT_TOO_LONG', 'The model-generated visual prompt plus copy exceeds the image model limit.');
 
   const generated = await generateImage(accounts, planned.accountIndex, imagePrompt);
   return {

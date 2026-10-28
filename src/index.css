@@ -3357,3 +3357,10 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   accent-color: var(--primary);
   cursor: pointer;
 }
+
+/* Theme picker: eight chips that wrap on narrow columns. */
+.core-theme-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
