@@ -1,14 +1,8 @@
 import React, { useState } from 'react';
-import { 
-  Lock, 
-  Eye, 
-  EyeOff, 
-  ArrowRight,
-  AtSign
-} from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 import { apiService } from '../services/apiService';
 import type { AuthUser } from '../types';
-import { IsometricContentMotherboard } from './IsometricContentMotherboard';
+import { CarouselShowcase } from './CarouselShowcase';
 
 interface AuthViewProps {
   onAuthed: (user: AuthUser) => Promise<void>;
@@ -37,137 +31,115 @@ export const AuthView: React.FC<AuthViewProps> = ({ onAuthed }) => {
     }
   };
 
+  const handleDemoFill = () => {
+    setEmail('admin@tirta.demo');
+    setPassword('DemoPass123');
+  };
+
   return (
-    <div className="relative min-h-screen w-full flex flex-col lg:flex-row items-center justify-between overflow-hidden bg-[#f1f5fd] font-sans selection:bg-[#1815d8] selection:text-white">
-      {/* ── 3D ISOMETRIC CONTENT-ENGINE MOTHERBOARD BACKGROUND ── */}
-      <div className="absolute inset-0 w-full h-full z-0 overflow-hidden">
-        <IsometricContentMotherboard className="w-full h-full" />
-      </div>
+    <div className="min-h-screen w-full flex flex-col lg:flex-row overflow-hidden bg-white font-sans selection:bg-[#0d0cbd] selection:text-white">
+      {/* ── LEFT PANEL: 3-LINE VERTICAL SLIDING CAROUSEL SHOWCASE ── */}
+      <section className="hidden md:block w-full md:w-[48%] lg:w-[54%] xl:w-[56%] h-[40vh] md:h-screen relative overflow-hidden bg-white">
+        <CarouselShowcase className="h-full w-full" />
+      </section>
 
-      <div className="absolute top-6 left-6 sm:top-9 sm:left-10 z-20" title="VibeContent">
-        <img src="/favicon.svg?v=2" alt="VibeContent" width="42" height="42" />
-      </div>
+      {/* ── RIGHT PANEL: CLEAN LOGIN FORM WITHOUT CARD ── */}
+      <section className="w-full md:w-[52%] lg:w-[46%] xl:w-[44%] min-h-screen flex flex-col justify-center items-center p-6 sm:p-10 lg:p-14 bg-white relative">
+        <div className="w-full max-w-[360px] sm:max-w-[390px] flex flex-col items-center">
+          {/* Heading in High-Contrast Editorial Serif */}
+          <h1 className="font-serif text-[38px] sm:text-[45px] leading-[1.12] text-slate-900 tracking-tight text-center mb-2 font-normal">
+            Selamat datang<br />kembali
+          </h1>
 
-      {/* Left empty spacer to allow the 3D isometric processor chip to shine freely */}
-      <div className="hidden lg:block lg:flex-1 h-full pointer-events-none" />
-
-      {/* ── RIGHT PANEL: ULTRA-PREMIUM FROSTED GLASS LOGIN FORM ── */}
-      <section className="relative z-20 w-full lg:w-[480px] xl:w-[500px] flex items-center justify-center p-6 sm:p-10 lg:p-12 lg:mr-8 xl:mr-16 my-auto">
-        <div 
-          className="w-full max-w-[420px] rounded-3xl p-7 sm:p-9 border border-white/70 shadow-2xl transition-all"
-          style={{
-            background: 'rgba(255, 255, 255, 0.62)',
-            backdropFilter: 'blur(28px) saturate(160%)',
-            WebkitBackdropFilter: 'blur(28px) saturate(160%)',
-            boxShadow: '0 24px 60px -12px rgba(13, 12, 189, 0.16), 0 0 0 1px rgba(255, 255, 255, 0.8), inset 0 1px 2px rgba(255, 255, 255, 0.95)',
-          }}
-        >
-          {/* Welcoming Text */}
-          <div className="mb-7 text-left">
-            <h2 className="text-2xl sm:text-[26px] font-black text-slate-900 tracking-tight mb-2">
-              Masuk ke Akun Anda
-            </h2>
-            <p className="text-slate-500 text-xs sm:text-sm leading-relaxed font-medium">
-              Selamat datang, selamat mencoba VibeContent!
-            </p>
-          </div>
+          {/* Subtitle */}
+          <p className="text-slate-400 text-xs sm:text-[13px] text-center mb-8 font-normal">
+            Masukkan email untuk masuk ke akun Anda
+          </p>
 
           {/* Error Banner */}
           {error && (
-            <div 
-              role="alert" 
-              className="mb-5 p-3.5 rounded-xl bg-rose-50/90 border border-rose-200 text-rose-700 text-xs sm:text-sm font-semibold flex items-center gap-2.5 shadow-sm"
+            <div
+              role="alert"
+              className="w-full mb-5 p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium flex items-center gap-2"
             >
-              <div className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
+              <div className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
-          {/* Login Form */}
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="w-full flex flex-col">
             {/* Input Email */}
-            <div>
-              <label 
-                htmlFor="login-email" 
-                className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2"
+            <div className="mb-4">
+              <label
+                htmlFor="login-email"
+                className="block text-xs font-semibold text-slate-500 mb-1.5"
               >
                 Email
               </label>
-              <div className="relative flex items-center">
-                <span className="absolute left-3.5 text-slate-400 pointer-events-none">
-                  <AtSign size={18} />
-                </span>
-                <input 
-                  id="login-email"
-                  type="email"
-                  required
-                  autoComplete="username"
-                  placeholder=""
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  className="w-full h-12 pl-11 pr-4 rounded-xl border border-slate-300/80 focus:border-[#1815d8] focus:ring-2 focus:ring-[#1815d8]/20 outline-none font-medium text-sm text-slate-900 transition-all shadow-xs"
-                  style={{
-                    background: 'rgba(255, 255, 255, 0.72)',
-                  }}
-                />
-              </div>
+              <input
+                id="login-email"
+                type="email"
+                required
+                autoComplete="username"
+                placeholder="Masukkan email Anda"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                className="w-full h-11 px-3.5 rounded-lg border border-slate-200/90 bg-[#f8fafc] focus:bg-white focus:border-[#0d0cbd] focus:ring-1 focus:ring-[#0d0cbd]/20 outline-none font-normal text-sm text-slate-800 placeholder:text-slate-300 transition-all"
+              />
             </div>
 
             {/* Input Kata Sandi */}
-            <div>
-              <label 
-                htmlFor="login-password" 
-                className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2"
+            <div className="mb-1.5">
+              <label
+                htmlFor="login-password"
+                className="block text-xs font-semibold text-slate-500 mb-1.5"
               >
                 Kata Sandi
               </label>
               <div className="relative flex items-center">
-                <span className="absolute left-3.5 text-slate-400 pointer-events-none">
-                  <Lock size={18} />
-                </span>
-                <input 
+                <input
                   id="login-password"
                   type={showPassword ? 'text' : 'password'}
                   required
                   autoComplete="current-password"
-                  placeholder=""
+                  placeholder="Masukkan kata sandi Anda"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
-                  className="w-full h-12 pl-11 pr-11 rounded-xl border border-slate-300/80 focus:border-[#1815d8] focus:ring-2 focus:ring-[#1815d8]/20 outline-none font-medium text-sm text-slate-900 transition-all shadow-xs"
-                  style={{
-                    background: 'rgba(255, 255, 255, 0.72)',
-                  }}
+                  className="w-full h-11 pl-3.5 pr-10 rounded-lg border border-slate-200/90 bg-[#f8fafc] focus:bg-white focus:border-[#0d0cbd] focus:ring-1 focus:ring-[#0d0cbd]/20 outline-none font-normal text-sm text-slate-800 placeholder:text-slate-300 transition-all"
                 />
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   onClick={() => setShowPassword(prev => !prev)}
-                  className="absolute right-3.5 text-slate-400 hover:text-slate-600 transition-colors focus:outline-none cursor-pointer"
+                  className="absolute right-3 text-slate-400 hover:text-slate-600 transition-colors focus:outline-none cursor-pointer"
                   title={showPassword ? 'Sembunyikan sandi' : 'Tampilkan sandi'}
                 >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
             </div>
 
-            {/* Submit Button with Royal Blue Gradient */}
+            {/* Lupa Kata Sandi */}
+            <div className="flex justify-end mb-6">
+              <button
+                type="button"
+                onClick={handleDemoFill}
+                className="text-xs text-slate-400 hover:text-[#0d0cbd] transition-colors cursor-pointer"
+                title="Klik untuk mengisi akun demo"
+              >
+                Lupa Kata Sandi?
+              </button>
+            </div>
+
+            {/* Submit Button */}
             <button
               type="submit"
               disabled={busy}
-              className="mt-3 w-full h-12 rounded-xl text-white font-bold text-sm tracking-wide shadow-lg shadow-indigo-600/30 hover:shadow-indigo-600/40 active:scale-[0.99] transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
-              style={{
-                background: 'radial-gradient(circle at 20% 25%, #1815d8 0%, #0d0cbd 50%, #050466 100%)',
-              }}
+              className="w-full h-11 rounded-lg border border-[#0d0cbd] text-[#0d0cbd] hover:bg-[#0d0cbd] hover:text-white active:scale-[0.99] font-semibold text-sm transition-all duration-200 flex items-center justify-center cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed shadow-xs"
             >
-              <span>{busy ? 'Memproses Masuk…' : 'Masuk ke Akun'}</span>
-              {!busy && <ArrowRight size={18} />}
+              {busy ? 'Memproses…' : 'Masuk'}
             </button>
           </form>
-
-          {/* Footer Meta */}
-          <div className="mt-6 pt-5 border-t border-slate-200/60 flex items-center justify-between text-[11px] text-slate-400 font-medium">
-            <span>Enterprise Content System</span>
-            <span>v4.2.0 • Secured</span>
-          </div>
         </div>
       </section>
     </div>

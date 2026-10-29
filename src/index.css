@@ -97,11 +97,6 @@
   will-change: transform;
 }
 
-.carousel-hover-container:hover .animate-slide-up-slow,
-.carousel-hover-container:hover .animate-slide-down-slow,
-.carousel-hover-container:hover .animate-slide-up-medium {
-  animation-play-state: paused;
-}
 
 /* Keep the legacy reset below Tailwind utilities in the base layer. */
 @layer base {
