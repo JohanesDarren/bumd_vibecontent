@@ -20,5 +20,21 @@ function buildStamp(): Plugin {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss(), buildStamp()],
-  server: { proxy: { '/api': { target: 'http://127.0.0.1:3005' } } }
+  server: { proxy: { '/api': { target: 'http://127.0.0.1:3005' } } },
+  build: {
+    // Vendor code changes rarely; keeping it in its own chunk means a UI deploy
+    // does not invalidate the React/lucide download in returning browsers.
+    rollupOptions: {
+      output: {
+        manualChunks(id: string) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react-dom') || id.includes('/react/')) return 'react';
+            if (id.includes('lucide-react')) return 'icons';
+            return 'vendor';
+          }
+          return undefined;
+        }
+      }
+    }
+  }
 })

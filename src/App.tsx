@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import { 
   ActiveTab, 
   Workspace, 
@@ -23,30 +23,37 @@ import { AppSettings, DEFAULT_SETTINGS, normalizeSettings } from './services/app
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { BriefHistoryRail } from './components/BriefHistoryRail';
-import { DashboardView } from './components/DashboardView';
-import { BriefStudioView } from './components/BriefStudioView';
-import { EditorWorkspaceView } from './components/EditorWorkspaceView';
 import { AuthView } from './components/AuthView';
-import { VisualStudioView } from './components/VisualStudioView';
 
-import { LibraryView } from './components/LibraryView';
 
-import { BrandProfileView } from './components/BrandProfileView';
-import { KnowledgeBaseView } from './components/KnowledgeBaseView';
-import { AuditLogView } from './components/AuditLogView';
-import { ExportModal } from './components/ExportModal';
 
-import { UserManagementView } from './components/UserManagementView';
-import { SettingsHelpView } from './components/SettingsHelpView';
-import { ContentSchedulingView } from './components/ContentSchedulingView';
-import { CorporateManagementView } from './components/CorporateManagementView';
-import { CorporateDashboardView } from './components/CorporateDashboardView';
-import { WorkspaceMappingView } from './components/WorkspaceMappingView';
-import { CorporateUsersView } from './components/CorporateUsersView';
 
-import { AdminDashboard } from './components/AdminDashboard';
 
 import { canAccessTab, filterUsersForWorkspace, resolveDraftActor } from './services/policies';
+
+/* ── Route-level code splitting ────────────────────────────────────────────
+   Each view is loaded on demand so the login page no longer ships the
+   scheduling, library, admin and editor code. The shell (Header, Sidebar,
+   AuthView) stays eager because it paints immediately.
+   ─────────────────────────────────────────────────────────────────────── */
+const DashboardView = lazy(() => import('./components/DashboardView').then(m => ({ default: m.DashboardView })));
+const BriefStudioView = lazy(() => import('./components/BriefStudioView').then(m => ({ default: m.BriefStudioView })));
+const EditorWorkspaceView = lazy(() => import('./components/EditorWorkspaceView').then(m => ({ default: m.EditorWorkspaceView })));
+const VisualStudioView = lazy(() => import('./components/VisualStudioView').then(m => ({ default: m.VisualStudioView })));
+const LibraryView = lazy(() => import('./components/LibraryView').then(m => ({ default: m.LibraryView })));
+const BrandProfileView = lazy(() => import('./components/BrandProfileView').then(m => ({ default: m.BrandProfileView })));
+const KnowledgeBaseView = lazy(() => import('./components/KnowledgeBaseView').then(m => ({ default: m.KnowledgeBaseView })));
+const AuditLogView = lazy(() => import('./components/AuditLogView').then(m => ({ default: m.AuditLogView })));
+const ExportModal = lazy(() => import('./components/ExportModal').then(m => ({ default: m.ExportModal })));
+const UserManagementView = lazy(() => import('./components/UserManagementView').then(m => ({ default: m.UserManagementView })));
+const SettingsHelpView = lazy(() => import('./components/SettingsHelpView').then(m => ({ default: m.SettingsHelpView })));
+const ContentSchedulingView = lazy(() => import('./components/ContentSchedulingView').then(m => ({ default: m.ContentSchedulingView })));
+const CorporateManagementView = lazy(() => import('./components/CorporateManagementView').then(m => ({ default: m.CorporateManagementView })));
+const CorporateDashboardView = lazy(() => import('./components/CorporateDashboardView').then(m => ({ default: m.CorporateDashboardView })));
+const WorkspaceMappingView = lazy(() => import('./components/WorkspaceMappingView').then(m => ({ default: m.WorkspaceMappingView })));
+const CorporateUsersView = lazy(() => import('./components/CorporateUsersView').then(m => ({ default: m.CorporateUsersView })));
+const AdminDashboard = lazy(() => import('./components/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
+
 
 export function App() {
   const [authenticated, setAuthenticated] = useState(false);
@@ -532,6 +539,7 @@ export function App() {
 
         {/* Dynamic Viewport */}
         <main key={activeWorkspace.id} className={`content-viewport ${authUser.role === 'creator' ? 'creator-content' : ''}`}>
+          <Suspense fallback={<ViewSkeleton />}>
           {safeTab === 'dashboard' && authUser.role === 'corporate' && <CorporateDashboardView onNavigate={setCurrentTab} onOpenWorkspace={id => { void handleSelectWorkspace(id).then(() => setCurrentTab('user_management')).catch(e => showToast(e.message)); }} />}
                     {safeTab === 'dashboard' && authUser.role !== 'corporate' && (
                       <DashboardView
@@ -689,6 +697,7 @@ export function App() {
               onNotify={showToast}
             />
           )}
+          </Suspense>
         </main>
       </div>
 
@@ -712,4 +721,27 @@ export function App() {
   );
 }
 
-export default App;
+export default App
+/**
+ * Placeholder shown while a route chunk is downloading.
+ *
+ * It mirrors the shape of a typical view (title line, two cards, a table) so the
+ * layout does not jump when the real content arrives.
+ */
+const ViewSkeleton: React.FC = () => (
+  <div className="view-skeleton" aria-busy="true" aria-live="polite">
+    <span className="sr-only">Memuat halaman…</span>
+    <div className="vs-line vs-title" />
+    <div className="vs-line vs-sub" />
+    <div className="vs-cards">
+      <div className="vs-card" />
+      <div className="vs-card" />
+      <div className="vs-card" />
+    </div>
+    <div className="vs-line vs-row" />
+    <div className="vs-line vs-row" />
+    <div className="vs-line vs-row vs-short" />
+  </div>
+);
+
+;

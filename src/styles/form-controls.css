@@ -804,3 +804,53 @@ input[type='radio']:not(.ui-check-input):focus-visible {
   height: 16px;
   cursor: pointer;
 }
+
+/* ── Route loading skeleton ──────────────────────────────────────────────── */
+/* Shown while a lazily loaded view chunk downloads. It mimics a typical page
+   layout so the content does not jump when the real view replaces it. */
+
+.view-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 0;
+  animation: vs-fade 220ms ease-out both;
+}
+
+@keyframes vs-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.vs-line,
+.vs-card {
+  border-radius: 10px;
+  background: linear-gradient(90deg, #eef2f8 25%, #f7f9fc 50%, #eef2f8 75%);
+  background-size: 200% 100%;
+  animation: vs-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes vs-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.vs-title { height: 26px; width: 38%; }
+.vs-sub { height: 14px; width: 56%; }
+.vs-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 6px 0; }
+.vs-card { height: 92px; }
+.vs-row { height: 44px; width: 100%; }
+.vs-short { width: 72%; }
+
+@media (max-width: 720px) {
+  .vs-cards { grid-template-columns: 1fr; }
+}
+
+/* Reduced motion: keep the skeleton static, it is a placeholder not decoration. */
+@media (prefers-reduced-motion: reduce) {
+  .view-skeleton,
+  .vs-line,
+  .vs-card {
+    animation: none !important;
+  }
+}
