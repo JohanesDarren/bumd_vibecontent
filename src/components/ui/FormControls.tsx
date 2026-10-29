@@ -226,3 +226,58 @@ export function Field({ label, hint, error, required, aside, htmlFor, children, 
     </div>
   );
 }
+
+export type ChipOption<T extends string> = {
+  value: T;
+  label: React.ReactNode;
+  icon?: React.ReactNode;
+};
+
+type ChipGroupProps<T extends string> = {
+  values: T[];
+  onChange: (values: T[]) => void;
+  options: ChipOption<T>[];
+  ariaLabel?: string;
+  className?: string;
+};
+
+/**
+ * Multi-select chip row.
+ *
+ * A wrapped row of checkboxes is hard to scan and eats vertical space; chips put
+ * the whole choice set on one line and show selection with a tick. Each chip is
+ * still a real checkbox so keyboard and screen readers work unchanged.
+ */
+export function ChipGroup<T extends string>({
+  values,
+  onChange,
+  options,
+  ariaLabel,
+  className
+}: ChipGroupProps<T>) {
+  const group = useId();
+  return (
+    <div className={['ui-chips', className ?? ''].filter(Boolean).join(' ')} role="group" aria-label={ariaLabel}>
+      {options.map(option => {
+        const id = `${group}-${option.value}`;
+        const active = values.includes(option.value);
+        return (
+          <label key={option.value} htmlFor={id} className={['ui-chip', active ? 'is-on' : ''].filter(Boolean).join(' ')}>
+            <input
+              id={id}
+              type="checkbox"
+              className="ui-check-input"
+              checked={active}
+              onChange={() => {
+                onChange(active ? values.filter(v => v !== option.value) : [...values, option.value]);
+              }}
+            />
+            {active ? <Check size={12} strokeWidth={3.2} aria-hidden="true" /> : null}
+            {option.icon ? <span className="ui-chip-icon" aria-hidden="true">{option.icon}</span> : null}
+            <span className="ui-chip-label">{option.label}</span>
+          </label>
+        );
+      })}
+    </div>
+  );
+}

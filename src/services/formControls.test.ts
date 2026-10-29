@@ -20,6 +20,7 @@ async function loadUi() {
       Switch: React.ComponentType<any>;
       Segmented: React.ComponentType<any>;
       Field: React.ComponentType<any>;
+      ChipGroup: React.ComponentType<any>;
     };
   } finally {
     await vite.close();
@@ -27,7 +28,7 @@ async function loadUi() {
 }
 
 // Loaded once for the whole file; every test below shares the same components.
-const { Checkbox, Switch, Segmented, Field } = await loadUi();
+const { Checkbox, Switch, Segmented, Field, ChipGroup } = await loadUi();
 
 /* ── Checkbox ─────────────────────────────────────────────────────────────── */
 
@@ -209,4 +210,41 @@ test('the stylesheet is imported after the legacy base rules', async () => {
   assert.ok(at > 0, 'form-controls.css must be imported');
   const legacy = index.indexOf('.form-input, .form-select, .form-textarea {');
   assert.ok(at > legacy, 'the new sheet must be imported after the legacy rules');
+});
+
+test('chip group is a set of real checkboxes, one per option', () => {
+  const out = html(
+    React.createElement(ChipGroup, {
+      values: ['instagram'],
+      onChange: () => {},
+      ariaLabel: 'Platform publikasi',
+      options: [
+        { value: 'instagram', label: 'Instagram' },
+        { value: 'facebook', label: 'Facebook' },
+        { value: 'tiktok', label: 'TikTok' }
+      ]
+    })
+  );
+  assert.equal((out.match(/type="checkbox"/g) || []).length, 3);
+  assert.match(out, /role="group"/);
+  assert.match(out, /aria-label="Platform publikasi"/);
+  // Only the values passed in are marked on.
+  assert.equal((out.match(/is-on/g) || []).length, 1);
+  assert.equal((out.match(/checked=""/g) || []).length, 1);
+});
+
+test('chip group tolerates an empty selection', () => {
+  const out = html(
+    React.createElement(ChipGroup, { values: [], onChange: () => {}, options: [{ value: 'a', label: 'A' }] })
+  );
+  assert.doesNotMatch(out, /is-on/);
+  assert.doesNotMatch(out, /checked=""/);
+});
+
+test('the stylesheet covers the chips and selectable rows', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const css = await readFile(new URL('../styles/form-controls.css', import.meta.url), 'utf8');
+  for (const cls of ['.ui-chip', '.ui-chips', '.ui-slot-row', '.scheduling-filter-select']) {
+    assert.ok(css.includes(cls), `${cls} must be styled`);
+  }
 });

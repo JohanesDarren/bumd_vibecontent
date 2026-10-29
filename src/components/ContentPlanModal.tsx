@@ -3,6 +3,7 @@ import { Sparkles, X, Check, BookOpen } from 'lucide-react';
 import type { SchedulePillar, SchedulePlatform } from '../types';
 import { apiService, type PlanSlot } from '../services/apiService';
 import { PILLARS, parseDateStr } from '../services/scheduling';
+import { ChipGroup } from './ui/FormControls';
 
 const PLATFORMS: { key: SchedulePlatform; label: string }[] = [
   { key: 'instagram', label: 'Instagram' },
@@ -115,14 +116,12 @@ export const ContentPlanModal: React.FC<ContentPlanModalProps> = ({
           </div>
           <div className="form-group">
             <label className="form-label">Platform</label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-              {PLATFORMS.map(p => (
-                <label key={p.key} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={platforms.includes(p.key)} onChange={() => setPlatforms(prev => prev.includes(p.key) ? prev.filter(x => x !== p.key) : [...prev, p.key])} />
-                  {p.label}
-                </label>
-              ))}
-            </div>
+            <ChipGroup
+              values={platforms}
+              onChange={setPlatforms}
+              ariaLabel="Platform publikasi"
+              options={PLATFORMS.map(p => ({ value: p.key, label: p.label }))}
+            />
           </div>
           <button className="btn btn-secondary" onClick={generate} disabled={busy} style={{ alignSelf: 'flex-start' }}>
             <Sparkles size={16} /> {busy && !slots.length ? 'Menyusun usulan…' : slots.length ? 'Buat Ulang Usulan' : 'Buat Usulan'}
@@ -131,8 +130,8 @@ export const ContentPlanModal: React.FC<ContentPlanModalProps> = ({
           {slots.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '340px', overflowY: 'auto' }}>
               {slots.map((slot, i) => (
-                <label key={`${slot.date}-${slot.platform}-${i}`} style={{ display: 'grid', gridTemplateColumns: '20px 110px 1fr', gap: '10px', alignItems: 'start', padding: '10px', borderRadius: '10px', border: '1px solid var(--border-color, rgba(0,0,0,0.1))', borderLeft: slot.pillar ? `4px solid ${PILLARS[slot.pillar].color}` : undefined, opacity: chosen[i] ? 1 : 0.55 }}>
-                  <input type="checkbox" checked={chosen[i]} onChange={() => setChosen(prev => prev.map((v, j) => j === i ? !v : v))} style={{ marginTop: '3px' }} />
+                <label key={`${slot.date}-${slot.platform}-${i}`} className={`ui-slot-row ${chosen[i] ? 'is-on' : ''}`} style={{ display: 'grid', gridTemplateColumns: '20px 110px 1fr', gap: '10px', alignItems: 'start', padding: '10px', borderRadius: '10px', border: '1px solid var(--ui-hairline)', borderLeft: slot.pillar ? `4px solid ${PILLARS[slot.pillar].color}` : undefined }}>
+                  <input type="checkbox" className="ui-row-check" checked={chosen[i]} onChange={() => setChosen(prev => prev.map((v, j) => j === i ? !v : v))} style={{ marginTop: '3px' }} />
                   <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
                     <strong>{shortDate(slot.date)}</strong><br />{slot.time} · {PLATFORMS.find(p => p.key === slot.platform)?.label}
                     {slot.pillar && <><br /><span style={{ color: PILLARS[slot.pillar].color }}>{PILLARS[slot.pillar].label}</span></>}
