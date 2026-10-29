@@ -8,7 +8,7 @@ interface ShowcaseCardItem {
   alt: string;
 }
 
-// Column 1: Mix of clean products and announcement posters
+// Column 1: Mix of clean products and public announcement posters
 const COLUMN_1_ITEMS: ShowcaseCardItem[] = [
   {
     id: 'c1-1',
@@ -19,10 +19,10 @@ const COLUMN_1_ITEMS: ShowcaseCardItem[] = [
   },
   {
     id: 'c1-2',
-    image: '/showcase/poster_amber_hotel.jpg',
+    image: '/showcase/poster_hotel_natural.jpg',
     aspectRatio: 'aspect-[3/4]',
     objectPosition: 'object-top',
-    alt: 'Grand Heritage Hotel Poster',
+    alt: 'Grande Heritage Hotel Poster',
   },
   {
     id: 'c1-3',
@@ -33,14 +33,14 @@ const COLUMN_1_ITEMS: ShowcaseCardItem[] = [
   },
   {
     id: 'c1-4',
-    image: '/showcase/poster_green_eco.jpg',
+    image: '/showcase/poster_eco_natural.jpg',
     aspectRatio: 'aspect-square',
     objectPosition: 'object-bottom',
-    alt: 'Kota Hijau Public Service Announcement',
+    alt: 'Kota Hijau Eco Transit Poster',
   },
 ];
 
-// Column 2: Mix of event posters and clean products
+// Column 2: Mix of event flyers, products, and hospital announcements
 const COLUMN_2_ITEMS: ShowcaseCardItem[] = [
   {
     id: 'c2-1',
@@ -58,10 +58,10 @@ const COLUMN_2_ITEMS: ShowcaseCardItem[] = [
   },
   {
     id: 'c2-3',
-    image: '/showcase/poster_red_emergency.jpg',
+    image: '/showcase/poster_hospital_natural.jpg',
     aspectRatio: 'aspect-[4/3]',
     objectPosition: 'object-center',
-    alt: 'RSUD Layanan Darurat Poster',
+    alt: 'RSUD Layanan Medis Prima Poster',
   },
   {
     id: 'c2-4',
@@ -72,7 +72,7 @@ const COLUMN_2_ITEMS: ShowcaseCardItem[] = [
   },
 ];
 
-// Column 3: Mix of clean products and civic banners
+// Column 3: Mix of clean bakery products, water utility, and smart city
 const COLUMN_3_ITEMS: ShowcaseCardItem[] = [
   {
     id: 'c3-1',
@@ -83,7 +83,7 @@ const COLUMN_3_ITEMS: ShowcaseCardItem[] = [
   },
   {
     id: 'c3-2',
-    image: '/showcase/poster_blue_water.jpg',
+    image: '/showcase/poster_water_natural.jpg',
     aspectRatio: 'aspect-[3/4]',
     objectPosition: 'object-top',
     alt: 'Perumda Tirta Clean Water Announcement',
@@ -97,7 +97,7 @@ const COLUMN_3_ITEMS: ShowcaseCardItem[] = [
   },
   {
     id: 'c3-4',
-    image: '/showcase/poster_purple_smartcity.jpg',
+    image: '/showcase/poster_smartcity_natural.jpg',
     aspectRatio: 'aspect-[4/3]',
     objectPosition: 'object-bottom',
     alt: 'Smart City Digital Portal Banner',
