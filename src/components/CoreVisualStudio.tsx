@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Image as ImageIcon, Loader2, Sparkles, Upload, X, Download, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Switch, Segmented } from './ui/FormControls';
 
 /**
  * Visual generation surface for the core-prompt architecture.
@@ -16,15 +17,19 @@ type Mode = 'product' | 'human';
 type Publication = 'social' | 'poster';
 type Theme = 'korporat' | 'gelap' | 'editorial' | 'aurora' | 'alam' | 'blueprint' | 'ceria' | 'swiss';
 
-const THEME_OPTIONS: { key: Theme; label: string }[] = [
-  { key: 'korporat', label: 'Korporat' },
-  { key: 'gelap', label: 'Gelap' },
-  { key: 'editorial', label: 'Editorial' },
-  { key: 'aurora', label: 'Aurora' },
-  { key: 'alam', label: 'Alam' },
-  { key: 'blueprint', label: 'Blueprint' },
-  { key: 'ceria', label: 'Ceria' },
-  { key: 'swiss', label: 'Swiss' }
+/**
+ * The eight poster themes with their real swatches, taken from the design system
+ * so the picker shows the actual colours instead of a name alone.
+ */
+const THEME_OPTIONS: { key: Theme; label: string; bg: string; accent: string; accent2: string }[] = [
+  { key: 'korporat', label: 'Korporat', bg: '#ffffff', accent: '#c8962e', accent2: '#1b3a6b' },
+  { key: 'gelap', label: 'Gelap', bg: '#0b0d17', accent: '#22d3ee', accent2: '#a78bfa' },
+  { key: 'editorial', label: 'Editorial', bg: '#f6f1e7', accent: '#1f3a93', accent2: '#b5452b' },
+  { key: 'aurora', label: 'Aurora', bg: '#f7f5ff', accent: '#7c3aed', accent2: '#ec4899' },
+  { key: 'alam', label: 'Alam', bg: '#f4f1e8', accent: '#2f6b3a', accent2: '#c08a2b' },
+  { key: 'blueprint', label: 'Blueprint', bg: '#f5f8fc', accent: '#0a66c2', accent2: '#f59e0b' },
+  { key: 'ceria', label: 'Ceria', bg: '#fffaf5', accent: '#ff6b6b', accent2: '#2ec4b6' },
+  { key: 'swiss', label: 'Swiss', bg: '#ffffff', accent: '#e3000f', accent2: '#111111' }
 ];
 type Slot = 'model' | 'font' | 'color' | 'pose' | 'lighting';
 
@@ -258,65 +263,71 @@ export function CoreVisualStudio({
 
           <div className="core-field">
             <label className="core-label">Jenis visual</label>
-            <div className="core-mode-row">
-              <button
-                type="button"
-                className={`core-mode ${mode === 'product' ? 'is-active' : ''}`}
-                onClick={() => { setMode('product'); setReferences(prev => prev.filter(r => PRODUCT_SLOTS.includes(r.slot))); }}
-              >
-                <strong>Product only</strong>
-                <span>Tanpa model manusia</span>
-              </button>
-              <button
-                type="button"
-                className={`core-mode ${mode === 'human' ? 'is-active' : ''}`}
-                onClick={() => setMode('human')}
-              >
-                <strong>Human model</strong>
-                <span>Dengan model & pose</span>
-              </button>
-            </div>
+            <Segmented
+              value={mode}
+              onChange={next => {
+                setMode(next);
+                if (next === 'product') {
+                  setReferences(prev => prev.filter(r => PRODUCT_SLOTS.includes(r.slot)));
+                }
+              }}
+              variant="card"
+              fill
+              ariaLabel="Jenis visual"
+              options={[
+                { value: 'product', label: 'Product only', note: 'Tanpa model manusia' },
+                { value: 'human', label: 'Human model', note: 'Dengan model & pose' }
+              ]}
+            />
           </div>
 
           <div className="core-field">
             <label className="core-label">Jenis publikasi</label>
-            <div className="core-mode-row">
-              <button
-                type="button"
-                className={`core-mode ${publication === 'social' ? 'is-active' : ''}`}
-                onClick={() => setPublication('social')}
-              >
-                <strong>Social media post</strong>
-                <span>Rapi, bersih, teks minimal</span>
-              </button>
-              <button
-                type="button"
-                className={`core-mode ${publication === 'poster' ? 'is-active' : ''}`}
-                onClick={() => setPublication('poster')}
-              >
-                <strong>Poster / banner</strong>
-                <span>Persuasif, ajakan bertindak</span>
-              </button>
-            </div>
-            <label className="core-check">
-              <input type="checkbox" checked={commercial} onChange={e => setCommercial(e.target.checked)} />
-              <span>Konten komersial (produk dipromosikan)</span>
-            </label>
+            <Segmented
+              value={publication}
+              onChange={setPublication}
+              variant="card"
+              fill
+              ariaLabel="Jenis publikasi"
+              options={[
+                { value: 'social', label: 'Social media post', note: 'Rapi, teks minimal' },
+                { value: 'poster', label: 'Poster / banner', note: 'Persuasif, ajakan' }
+              ]}
+            />
+            <Switch
+              checked={commercial}
+              onChange={setCommercial}
+              label="Konten komersial"
+              hint="Produk sedang dipromosikan."
+            />
           </div>
 
           <div className="core-field">
             <label className="core-label">Tema desain</label>
-            <div className="core-theme-row">
-              {THEME_OPTIONS.map(option => (
-                <button
-                  key={option.key}
-                  type="button"
-                  className={`core-chip ${theme === option.key ? 'is-active' : ''}`}
-                  onClick={() => setTheme(option.key)}
-                >
-                  {option.label}
-                </button>
-              ))}
+            <div className="ui-swatch-grid" role="radiogroup" aria-label="Tema desain">
+              {THEME_OPTIONS.map(option => {
+                const active = theme === option.key;
+                return (
+                  <button
+                    key={option.key}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    className={`ui-swatch ${active ? 'is-active' : ''}`}
+                    onClick={() => setTheme(option.key)}
+                  >
+                    <span
+                      className="ui-swatch-plate"
+                      style={{ background: option.bg }}
+                      aria-hidden="true"
+                    >
+                      <i style={{ background: option.accent }} />
+                      <i style={{ background: option.accent2 }} />
+                    </span>
+                    <span className="ui-swatch-name">{option.label}</span>
+                  </button>
+                );
+              })}
             </div>
             <p className="core-help">
               Palet, tipografi, dan ornamen mengikuti sistem poster resmi.
@@ -325,19 +336,18 @@ export function CoreVisualStudio({
 
           <div className="core-field">
             <label className="core-label">Orientasi gambar</label>
-            <div className="core-ratio-row">
-              {(['1:1', '9:16', '16:9'] as const).map(ratio => (
-                <button
-                  key={ratio}
-                  type="button"
-                  className={`core-chip ${aspectRatio === ratio ? 'is-active' : ''}`}
-                  onClick={() => setAspectRatio(ratio)}
-                >
-                  {ratio === '1:1' ? 'Persegi' : ratio === '9:16' ? 'Vertikal' : 'Horizontal'}
-                  <small>{ratio}</small>
-                </button>
-              ))}
-            </div>
+            <Segmented
+              value={aspectRatio}
+              onChange={setAspectRatio}
+              size="sm"
+              fill
+              ariaLabel="Orientasi gambar"
+              options={[
+                { value: '1:1' as const, label: 'Persegi', note: '1:1' },
+                { value: '9:16' as const, label: 'Vertikal', note: '9:16' },
+                { value: '16:9' as const, label: 'Horizontal', note: '16:9' }
+              ]}
+            />
           </div>
 
           <div className="core-field">

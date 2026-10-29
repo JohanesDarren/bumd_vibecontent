@@ -3424,3 +3424,6 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
     animation: verticalSlideUp 84s linear infinite !important;
   }
 }
+
+/* Form surface system — imported last so it wins over the legacy base rules. */
+@import "./styles/form-controls.css";
