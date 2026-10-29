@@ -83,17 +83,17 @@
 }
 
 .animate-slide-up-slow {
-  animation: verticalSlideUp 48s linear infinite;
+  animation: verticalSlideUp 96s linear infinite;
   will-change: transform;
 }
 
 .animate-slide-down-slow {
-  animation: verticalSlideDown 54s linear infinite;
+  animation: verticalSlideDown 112s linear infinite;
   will-change: transform;
 }
 
 .animate-slide-up-medium {
-  animation: verticalSlideUp 42s linear infinite;
+  animation: verticalSlideUp 84s linear infinite;
   will-change: transform;
 }
 
@@ -3398,4 +3398,26 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+/* ── Carousel motion ─────────────────────────────────────────────────────────
+   The carousel is a long, slow vertical drift (96–112s per half-cycle). Two
+   things used to break it:
+
+   1. A global `animation-duration: .01ms !important` rule under
+      prefers-reduced-motion. An infinite loop at zero duration jumps to its end
+      state every frame, so the columns visibly strobed instead of drifting.
+   2. Too short a cycle, which read as "faster than a car".
+
+   Reduced motion is honoured by stopping the loop in place, not by racing it.
+   ------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .animate-slide-up-slow,
+  .animate-slide-down-slow,
+  .animate-slide-up-medium {
+    /* Hold still: cancelling the animation leaves the columns at their natural
+       offset, so the grid stays composed instead of snapping or strobing. */
+    animation-play-state: paused !important;
+    animation-duration: 96s !important;
+  }
 }
