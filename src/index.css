@@ -55,6 +55,8 @@
 
   /* Typography */
   --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  /* Secondary face: used for display headings across the whole app. */
+  --font-serif: 'Cormorant Garamond', 'Playfair Display', Georgia, serif;
   --font-mono: 'JetBrains Mono', monospace;
 
   /* Transitions */
@@ -3427,3 +3429,57 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 
 /* Form surface system — imported last so it wins over the legacy base rules. */
 @import "./styles/form-controls.css";
+
+/* ==========================================================================
+   Typography: one voice across every role and page.
+
+   The login page established the pairing — Plus Jakarta Sans for interface text
+   and Cormorant Garamond for display headings. Both are applied here at the
+   document level so every view inherits them instead of relying on Tailwind's
+   per-element defaults.
+   ========================================================================== */
+
+html,
+body,
+button,
+input,
+select,
+textarea,
+optgroup {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Display headings take the secondary (serif) face. Sizes stay with the
+   component; only the family and optical spacing change. */
+h1,
+h2,
+.page-title,
+.section-title,
+.hero-title,
+.display-title {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* Serif needs slightly tighter optical spacing at large sizes. */
+.page-title {
+  line-height: 1.15;
+}
+
+/* Anything explicitly marked as interface text keeps the sans face. */
+.font-sans,
+.ui-field-label,
+.ui-seg-label,
+.ui-chip-label,
+.btn,
+.form-input,
+.form-select,
+.form-textarea,
+table,
+th,
+td {
+  font-family: var(--font-sans);
+}

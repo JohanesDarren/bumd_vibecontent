@@ -46,6 +46,15 @@ export const AuthView: React.FC<AuthViewProps> = ({ onAuthed }) => {
       {/* ── RIGHT PANEL: CLEAN LOGIN FORM WITHOUT CARD ── */}
       <section className="w-full md:w-[52%] lg:w-[46%] xl:w-[44%] min-h-screen flex flex-col justify-center items-center p-6 sm:p-10 lg:p-14 bg-white relative">
         <div className="w-full max-w-[360px] sm:max-w-[390px] flex flex-col items-center">
+          {/* Brand mark, centred above the welcome heading */}
+          <img
+            src="/favicon.svg?v=2"
+            alt="VibeContent"
+            width={56}
+            height={56}
+            className="mb-6 h-14 w-14 rounded-2xl shadow-[0_6px_20px_-6px_rgba(13,12,189,0.35)]"
+          />
+
           {/* Heading in High-Contrast Editorial Serif */}
           <h1 className="font-serif text-[38px] sm:text-[45px] leading-[1.12] text-slate-900 tracking-tight text-center mb-2 font-normal">
             Selamat datang<br />kembali

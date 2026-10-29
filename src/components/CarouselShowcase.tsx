@@ -12,28 +12,28 @@ interface ShowcaseCardItem {
 const COLUMN_1_ITEMS: ShowcaseCardItem[] = [
   {
     id: 'c1-1',
-    image: 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?auto=format&fit=crop&w=700&q=80',
+    image: '/showcase/opt/prod_jacket.webp',
     aspectRatio: 'aspect-square',
     objectPosition: 'object-center',
     alt: 'Outerwear Jacket Product',
   },
   {
     id: 'c1-2',
-    image: '/showcase/poster_hotel_natural.jpg',
+    image: '/showcase/opt/poster_hotel_natural.webp',
     aspectRatio: 'aspect-[3/4]',
     objectPosition: 'object-top',
     alt: 'Grande Heritage Hotel Poster',
   },
   {
     id: 'c1-3',
-    image: 'https://images.unsplash.com/photo-1552346154-21d32810aba3?auto=format&fit=crop&w=700&q=80',
+    image: '/showcase/opt/prod_sneaker.webp',
     aspectRatio: 'aspect-[4/3]',
     objectPosition: 'object-center',
     alt: 'Sneaker Kicks Product',
   },
   {
     id: 'c1-4',
-    image: '/showcase/poster_eco_natural.jpg',
+    image: '/showcase/opt/poster_eco_natural.webp',
     aspectRatio: 'aspect-square',
     objectPosition: 'object-bottom',
     alt: 'Kota Hijau Eco Transit Poster',
@@ -44,28 +44,28 @@ const COLUMN_1_ITEMS: ShowcaseCardItem[] = [
 const COLUMN_2_ITEMS: ShowcaseCardItem[] = [
   {
     id: 'c2-1',
-    image: '/showcase/ref_sport_connect.jpg',
+    image: '/showcase/opt/ref_sport_connect.webp',
     aspectRatio: 'aspect-[3/4]',
     objectPosition: 'object-top',
     alt: 'Connect Sport Day Poster',
   },
   {
     id: 'c2-2',
-    image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=700&q=80',
+    image: '/showcase/opt/prod_watch.webp',
     aspectRatio: 'aspect-square',
     objectPosition: 'object-center',
     alt: 'Minimalist Watch Product',
   },
   {
     id: 'c2-3',
-    image: '/showcase/poster_hospital_natural.jpg',
+    image: '/showcase/opt/poster_hospital_natural.webp',
     aspectRatio: 'aspect-[4/3]',
     objectPosition: 'object-center',
     alt: 'RSUD Layanan Medis Prima Poster',
   },
   {
     id: 'c2-4',
-    image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=700&q=80',
+    image: '/showcase/opt/prod_tech.webp',
     aspectRatio: 'aspect-[3/4]',
     objectPosition: 'object-center',
     alt: 'Studio Headphones Product',
@@ -76,42 +76,53 @@ const COLUMN_2_ITEMS: ShowcaseCardItem[] = [
 const COLUMN_3_ITEMS: ShowcaseCardItem[] = [
   {
     id: 'c3-1',
-    image: 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?auto=format&fit=crop&w=700&q=80',
+    image: '/showcase/opt/prod_bread.webp',
     aspectRatio: 'aspect-[4/3]',
     objectPosition: 'object-center',
     alt: 'Artisan Croissant Bakery Product',
   },
   {
     id: 'c3-2',
-    image: '/showcase/poster_water_natural.jpg',
+    image: '/showcase/opt/poster_water_natural.webp',
     aspectRatio: 'aspect-[3/4]',
     objectPosition: 'object-top',
     alt: 'Perumda Tirta Clean Water Announcement',
   },
   {
     id: 'c3-3',
-    image: 'https://images.unsplash.com/photo-1592945403244-b3fbafd7f539?auto=format&fit=crop&w=700&q=80',
+    image: '/showcase/opt/prod_perfume.webp',
     aspectRatio: 'aspect-square',
     objectPosition: 'object-center',
     alt: 'Luxury Fragrance Perfume Product',
   },
   {
     id: 'c3-4',
-    image: '/showcase/poster_smartcity_natural.jpg',
+    image: '/showcase/opt/poster_smartcity_natural.webp',
     aspectRatio: 'aspect-[4/3]',
     objectPosition: 'object-bottom',
     alt: 'Smart City Digital Portal Banner',
   },
 ];
 
-const ShowcaseCard: React.FC<{ item: ShowcaseCardItem }> = ({ item }) => {
+/**
+ * A single showcase card.
+ *
+ * The columns drift continuously, so a card that is off-screen now will be
+ * visible within seconds. `loading="lazy"` therefore caused visible pop-in
+ * during the scroll; every image is fetched eagerly at high priority instead.
+ * The files themselves are small WebP (11–69 KB), so eager loading is cheap.
+ */
+const ShowcaseCard: React.FC<{ item: ShowcaseCardItem; priority?: boolean }> = ({ item, priority }) => {
   return (
     <div className="relative w-full overflow-hidden rounded-2xl sm:rounded-3xl bg-slate-100 border border-slate-200/80 shadow-xs select-none pointer-events-none">
       <div className={`w-full ${item.aspectRatio} relative overflow-hidden bg-slate-100`}>
         <img
           src={item.image}
           alt={item.alt}
-          loading="lazy"
+          width={720}
+          height={900}
+          decoding="async"
+          fetchPriority={priority ? 'high' : 'auto'}
           className={`w-full h-full object-cover ${item.objectPosition || 'object-center'}`}
         />
       </div>
@@ -130,7 +141,7 @@ const CarouselColumn: React.FC<{ items: ShowcaseCardItem[]; animationClass: stri
     <div className="flex-1 min-w-0 overflow-hidden h-full">
       <div className={`flex flex-col gap-4 sm:gap-5 ${animationClass}`}>
         {doubledItems.map((item, index) => (
-          <ShowcaseCard key={`${item.id}-${index}`} item={item} />
+          <ShowcaseCard key={`${item.id}-${index}`} item={item} priority={index < 2} />
         ))}
       </div>
     </div>
