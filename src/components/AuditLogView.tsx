@@ -68,7 +68,7 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <Lock size={20} color="#10b981" />
           <span style={{ fontSize: '0.85rem' }}>
-            <strong>Kepatuhan Isolasi Tenant (PRD F-01 & F-12):</strong> Semua event audit terenkripsi dan terikat ketat pada ID workspace <code>{activeWorkspace?.id || 'GLOBAL'}</code>. Tidak ada kebocoran metadata antar entitas .
+            <strong>Kepatuhan Isolasi Tenant:</strong> Semua event audit terenkripsi dan terikat ketat pada ID workspace <code>{activeWorkspace?.id || 'GLOBAL'}</code>. Tidak ada kebocoran metadata antar entitas .
           </span>
         </div>
         <span style={{ fontSize: '0.78rem', color: '#34d399', fontWeight: 700, display: 'flex', alignItems: 'center' }}>

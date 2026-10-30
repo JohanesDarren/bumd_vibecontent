@@ -236,7 +236,7 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
               Target Audiens
             </h3>
             <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '12px' }}>
-              Shown as selectable options in Brief Studio.
+              Tampil sebagai pilihan di Brief & Generasi.
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '14px' }}>
               {(profile.targetAudiences ?? []).map((aud, idx) => (
@@ -395,7 +395,7 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
                 <input 
                   type="text" 
                   className="form-input" 
-                  placeholder="Official term..."
+                  placeholder="Istilah resmi..."
                   value={newTerm}
                   onChange={e => setNewTerm(e.target.value)}
                 />
@@ -406,7 +406,7 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
                   value={newDef}
                   onChange={e => setNewDef(e.target.value)}
                 />
-                <button type="button" className="btn btn-secondary" onClick={handleAddTerm}>
+                <button type="button" className="btn btn-secondary" onClick={handleAddTerm} aria-label="Tambah istilah resmi" title="Tambah istilah resmi">
                   <Plus size={16} />
                 </button>
               </div>
@@ -482,7 +482,7 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
                   value={newReplacement}
                   onChange={e => setNewReplacement(e.target.value)}
                 />
-                <button type="button" className="btn btn-secondary" onClick={handleAddBanned}>
+                <button type="button" className="btn btn-secondary" onClick={handleAddBanned} aria-label="Tambah kata terlarang" title="Tambah kata terlarang">
                   <Plus size={16} />
                 </button>
               </div>
@@ -548,7 +548,7 @@ export const BrandProfileView: React.FC<BrandProfileViewProps> = ({
                   value={newCtaText}
                   onChange={e => setNewCtaText(e.target.value)}
                 />
-                <button type="button" className="btn btn-secondary" onClick={handleAddCta}>
+                <button type="button" className="btn btn-secondary" onClick={handleAddCta} aria-label="Tambah CTA resmi" title="Tambah CTA resmi">
                   <Plus size={16} />
                 </button>
               </div>

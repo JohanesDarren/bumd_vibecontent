@@ -47,7 +47,9 @@ test('save button is disabled after the current brief was saved, preventing dupl
     const save='.brief-editor-actions button:first-child';
     assert.equal(await page.$eval(save,el=>(el as HTMLButtonElement).disabled),false);
     assert.match(await page.$eval(save,el=>el.textContent||''),/Simpan Draf/);
-    assert.match(await page.$eval('.brief-editor-actions button:last-child',el=>el.textContent||''),/Lanjut ke Editor/);
+    // The label now states that this action generates content before opening
+    // the editor; "Lanjut ke Editor" looked like plain navigation.
+    assert.match(await page.$eval('.brief-editor-actions button:last-child',el=>el.textContent||''),/Generate & Buka Editor/);
   } finally {
     await browser?.close();await server.close();await unlink(html);await unlink(entry);
   }

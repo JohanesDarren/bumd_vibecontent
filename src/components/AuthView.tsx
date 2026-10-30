@@ -15,6 +15,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onAuthed }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,10 +32,9 @@ export const AuthView: React.FC<AuthViewProps> = ({ onAuthed }) => {
     }
   };
 
-  const handleDemoFill = () => {
-    setEmail('admin@tirta.demo');
-    setPassword('DemoPass123');
-  };
+  // Self-service reset is not implemented. Point the user at the real channel
+  // rather than shipping credentials in the production bundle.
+  const RESET_NOTICE = 'Reset kata sandi belum tersedia secara mandiri. Hubungi administrator workspace untuk mengatur ulang kata sandi akun Anda.';
 
   return (
     <div className="min-h-screen w-full flex flex-col lg:flex-row overflow-hidden bg-white font-sans selection:bg-[#0d0cbd] selection:text-white">
@@ -128,17 +128,27 @@ export const AuthView: React.FC<AuthViewProps> = ({ onAuthed }) => {
               </div>
             </div>
 
-            {/* Lupa Kata Sandi */}
+            {/* Password reset. There is no self-service reset yet, so the link
+                states the real path instead of pretending to be one (and instead
+                of silently filling demo credentials into the form). */}
             <div className="flex justify-end mb-6">
               <button
                 type="button"
-                onClick={handleDemoFill}
+                onClick={() => setNotice(RESET_NOTICE)}
                 className="text-xs text-slate-400 hover:text-[#0d0cbd] transition-colors cursor-pointer"
-                title="Klik untuk mengisi akun demo"
               >
                 Lupa Kata Sandi?
               </button>
             </div>
+
+            {notice && (
+              <div
+                role="status"
+                className="w-full mb-5 p-3 rounded-lg bg-slate-50 border border-slate-200 text-slate-600 text-xs leading-relaxed"
+              >
+                {notice}
+              </div>
+            )}
 
             {/* Submit Button */}
             <button

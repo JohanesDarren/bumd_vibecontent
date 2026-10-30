@@ -326,8 +326,7 @@ export const SettingsHelpView: React.FC<SettingsHelpViewProps> = ({ activeWorksp
             <SettingRow title="Workspace aktif" desc="Knowledge base terpisah per tenant, ditentukan di sisi server.">
               <span style={{ fontSize: '0.82rem', fontWeight: 700 }}>{activeWorkspace.name} ({activeWorkspace.code})</span>
             </SettingRow>
-            <p className="settings-hint">
-              Data aplikasi disimpan melalui API Node.js di PostgreSQL. Pengaturan halaman ini disimpan sekali untuk
+            <p className="settings-hint"> Pengaturan halaman ini disimpan sekali untuk
               perusahaan dan otomatis berlaku pada seluruh workspace perusahaan; kreator tidak dapat mengubahnya.
             </p>
           </div>

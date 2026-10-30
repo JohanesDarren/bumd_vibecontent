@@ -237,6 +237,13 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
   const [selectedCard, setSelectedCard] = useState<ScheduledContent | null>(null);
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  // A notice that never disappears becomes permanent clutter, so it self-clears.
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(null), 8000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
   const [info, setInfo] = useState<string | null>(null);
   const [planMode, setPlanMode] = useState<'plan' | 'gap' | null>(null);
   // Browser reminders are a per-viewer preference, so localStorage is the right home.
@@ -581,7 +588,14 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
   };
 
   const handleMarkPublished = async (item: ScheduledContent) => {
-    if (publishUrl.trim() && !isPostUrl(publishUrl)) return setNotice('Link post harus diawali http:// atau https://.');
+    const url = publishUrl.trim() || item.postUrl || '';
+    if (!url) return setNotice('Isi link postingan sebelum menandai terbit.');
+    if (!isPostUrl(url)) return setNotice('Link post harus diawali http:// atau https://.');
+    // Publishing is irreversible from the user's point of view, so it asks first.
+    const confirmed = window.confirm(
+      `Tandai "${item.title}" sebagai Terbit?\n\nLink: ${url}\n\nPastikan konten sudah benar-benar dipublikasikan.`
+    );
+    if (!confirmed) return;
     setNotice(null);
     const saved = await persistSchedule({ ...item, status: 'published', postUrl: publishUrl.trim() || item.postUrl || null });
     if (saved) {

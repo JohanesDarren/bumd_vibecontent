@@ -32,6 +32,51 @@ import Busboy from 'busboy';
 import { kmsConfig, uploadKnowledgeFile, deleteKnowledgeFile, queryKnowledge, validateKnowledgeUpload, kmsServiceStatus } from './kms.ts';
 
 const app = express();
+
+// The framework advertises itself in every response; that is free information
+// for an attacker and is not needed by any client.
+app.disable('x-powered-by');
+
+/**
+ * Baseline security headers.
+ *
+ * nginx already sets a few of these at the edge, but the app must not depend on
+ * the proxy: a direct hit on the Node port, or a different deployment, would
+ * otherwise ship without them. Existing values are preserved, missing ones are
+ * filled in.
+ */
+app.use((_req, res, next) => {
+  const set = (name: string, value: string) => {
+    if (!res.getHeader(name)) res.setHeader(name, value);
+  };
+  set('X-Content-Type-Options', 'nosniff');
+  set('X-Frame-Options', 'SAMEORIGIN');
+  set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  // HSTS only makes sense over TLS; sending it on plain HTTP is ignored anyway.
+  if (_req.secure || _req.headers['x-forwarded-proto'] === 'https') {
+    set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  // A conservative CSP: the app loads its own bundle, Google Fonts, and inline
+  // styles injected by React/Tailwind. 'unsafe-inline' for style-src is required
+  // by the current styling approach; scripts stay restricted to same-origin.
+  set(
+    'Content-Security-Policy',
+    [
+      "default-src 'self'",
+      "script-src 'self'",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "font-src 'self' https://fonts.gstatic.com data:",
+      "img-src 'self' data: blob:",
+      "connect-src 'self'",
+      "frame-ancestors 'self'",
+      "base-uri 'self'",
+      "form-action 'self'"
+    ].join('; ')
+  );
+  next();
+});
+
 const allowedOrigins=(process.env.API_ALLOWED_ORIGIN || (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5173,http://127.0.0.1:5173')).split(',').map(origin=>origin.trim()).filter(Boolean);
 if(process.env.NODE_ENV === 'production' && !allowedOrigins.length) throw new Error('API_ALLOWED_ORIGIN is required in production');
 app.use(cors({ origin: (origin, callback) => callback(null, !origin || allowedOrigins.includes(origin)), credentials: true, exposedHeaders: ['X-Session-Idle-Seconds'] }));
@@ -469,7 +514,7 @@ app.get('/api/admin/overview',globalOnly,async(_req,res,next)=>{try{
     pool.query('SELECT count(*)::int AS count FROM organizations'),
     pool.query(`SELECT count(*)::int AS total,count(*) FILTER (WHERE global_role='creator')::int AS creators,count(*) FILTER (WHERE global_role='corporate')::int AS corporate,count(*) FILTER (WHERE global_role='superadmin')::int AS superadmins FROM users`),
     pool.query('SELECT count(*)::int AS count FROM content_drafts'),
-    pool.query('SELECT count(*)::int AS count FROM knowledge_sources'),
+    pool.query('SELECT count(*)::int AS count FROM kms_documents'),
     pool.query('SELECT count(*)::int AS count FROM audit_events')
   ]);
   res.json({companies:companies.rows,workspaces:workspaces.rows[0].count,users:users.rows[0],drafts:drafts.rows[0].count,knowledgeSources:sources.rows[0].count,auditEvents:audit.rows[0].count});
@@ -492,7 +537,33 @@ app.post('/api/admin/memberships',globalOnly,async(req,res,next)=>{try{const {wo
 app.delete('/api/admin/memberships/:workspaceId/:userId',globalOnly,async(req,res,next)=>{try{const {workspaceId,userId}=req.params;const membership=await pool.query('SELECT 1 FROM memberships WHERE organization_id=$1 AND user_id=$2',[workspaceId,userId]);if(!membership.rowCount)return res.status(404).json({error:'Membership not found'});const other=await pool.query('SELECT 1 FROM memberships WHERE user_id=$1 AND organization_id<>$2 AND active LIMIT 1',[userId,workspaceId]);if(!other.rowCount)return res.status(409).json({error:'Last workspace assignment cannot be removed'});await pool.query('DELETE FROM memberships WHERE organization_id=$1 AND user_id=$2',[workspaceId,userId]);res.json({ok:true});}catch(e){next(e);}});
 app.get('/api/admin/audit',globalOnly,async(req,res,next)=>{try{res.json((await pool.query(`SELECT a.id,a.created_at AS "createdAt",a.action,a.actor_name AS "actorName",a.object_type AS "objectType",a.object_name AS "objectName",o.name AS "workspaceName" FROM audit_events a JOIN organizations o ON o.id=a.organization_id ORDER BY a.created_at DESC LIMIT 100`)).rows);}catch(e){next(e);}});
 app.get('/api/admin/workspaces',globalOnly,async(req,res,next)=>{try{res.json((await pool.query('SELECT id,name,code,sector,city,company_id AS "companyId" FROM organizations ORDER BY name')).rows);}catch(e){next(e);}});
-app.post('/api/admin/workspaces',globalOnly,async(req,res,next)=>{try{const {companyId,name,code,sector,city}=req.body||{};if(![companyId,name,code,sector,city].every(isNonEmptyString))return res.status(400).json({error:'companyId, name, code, sector, city required'});res.status(201).json((await pool.query('INSERT INTO organizations(id,company_id,name,code,sector,city) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,name,code,company_id AS "companyId"',[`org-${randomUUID()}`,companyId,name,code.toUpperCase(),sector,city])).rows[0]);}catch(e){next(e);}});
+/**
+ * Workspace field rules.
+ *
+ * The UI labels the code as "3-6 characters", but the API accepted 1 and 26,
+ * and accepted 5000-character names that broke the table layout. The server is
+ * the authority, so the same rules apply to every caller.
+ */
+const WORKSPACE_CODE = /^[A-Z0-9][A-Z0-9-]{2,5}$/;
+function validateWorkspaceFields(input: { name?: unknown; code?: unknown; sector?: unknown; city?: unknown }):
+  { error: string } | { name: string; code: string; sector: string; city: string } {
+  const name = typeof input.name === 'string' ? input.name.trim() : '';
+  const code = typeof input.code === 'string' ? input.code.trim().toUpperCase() : '';
+  const sector = typeof input.sector === 'string' ? input.sector.trim() : '';
+  const city = typeof input.city === 'string' ? input.city.trim() : '';
+
+  if (!name) return { error: 'Nama workspace wajib diisi.' };
+  if (name.length > 120) return { error: 'Nama workspace maksimal 120 karakter.' };
+  if (!code) return { error: 'Kode unit wajib diisi.' };
+  if (!WORKSPACE_CODE.test(code)) return { error: 'Kode unit harus 3-6 karakter: huruf, angka, atau tanda hubung.' };
+  if (!sector) return { error: 'Sektor wajib diisi.' };
+  if (sector.length > 80) return { error: 'Sektor maksimal 80 karakter.' };
+  if (!city) return { error: 'Kota wajib diisi.' };
+  if (city.length > 80) return { error: 'Kota maksimal 80 karakter.' };
+  return { name, code, sector, city };
+}
+
+app.post('/api/admin/workspaces',globalOnly,async(req,res,next)=>{try{const {companyId,name,code,sector,city}=req.body||{};if(!isNonEmptyString(companyId))return res.status(400).json({error:'companyId wajib diisi'});const v=validateWorkspaceFields({name,code,sector,city});if('error' in v)return res.status(400).json({error:v.error});res.status(201).json((await pool.query('INSERT INTO organizations(id,company_id,name,code,sector,city) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,name,code,company_id AS "companyId"',[`org-${randomUUID()}`,companyId,name,code.toUpperCase(),sector,city])).rows[0]);}catch(e){next(e);}});
 app.put('/api/admin/workspaces/:id',globalOnly,async(req,res,next)=>{try{const {companyId,name,code,sector,city}=req.body||{};if(![companyId,name,code,sector,city].every(isNonEmptyString))return res.status(400).json({error:'companyId, name, code, sector, city required'});const previous=(await pool.query('SELECT company_id FROM organizations WHERE id=$1',[req.params.id])).rows[0];if(!previous)return res.status(404).json({error:'Workspace not found'});if(previous.company_id!==companyId&&(await pool.query(`SELECT 1 FROM memberships WHERE organization_id=$1 UNION ALL SELECT 1 FROM content_drafts WHERE organization_id=$1 UNION ALL SELECT 1 FROM content_briefs WHERE organization_id=$1 UNION ALL SELECT 1 FROM knowledge_sources WHERE organization_id=$1 LIMIT 1`,[req.params.id])).rowCount)return res.status(409).json({error:'Remove workspace members and content before moving it to another company'});const result=await pool.query('UPDATE organizations SET company_id=$1,name=$2,code=$3,sector=$4,city=$5 WHERE id=$6 RETURNING id,name,code,sector,city,company_id AS "companyId"',[companyId,name.trim(),code.trim().toUpperCase(),sector.trim(),city.trim(),req.params.id]);res.json(result.rows[0]);}catch(e){next(e);}});
 app.delete('/api/admin/workspaces/:id',globalOnly,async(req,res,next)=>{try{const result=await pool.query(`DELETE FROM organizations o WHERE o.id=$1 AND NOT EXISTS(SELECT 1 FROM memberships WHERE organization_id=o.id) AND NOT EXISTS(SELECT 1 FROM content_drafts WHERE organization_id=o.id) AND NOT EXISTS(SELECT 1 FROM content_briefs WHERE organization_id=o.id) AND NOT EXISTS(SELECT 1 FROM knowledge_sources WHERE organization_id=o.id) RETURNING id`,[req.params.id]);if(result.rowCount)return res.json({ok:true});if(!(await pool.query('SELECT 1 FROM organizations WHERE id=$1',[req.params.id])).rowCount)return res.status(404).json({error:'Workspace not found'});res.status(409).json({error:'Remove workspace members and content first'});}catch(e){if((e as {code?:string}).code==='23503')return res.status(409).json({error:'Workspace has dependent data and cannot be deleted'});next(e);}});
 app.put('/api/corporate/settings',corporateOnly,async(req,res,next)=>{try{
@@ -515,7 +586,7 @@ app.get('/api/corporate/dashboard',corporateOnly,async(_req,res,next)=>{try{
       (SELECT count(*)::int FROM content_drafts d WHERE d.organization_id=o.id) AS "draftCount",
       (SELECT count(*)::int FROM content_drafts d WHERE d.organization_id=o.id AND d.status='disetujui') AS "approvedCount",
       (SELECT count(*)::int FROM content_drafts d WHERE d.organization_id=o.id AND d.status='menunggu_review') AS "reviewCount",
-      (SELECT count(*)::int FROM knowledge_sources k WHERE k.organization_id=o.id) AS "sourceCount",
+      (SELECT count(*)::int FROM kms_documents k WHERE k.workspace_id=o.id) AS "sourceCount",
       (SELECT count(*)::int FROM content_briefs b WHERE b.organization_id=o.id) AS "briefCount",
       (SELECT count(*)::int FROM audit_events a WHERE a.organization_id=o.id) AS "auditCount"
       FROM organizations o WHERE o.company_id=$1 ORDER BY o.name,o.id`,[companyId]),
@@ -538,7 +609,7 @@ app.put('/api/corporate/users/:userId',corporateOnly,async(req,res,next)=>{try{c
 app.delete('/api/corporate/users/:userId',corporateOnly,async(req,res,next)=>{try{const u=res.locals.user;if(u.role!=='corporate')return res.status(403).json({error:'Company account required'});const result=await pool.query(`DELETE FROM users WHERE id=$1 AND company_id=$2 AND global_role='creator' RETURNING id`,[req.params.userId,u.companyId]);if(!result.rowCount)return res.status(404).json({error:'Creator not found in your company'});res.json({ok:true});}catch(e){if((e as {code?:string}).code==='23503')return res.status(409).json({error:'Creator has authored content; account cannot be deleted'});next(e);}});
 app.put('/api/corporate/users/:userId/workspaces',corporateOnly,async(req,res,next)=>{try{if(res.locals.user.role!=='corporate')return res.status(403).json({error:'Company account required'});const {workspaceIds}=req.body||{};if(!Array.isArray(workspaceIds)||!workspaceIds.every(isNonEmptyString))return res.status(400).json({error:'workspaceIds must be an array of workspace IDs'});const result=await assignCompanyUser(res.locals.user.companyId,req.params.userId,workspaceIds);if(result.status!==200)return res.status(result.status).json({error:result.status===404?'Creator not found in your company':'Workspace outside your company'});res.json(result);}catch(e){next(e);}});
 app.get('/api/corporate/workspaces',corporateOnly,async(req,res,next)=>{try{const u=res.locals.user;res.json((await pool.query('SELECT id,name,code,sector,city FROM organizations WHERE $1=\'superadmin\' OR company_id=$2 ORDER BY name',[u.role,u.companyId])).rows);}catch(e){next(e);}});
-app.post('/api/corporate/workspaces',corporateOnly,async(req,res,next)=>{try{const u=res.locals.user;const {name,code,sector,city,companyId}=req.body||{};if(![name,code,sector,city].every(isNonEmptyString)||u.role==='superadmin'&&!isNonEmptyString(companyId))return res.status(400).json({error:'name, code, sector, city, and companyId for superadmin required'});res.status(201).json((await pool.query('INSERT INTO organizations(id,company_id,name,code,sector,city) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,name,code',[`org-${randomUUID()}`,u.role==='superadmin'?companyId:u.companyId,name,code.toUpperCase(),sector,city])).rows[0]);}catch(e){next(e);}});
+app.post('/api/corporate/workspaces',corporateOnly,async(req,res,next)=>{try{const u=res.locals.user;const {name,code,sector,city,companyId}=req.body||{};if(u.role==='superadmin'&&!isNonEmptyString(companyId))return res.status(400).json({error:'companyId wajib diisi'});const v=validateWorkspaceFields({name,code,sector,city});if('error' in v)return res.status(400).json({error:v.error});res.status(201).json((await pool.query('INSERT INTO organizations(id,company_id,name,code,sector,city) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,name,code',[`org-${randomUUID()}`,u.role==='superadmin'?companyId:u.companyId,name,code.toUpperCase(),sector,city])).rows[0]);}catch(e){next(e);}});
 app.put('/api/corporate/workspaces/:workspaceId',corporateOnly,async(req,res,next)=>{try{const u=res.locals.user;if(u.role!=='corporate')return res.status(403).json({error:'Company account required'});const {name,code,sector,city}=req.body||{};if(![name,code,sector,city].every(isNonEmptyString))return res.status(400).json({error:'name, code, sector and city required'});const result=await pool.query('UPDATE organizations SET name=$1,code=$2,sector=$3,city=$4 WHERE id=$5 AND company_id=$6 RETURNING id,name,code,sector,city',[name.trim(),code.trim().toUpperCase(),sector.trim(),city.trim(),req.params.workspaceId,u.companyId]);if(!result.rowCount)return res.status(404).json({error:'Workspace not found in your company'});res.json(result.rows[0]);}catch(e){if((e as {code?:string}).code==='23505')return res.status(409).json({error:'Workspace code already in use'});next(e);}});
 app.delete('/api/corporate/workspaces/:workspaceId',corporateOnly,async(req,res,next)=>{try{const u=res.locals.user;if(u.role!=='corporate')return res.status(403).json({error:'Company account required'});const id=req.params.workspaceId;const result=await pool.query(`DELETE FROM organizations o WHERE o.id=$1 AND o.company_id=$2 AND NOT EXISTS(SELECT 1 FROM memberships m WHERE m.organization_id=o.id) AND NOT EXISTS(SELECT 1 FROM content_drafts d WHERE d.organization_id=o.id) AND NOT EXISTS(SELECT 1 FROM content_briefs b WHERE b.organization_id=o.id) AND NOT EXISTS(SELECT 1 FROM knowledge_sources k WHERE k.organization_id=o.id) RETURNING id`,[id,u.companyId]);if(result.rowCount)return res.json({ok:true});if(!(await pool.query('SELECT 1 FROM organizations WHERE id=$1 AND company_id=$2',[id,u.companyId])).rowCount)return res.status(404).json({error:'Workspace not found in your company'});res.status(409).json({error:'Workspace has members or content; remove them first'});}catch(e){if((e as {code?:string}).code==='23503')return res.status(409).json({error:'Workspace has dependent data and cannot be deleted'});next(e);}});
 app.post('/api/corporate/workspaces/:workspaceId/members',corporateOnly,requireWorkspace(req=>req.params.workspaceId,true),async(req,res,next)=>{try{const {name,email,role}=req.body||{};if(!isNonEmptyString(name)||!isEmail(email)||role!=='creator')return res.status(400).json({error:'name, email, creator role required'});res.status(201).json(await createUserMembership(req.params.workspaceId,{...req.body,role:'creator'}));}catch(e){if(e instanceof Error&&['Only creator accounts can join a workspace','Creator belongs to another company'].includes(e.message))return res.status(409).json({error:e.message});next(e);}});
@@ -755,7 +826,7 @@ async function runRagJob(id:string,workspaceId:string,query:string){
   try{
     // Brief/Editor are RAG work, not KMS work: RAG retrieves matched knowledge
     // and writes the copy. KMS only stores corporate-uploaded documents.
-    const answer=await ragQuery(workspaceId,query);
+    const answer=await ragQuery(workspaceId,query,undefined,await authorizedKmsIds(String(workspaceId)));
     if(answer.grounded)await markSourcesIndexed(answer.sources,ids=>pool.query('UPDATE kms_documents SET indexed=true WHERE id=ANY($1::text[])',[ids]),error=>console.warn('[rag] indexed metadata update failed',error instanceof Error?error.message:error));
     await pool.query("UPDATE rag_jobs SET status='done',answer=$2::jsonb WHERE id=$1",[id,JSON.stringify(answer)]);
   }catch(error){
@@ -767,7 +838,7 @@ async function runRagJob(id:string,workspaceId:string,query:string){
 // ── RAG service proxy routes ──
 app.get('/api/rag/status',async(_req,res)=>{try{const status=await ragStatus();const deps=status?.dependencies||{};const ready=status?.status==='ready'&&['qdrant','embedding','reranker','llm'].every(name=>String((deps as any)[name]||'')==='ok');res.json({configured:true,ready,dependencies:deps,detail:status?.detail||{}});}catch(error){const message=error instanceof Error?error.message:'RAG status unavailable';res.json({configured:ragConfigured(),ready:false,detail:message});}});
 app.post('/api/rag/search',contentOnly,requireWorkspace(req=>req.body?.workspaceId),(_req,res)=>res.status(410).json({error:'KMS tidak menyediakan pencarian kutipan terpisah; gunakan sumber dari jawaban RAG'}));
-app.post('/api/rag/query',contentOnly,requireWorkspace(req=>req.body?.workspaceId),async(req,res)=>{try{const{workspaceId,query}=req.body||{};if(!isNonEmptyString(workspaceId))return res.status(400).json({error:'workspaceId is required'});if(!isNonEmptyString(query))return res.status(400).json({error:'query is required'});const answer=await ragQuery(workspaceId,query);if(answer.grounded){await markSourcesIndexed(answer.sources,ids=>pool.query('UPDATE kms_documents SET indexed=true WHERE id=ANY($1::text[])',[ids]),error=>console.warn('[rag] indexed metadata update failed',error instanceof Error?error.message:error));}res.json(answer);}catch(error){const message=error instanceof Error?error.message:'unknown error';console.error('[rag] query failed',{message,cause:error instanceof Error&&error.cause?String(error.cause):undefined});res.status(502).json({error:`KMS query gagal: ${message}`});}});
+app.post('/api/rag/query',contentOnly,requireWorkspace(req=>req.body?.workspaceId),async(req,res)=>{try{const{workspaceId,query}=req.body||{};if(!isNonEmptyString(workspaceId))return res.status(400).json({error:'workspaceId is required'});if(!isNonEmptyString(query))return res.status(400).json({error:'query is required'});const answer=await ragQuery(workspaceId,query,undefined,await authorizedKmsIds(String(workspaceId)));if(answer.grounded){await markSourcesIndexed(answer.sources,ids=>pool.query('UPDATE kms_documents SET indexed=true WHERE id=ANY($1::text[])',[ids]),error=>console.warn('[rag] indexed metadata update failed',error instanceof Error?error.message:error));}res.json(answer);}catch(error){const message=error instanceof Error?error.message:'unknown error';console.error('[rag] query failed',{message,cause:error instanceof Error&&error.cause?String(error.cause):undefined});res.status(502).json({error:`KMS query gagal: ${message}`});}});
 app.post('/api/rag/jobs',contentOnly,requireWorkspace(req=>req.body?.workspaceId),async(req,res)=>{try{const{workspaceId,query}=req.body||{};if(!isNonEmptyString(workspaceId)||!isNonEmptyString(query))return res.status(400).json({error:'workspaceId and query are required'});const id=randomUUID();await pool.query("INSERT INTO rag_jobs(id,workspace_id,user_id,status) VALUES($1,$2,$3,'running')",[id,workspaceId,String(res.locals.user?.id||'')]);await sweepRagJobs();void runRagJob(id,workspaceId,query);res.status(202).json({jobId:id,status:'running'});}catch(error){next(error);}});
 app.get('/api/rag/jobs/:id',async(req,res,next)=>{try{const result=await pool.query('SELECT workspace_id AS "workspaceId",status,answer,error FROM rag_jobs WHERE id=$1',[String(req.params.id)]);const job=result.rows[0];if(!job)return res.status(404).json({error:'Job not found or expired'});if(!permitted(res.locals.user,job.workspaceId))return res.status(403).json({error:'Workspace access denied'});if(job.status==='done')return res.json({status:'done',answer:job.answer});if(job.status==='error')return res.json({status:'error',error:job.error});res.json({status:'running'});}catch(error){next(error);}});
 app.post('/api/rag/refine',contentOnly,requireWorkspace(req=>req.body?.workspaceId),async(req,res,next)=>{try{const{draftContent,promptAction,kind}=req.body||{};if(!isNonEmptyString(draftContent)||!isNonEmptyString(promptAction))return res.status(400).json({error:'draftContent and promptAction required'});res.json(await ragRefine(String(req.body.workspaceId),draftContent,promptAction,typeof kind==='string'?kind:undefined));}catch(error){next(error);}});
@@ -776,7 +847,41 @@ app.post('/api/rag/compose',contentOnly,requireWorkspace(req=>req.body?.workspac
 // The former workspace-specific RAG service is intentionally not synced/pruned from the shared KMS corpus.
 app.post(['/api/rag/sync','/api/rag/prune'],knowledgeManager,(_req,res)=>res.status(410).json({error:'Gunakan unggah dan hapus dokumen pada KMS bersama'}));
 app.use('/api',(_req,res)=>{res.status(404).json({error:'Endpoint not found'});});
-app.use((error:unknown,_req:express.Request,res:express.Response,_next:express.NextFunction)=>{console.error(error);if((error as {code?:string}).code==='23505')return res.status(409).json({error:'A record with these unique values already exists (duplicate email or code)'});res.status(500).json({error:error instanceof Error?error.message:'Internal server error'});});
+/**
+ * Error mapping.
+ *
+ * Raw driver messages used to reach the browser ("violates foreign key
+ * constraint \"organizations_company_id_fkey\""), which leaks schema names and
+ * confuses users. Postgres codes are translated into a small, honest set of
+ * responses; anything unrecognised becomes a generic 500 and is logged server-side
+ * only.
+ */
+app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error(error);
+  const code = (error as { code?: string }).code;
+  const constraint = String((error as { constraint?: string }).constraint || '');
+
+  if (code === '23505') {
+    if (constraint.includes('code')) return res.status(409).json({ error: 'Kode tersebut sudah dipakai. Gunakan kode lain.' });
+    if (constraint.includes('email')) return res.status(409).json({ error: 'Email tersebut sudah terdaftar.' });
+    return res.status(409).json({ error: 'Data dengan nilai unik tersebut sudah ada.' });
+  }
+  if (code === '23503') {
+    return res.status(422).json({ error: 'Data induk yang dirujuk tidak ditemukan. Periksa pilihan Anda.' });
+  }
+  if (code === '23502') {
+    return res.status(422).json({ error: 'Ada kolom wajib yang belum diisi.' });
+  }
+  if (code === '22P02') {
+    return res.status(400).json({ error: 'Format data tidak valid.' });
+  }
+  // Application-level errors that deliberately carry a user-facing message.
+  const status = (error as { status?: number }).status;
+  if (typeof status === 'number' && status >= 400 && status < 500 && error instanceof Error) {
+    return res.status(status).json({ error: error.message });
+  }
+  return res.status(500).json({ error: 'Terjadi kesalahan pada server. Coba lagi atau hubungi administrator.' });
+});
 
 const port=Number(process.env.PORT||process.env.API_PORT||3005);
 if(process.env.NODE_ENV!=='test') {

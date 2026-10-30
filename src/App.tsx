@@ -646,6 +646,14 @@ export function App() {
                 await loadData(activeWorkspace.id);
                 showToast('Draf berhasil dipindahkan ke arsip.');
               }}
+              onRestoreDraft={async (id) => {
+                const draft = drafts.find(item => item.id === id);
+                if (!draft) return;
+                // Restoring puts the draft back in the active list as a working draft.
+                await apiService.saveDraft({ ...draft, status: 'draft', updatedAt: new Date().toISOString() });
+                await loadData(activeWorkspace.id);
+                showToast('Draf dipulihkan ke daftar aktif.');
+              }}
             />
           )}
 

@@ -26,6 +26,7 @@ interface LibraryViewProps {
   onOpenEditor: (draftId: string) => void;
   onOpenExportModal: (draft: ContentDraft) => void;
   onArchiveDraft: (draftId: string) => void;
+  onRestoreDraft: (draftId: string) => void;
 }
 
 export const LibraryView: React.FC<LibraryViewProps> = ({
@@ -34,7 +35,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   onSelectDraft,
   onOpenEditor,
   onOpenExportModal,
-  onArchiveDraft
+  onArchiveDraft,
+  onRestoreDraft
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<DraftStatus | 'all'>('all');
@@ -151,7 +153,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
                     <span>Oleh: <strong>{draft.creatorName}</strong></span>
-                    <span>{new Date(draft.updatedAt).toLocaleDateString('en-US')}</span>
+                    <span>{new Date(draft.updatedAt).toLocaleDateString('id-ID')}</span>
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
@@ -183,8 +185,25 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                         <span>Ekspor</span>
                       </button>
                       {draft.status !== 'diarsipkan' && (
-                        <button className="btn btn-secondary btn-sm" onClick={() => onArchiveDraft(draft.id)} title="Arsipkan draf">
+                        <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  if (window.confirm(`Arsipkan "${draft.title}"? Draf akan keluar dari daftar aktif.`)) {
+                    onArchiveDraft(draft.id);
+                  }
+                }}
+                title="Arsipkan draf"
+              >
                           <Archive size={14}/><span>Arsipkan</span>
+                        </button>
+                      )}
+                      {draft.status === 'diarsipkan' && (
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => onRestoreDraft(draft.id)}
+                          title="Pulihkan draf ke daftar aktif"
+                        >
+                          <Archive size={14}/><span>Pulihkan</span>
                         </button>
                       )}
                     </div>

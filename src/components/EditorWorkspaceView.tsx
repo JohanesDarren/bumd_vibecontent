@@ -379,7 +379,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)' }}>
                 <Sparkles size={14} />
-                <span>Variasi Cepat (F-08):</span>
+                <span>Variasi Cepat:</span>
                 {variationError && (
                   <span style={{ fontSize: '0.7rem', fontWeight: 500, color: 'var(--danger, #c0392b)' }}>
                     {variationError}
@@ -707,9 +707,9 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
           {activeTabSide === 'scorecard' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <h4 style={{ fontSize: '0.92rem', fontWeight: 700 }}>Automated Quality Check (F-09)</h4>
+                <h4 style={{ fontSize: '0.92rem', fontWeight: 700 }}>Pemeriksaan Kualitas Otomatis</h4>
                 <span className={`status-pill ${liveCheck.overallStatus}`}>
-                  {liveCheck.overallStatus === 'siap_review' ? 'Ready to Submit' : 'Needs Verification'}
+                  {liveCheck.overallStatus === 'siap_review' ? 'Siap Ditinjau' : 'Perlu Verifikasi'}
                 </span>
               </div>
 
@@ -774,8 +774,8 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
           {activeTabSide === 'history' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <h4 style={{ fontSize: '0.92rem', fontWeight: 700 }}>Riwayat Versi (F-08)</h4>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{draft.versions.length} Versions Saved</span>
+                <h4 style={{ fontSize: '0.92rem', fontWeight: 700 }}>Riwayat Versi</h4>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{draft.versions.length} versi tersimpan</span>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -808,7 +808,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
                       )}
                     </div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      By: <strong>{ver.createdBy}</strong> • {new Date(ver.createdAt).toLocaleDateString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                      By: <strong>{ver.createdBy}</strong> • {new Date(ver.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                     </div>
                     <div style={{ fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
                       "{ver.changeSummary}"

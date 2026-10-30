@@ -369,12 +369,23 @@ export function runQualityCheck(
   const normalizedContent = content.toLowerCase();
 
   // 1. Check banned words
+  //
+  // A single entry may list several spellings ("Politeknik Telkom / IT Telkom").
+  // Matching the raw entry therefore missed every variant, so each alternative
+  // is tested on its own. Matching is word-boundary aware so "Jurusan" does not
+  // fire inside a longer word by accident, while still catching inflections.
   const bannedWordsFound: string[] = [];
-  brandProfile.bannedWords.forEach(b => {
-    if (normalizedContent.includes(b.word.toLowerCase())) {
-      bannedWordsFound.push(b.word);
-    }
-  });
+  for (const entry of brandProfile.bannedWords) {
+    const variants = String(entry.word)
+      .split(/[\/|,;]|\s+atau\s+/i)
+      .map(v => v.trim().toLowerCase())
+      .filter(v => v.length > 2);
+    const hit = variants.find(v => {
+      const escaped = v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i').test(normalizedContent);
+    });
+    if (hit) bannedWordsFound.push(entry.word);
+  }
 
   // 2. Check CTA
   const expectedCta = brief.cta || brandProfile.officialCTAs[0]?.text || '';

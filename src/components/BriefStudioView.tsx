@@ -89,7 +89,7 @@ function renderEditorMarkup(text:string){
     .replace(/>/g, '&gt;')
     .replace(/\n/g, '<br/>')
     .replace(/\[References:([^\]]+)\]/g, '<span class="brief-citation-tag">[References:$1]</span>')
-    .replace(/\[(?:Perlu Verifikasi|Needs Verification)([^\]]*)\]/g, '<span class="brief-warning-tag">[Needs Verification$1]</span>');
+    .replace(/\[(?:Perlu Verifikasi|Needs Verification)([^\]]*)\]/g, '<span class="brief-warning-tag">[Perlu Verifikasi$1]</span>');
 }
 
 export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
@@ -213,7 +213,11 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
   const handleSubmit = async (e?: React.FormEvent, continueToEditor = false) => {
     e?.preventDefault();
     if (!title.trim() || !keyMessage.trim()) {
-      alert('Judul konten dan pesan kunci wajib diisi.');
+      // Inline message instead of a browser alert, and it says which field is empty.
+      const missing: string[] = [];
+      if (!title.trim()) missing.push('Judul konten');
+      if (!keyMessage.trim()) missing.push('Pesan kunci');
+      setGenerationError(`${missing.join(' dan ')} wajib diisi sebelum generate.`);
       return;
     }
     if (savedBrief?.key === briefKey) {
@@ -718,7 +722,10 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
               onClick={handleContinueToEditor}
             >
               {isGenerating ? <ClipLoader size={16} color="currentColor" speedMultiplier={0.8} /> : <ExternalLink size={16} />}
-              <span>{isGenerating ? 'Menyimpan Draf…' : 'Lanjut ke Editor'}</span>
+              {/* This action runs the AI generation, then opens the editor. The label
+                  says so, because "Lanjut ke Editor" looked like a plain navigation
+                  step while it actually took ~30 seconds of model time. */}
+              <span>{isGenerating ? 'Membuat konten…' : 'Generate & Buka Editor'}</span>
             </button>
           </div>
         </div>

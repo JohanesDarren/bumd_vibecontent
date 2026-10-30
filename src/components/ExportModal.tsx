@@ -81,7 +81,7 @@ ${currentVer?.citations.map(c => `- **${c.documentTitle}** (${c.section}) - Rele
         <div className="modal-header">
           <div>
             <span style={{ fontSize: '0.72rem', color: 'var(--accent-cyan)', fontWeight: 700, textTransform: 'uppercase' }}>
-              Ekspor Draf & Disposisi  (PRD F-11)
+              Ekspor Draf & Disposisi
             </span>
             <h3 style={{ fontSize: '1.2rem', fontWeight: 800 }}>
               {draft.title}

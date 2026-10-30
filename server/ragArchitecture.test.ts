@@ -7,7 +7,13 @@ const indexSrc = await readFile(new URL('./index.ts', import.meta.url), 'utf8');
 
 test('Brief and Editor generation go to RAG, never to KMS', () => {
   // KMS is document storage for corporate uploads; RAG does retrieval+generation.
-  assert.match(indexSrc, /const answer=await ragQuery\(workspaceId,query\)/);
+  // The call must also carry the workspace document allow-list: the corpus is
+  // shared, so isolation comes from the assigned documents, not the collection.
+  assert.match(
+    indexSrc,
+    /const answer=await ragQuery\(workspaceId,query,undefined,await authorizedKmsIds\(String\(workspaceId\)\)\)/,
+    'generation must scope RAG to the workspace documents'
+  );
   assert.ok(
     !/queryKnowledge\(query,kmsConfig\(\)/.test(indexSrc),
     'generation must not call the KMS chat endpoint'

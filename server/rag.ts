@@ -364,7 +364,27 @@ function styleFrom(query: string): string {
   return parts.length ? parts.join('; ') : 'caption media sosial yang santai dan ramah';
 }
 
-export async function ragQuery(scopeId: string, query: string, options?: unknown): Promise<RagQueryResult> {
+/**
+ * Workspace isolation.
+ *
+ * The knowledge base is shared, so isolation cannot come from the collection id.
+ * It comes from the documents assigned to the workspace: `allowedDocumentIds`
+ * is the authoritative list, and any chunk whose source is not on it is dropped
+ * before it can reach the answer or the sources panel.
+ *
+ * Passing `undefined` means "no filter" and is only acceptable for callers that
+ * have already established there is nothing to filter (e.g. an empty KB).
+ */
+export async function ragQuery(
+  scopeId: string,
+  query: string,
+  options?: unknown,
+  allowedDocumentIds?: string[]
+): Promise<RagQueryResult> {
+  // An empty allow-list is a deny-all, not a skip-filter.
+  if (allowedDocumentIds && allowedDocumentIds.length === 0) {
+    return { answer: '', grounded: false, sources: [], no_answer_reason: 'no_documents' };
+  }
   const clean = sanitizeOptions(options) || { top_k: 6, strict_grounding: true, include_sources: true };
   const retrievalQuery = retrievalTextFrom(query);
 
@@ -376,7 +396,12 @@ export async function ragQuery(scopeId: string, query: string, options?: unknown
   // writing step runs against our own vision/LLM gateway, which is fast and
   // reliable. Grounding rules stay identical: no chunks means no draft.
   const found = await ragSearch(scopeId, retrievalQuery, { top_k: clean.top_k, use_reranker: clean.use_reranker, use_hybrid: clean.use_hybrid });
-  const hits = (found.results || []).filter(hit => typeof hit.content === 'string' && hit.content.trim());
+  const allow = allowedDocumentIds ? new Set(allowedDocumentIds) : null;
+  const sourceIdOf = (hit: RagSearchHit): string => String(hit.document_id ?? '');
+  const hits = (found.results || [])
+    .filter(hit => typeof hit.content === 'string' && hit.content.trim())
+    // Drop anything outside the workspace before scoring or prompting.
+    .filter(hit => !allow || allow.has(sourceIdOf(hit)));
   const threshold = typeof clean.threshold === 'number' ? clean.threshold : 0.2;
   const usable = hits.filter(hit => normalizeScore(hit.score) >= threshold);
 

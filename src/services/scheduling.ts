@@ -69,10 +69,31 @@ export function currentVersion(draft?: ContentDraft) {
 export function factConflicts(item: ScheduledContent, draft: ContentDraft | undefined, documents: KnowledgeDocument[]): string[] {
   const citations = currentVersion(draft)?.citations || [];
   const issues: string[] = [];
-  for (const documentId of new Set(citations.map(c => c.documentId))) {
-    const doc = documents.find(d => d.id === documentId);
+  // Citations come from the vector store and carry its own chunk/document id,
+  // which is not the same string as the knowledge-base document id. Matching on
+  // id alone therefore reported "document no longer exists" for documents that
+  // were present. Resolve by id first, then by title, and only warn when the
+  // citation cannot be tied to any document the workspace can see.
+  const byId = new Map(documents.map(d => [d.id, d]));
+  const byTitle = new Map(
+    documents.filter(d => d.title).map(d => [d.title.trim().toLowerCase(), d])
+  );
+  const seen = new Set<string>();
+  for (const citation of citations) {
+    const documentId = citation.documentId;
+    const doc =
+      byId.get(documentId) ||
+      (citation.documentTitle ? byTitle.get(citation.documentTitle.trim().toLowerCase()) : undefined);
+
     if (!doc) {
-      issues.push(`Dokumen sumber "${citations.find(c => c.documentId === documentId)?.documentTitle || documentId}" sudah tidak ada di Knowledge Base.`);
+      // Deduplicate: one missing document must produce one warning, not one per chunk.
+      const key = `missing:${documentId}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        issues.push(
+          `Dokumen sumber "${citation.documentTitle || documentId}" sudah tidak ada di Knowledge Base.`
+        );
+      }
       continue;
     }
     if (doc.status !== 'aktif') issues.push(`Dokumen sumber "${doc.title}" berstatus ${DOCUMENT_STATUS_LABELS[doc.status]}.`);
