@@ -64,11 +64,13 @@ app.use((_req, res, next) => {
     'Content-Security-Policy',
     [
       "default-src 'self'",
-      "script-src 'self'",
+      // Cloudflare injects its analytics beacon at the edge; blocking it produced
+      // a console error on every page load without adding any security value.
+      "script-src 'self' https://static.cloudflareinsights.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com data:",
       "img-src 'self' data: blob:",
-      "connect-src 'self'",
+      "connect-src 'self' https://cloudflareinsights.com",
       "frame-ancestors 'self'",
       "base-uri 'self'",
       "form-action 'self'"

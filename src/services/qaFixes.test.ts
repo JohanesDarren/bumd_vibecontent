@@ -80,6 +80,8 @@ test('workspace fields are validated on the server', async () => {
 test('security headers are set by the app, not only the proxy', async () => {
   const server = await read('../../server/index.ts');
   assert.match(server, /app\.disable\('x-powered-by'\)/);
+  // The edge-injected analytics beacon must be allowed, or every page logs a CSP error.
+  assert.match(server, /static\.cloudflareinsights\.com/);
   for (const h of ['Content-Security-Policy', 'Strict-Transport-Security', 'X-Content-Type-Options']) {
     assert.ok(server.includes(h), `${h} must be set`);
   }
