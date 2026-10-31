@@ -154,6 +154,10 @@ export const apiService={
   },
   generateVisual:(input:import('./visualScene').VisualInput)=>request<{imageUrl:string;provider:string;model:string;llmModel:string;fallback:boolean;format:string;prompt:string;imagePrompt:string;dimensions:string;referenceUsed:boolean;referenceTitle?:string;referenceId?:string}>('/api/visual/generate',{method:'POST',body:JSON.stringify(input)}),
   saveDraft:(draft:ContentDraft,brief?:ContentBrief)=>request<ContentDraft>(`/api/drafts/${draft.id}`,{method:'PUT',body:JSON.stringify({...draft,brief})}),
+  // Approval workflow: creator submits, corporate decides. The server enforces
+  // the order, so the UI can only offer the action that is currently valid.
+  submitDraft:(workspaceId:string,draftId:string)=>request<{id:string;status:string}>(`/api/drafts/${draftId}/submit`,{method:'POST',body:JSON.stringify({workspaceId})}),
+  decideDraft:(workspaceId:string,draftId:string,decision:'disetujui'|'ditolak'|'revisi_diminta',note?:string)=>request<{id:string;status:string}>(`/api/drafts/${draftId}/approval`,{method:'POST',body:JSON.stringify({workspaceId,decision,note})}),
   fetchPostImage:(workspaceId:string,id:string)=>request<ScheduledContent>(`/api/organizations/${workspaceId}/schedules/${id}/post-image`,{method:'POST'}),
   setScheduleImage:(workspaceId:string,id:string,image:string|null,source?:'upload'|'ai')=>request<ScheduledContent>(`/api/organizations/${workspaceId}/schedules/${id}/custom-image`,{method:'PUT',body:JSON.stringify({image,source})}),
   ragPlan:(body:PlanRequestBody)=>request<{slots:PlanSlot[];sources:string[];model?:string}>('/api/rag/plan',{method:'POST',body:JSON.stringify(body)}),

@@ -505,7 +505,18 @@ export function CoreVisualStudio({
                 <span>Menyiapkan visual…</span>
               </div>
             ) : result ? (
-              <img src={result.imageUrl} alt="Visual hasil generasi" className="core-preview-img" />
+              // The image model cannot spell: any headline it draws comes out as
+              // pseudo-text ("Kulahi D3 System Innformmsi"). The real copy is
+              // composited here as live text, so it is always crisp and correct.
+              <div className="core-preview-stack">
+                <img src={result.imageUrl} alt="Visual hasil generasi" className="core-preview-img" />
+                {(headline || ctaText) && (
+                  <div className={`core-overlay core-overlay-${publication}`} aria-hidden="true">
+                    {headline ? <p className="core-overlay-head">{headline}</p> : null}
+                    {ctaText ? <span className="core-overlay-cta">{ctaText}</span> : null}
+                  </div>
+                )}
+              </div>
             ) : (
               <div className="core-preview-empty">
                 <ImageIcon size={26} />

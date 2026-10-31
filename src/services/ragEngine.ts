@@ -528,13 +528,12 @@ export function generateContentFromBrief(
   // Generate according to format
   if (brief.format === 'copy_caption') {
     const hashtags = [
-      '#BUMDProfesional',
+      // Hashtags come from the brand profile, not a fixed corporate template.
       `#${brandProfile.organizationName.replace(/\s+/g, '')}`,
       channelTag,
-      '#PelayananPublik',
-      '#InfoResmi'
+      ...(brandProfile.approvedHashtags || [])
     ].filter(Boolean).join(' ');
-    generatedText = `${ungroundedNotice ? `${ungroundedNotice}\n\n` : ''}[DRAF KORPORAT]
+    generatedText = `${ungroundedNotice ? `${ungroundedNotice}\n\n` : ''}
 
 ${brief.title.toUpperCase()}
 
@@ -763,7 +762,7 @@ export function refineDraftContent(
       };
     case 'caption_ig':
       return {
-        newContent: `✨ Informasi Penting ✨\n\n${currentContent.trim()}\n\nJangan lupa bagikan info ini ke orang terdekatmu!\n\n#${brandProfile.organizationName.replace(/\s+/g, '')} #InfoBUMD #PelayananPublik #Update #BUMD`,
+        newContent: `✨ Informasi Penting ✨\n\n${currentContent.trim()}\n\nJangan lupa bagikan info ini ke orang terdekatmu!\n\n#${brandProfile.organizationName.replace(/\s+/g, '')}${(brandProfile.approvedHashtags || []).map(h => ` ${h}`).join('')}`,
         summary: 'Formatted as Instagram caption with hook and hashtags.'
       };
     case 'formal':

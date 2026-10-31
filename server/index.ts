@@ -522,9 +522,27 @@ app.get('/api/admin/overview',globalOnly,async(_req,res,next)=>{try{
   res.json({companies:companies.rows,workspaces:workspaces.rows[0].count,users:users.rows[0],drafts:drafts.rows[0].count,knowledgeSources:sources.rows[0].count,auditEvents:audit.rows[0].count});
 }catch(e){next(e);}});
 app.get('/api/admin/companies',globalOnly,async(req,res,next)=>{try{res.json((await pool.query('SELECT id,name FROM companies ORDER BY name')).rows);}catch(e){next(e);}});
-app.post('/api/admin/companies',globalOnly,async(req,res,next)=>{try{if(!isNonEmptyString(req.body?.name))return res.status(400).json({error:'name required'});res.status(201).json((await pool.query('INSERT INTO companies(id,name) VALUES($1,$2) RETURNING id,name',[`co-${randomUUID()}`,req.body.name])).rows[0]);}catch(e){next(e);}});
+app.post('/api/admin/companies',globalOnly,async(req,res,next)=>{try{
+  const name=typeof req.body?.name==='string'?req.body.name.trim():'';
+  if(!name)return res.status(400).json({error:'Nama perusahaan induk wajib diisi'});
+  if(name.length>120)return res.status(400).json({error:'Nama perusahaan induk maksimal 120 karakter'});
+  const created=(await pool.query('INSERT INTO companies(id,name) VALUES($1,$2) RETURNING id,name',[`co-${randomUUID()}`,name])).rows[0];
+  // Companies are not owned by a workspace, so the audit row is attached to the
+  // first workspace of that company when one exists.
+  const ws=await pool.query('SELECT id FROM organizations WHERE company_id=$1 ORDER BY created_at LIMIT 1',[created.id]);
+  const a=actorOf(res);
+  if(ws.rows[0])await writeAudit({workspaceId:ws.rows[0].id,actorId:a.id,actorName:a.name,actorRole:a.role,action:'Company created',objectType:'company',objectId:created.id,objectName:created.name});
+  res.status(201).json(created);
+}catch(e){next(e);}});
 app.put('/api/admin/companies/:id',globalOnly,async(req,res,next)=>{try{if(!isNonEmptyString(req.body?.name))return res.status(400).json({error:'name required'});const result=await pool.query('UPDATE companies SET name=$1 WHERE id=$2 RETURNING id,name',[req.body.name.trim(),req.params.id]);if(!result.rowCount)return res.status(404).json({error:'Company not found'});res.json(result.rows[0]);}catch(e){next(e);}});
-app.delete('/api/admin/companies/:id',globalOnly,async(req,res,next)=>{try{const result=await pool.query(`DELETE FROM companies c WHERE c.id=$1 AND NOT EXISTS(SELECT 1 FROM organizations WHERE company_id=c.id) AND NOT EXISTS(SELECT 1 FROM users WHERE company_id=c.id) RETURNING id`,[req.params.id]);if(result.rowCount)return res.json({ok:true});if(!(await pool.query('SELECT 1 FROM companies WHERE id=$1',[req.params.id])).rowCount)return res.status(404).json({error:'Company not found'});res.status(409).json({error:'Remove company workspaces and corporate accounts first'});}catch(e){next(e);}});
+app.delete('/api/admin/companies/:id',globalOnly,async(req,res,next)=>{try{const preC=await pool.query('SELECT name FROM companies WHERE id=$1',[req.params.id]);
+    const result=await pool.query(`DELETE FROM companies c WHERE c.id=$1 AND NOT EXISTS(SELECT 1 FROM organizations WHERE company_id=c.id) AND NOT EXISTS(SELECT 1 FROM users WHERE company_id=c.id) RETURNING id`,[req.params.id]);
+    if(result.rowCount){
+      const a=actorOf(res);
+      const anchor=(res.locals.user?.workspaces?.[0]?.id);
+      if(anchor)await writeAudit({workspaceId:anchor,actorId:a.id,actorName:a.name,actorRole:a.role,action:'Company deleted',objectType:'company',objectId:String(req.params.id),objectName:preC.rows[0]?.name||String(req.params.id)});
+      return res.json({ok:true});
+    }if(!(await pool.query('SELECT 1 FROM companies WHERE id=$1',[req.params.id])).rowCount)return res.status(404).json({error:'Company not found'});res.status(409).json({error:'Remove company workspaces and corporate accounts first'});}catch(e){next(e);}});
 app.get('/api/admin/users',globalOnly,async(req,res,next)=>{try{res.json((await pool.query(`SELECT u.id,u.name,u.email,u.global_role AS role,u.company_id AS "companyId",COALESCE((SELECT array_agg(m.organization_id ORDER BY m.organization_id) FROM memberships m WHERE m.user_id=u.id AND m.active),'{}') AS "workspaceIds" FROM users u ORDER BY u.name`)).rows);}catch(e){next(e);}});
 app.post('/api/admin/users',globalOnly,async(req,res,next)=>{try{const {name,email,password,role,companyId,workspaceIds}=req.body||{};if(!isNonEmptyString(name)||!isEmail(email)||typeof password!=='string'||password.length<8||!['creator','corporate','superadmin'].includes(role))return res.status(400).json({error:'name, email, password (min 8 characters) and creator, corporate or superadmin role required'});if(role!=='superadmin'&&!isNonEmptyString(companyId))return res.status(400).json({error:'creator and corporate accounts require a companyId'});if(role==='creator'){if(!Array.isArray(workspaceIds)||!workspaceIds.length||!workspaceIds.every(isNonEmptyString))return res.status(400).json({error:'creator accounts require at least one workspaceId'});const created=await createCompanyUser(companyId,{name,email,password,workspaceIds});if(!created)return res.status(403).json({error:'Workspace outside company'});return res.status(201).json({...created,role:'creator',companyId});}const {hashPassword}=await import('./database.ts');res.status(201).json((await pool.query('INSERT INTO users(id,name,email,password_hash,global_role,company_id) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,name,email,global_role AS role,company_id AS "companyId"',[`usr-${randomUUID()}`,name,email.toLowerCase(),await hashPassword(password),role,role==='corporate'?companyId:null])).rows[0]);}catch(e){next(e);}});
 app.put('/api/admin/users/:id',globalOnly,async(req,res,next)=>{try{const {name,email,role,companyId,password}=req.body||{};if(!isNonEmptyString(name)||!isEmail(email)||!['creator','corporate','superadmin'].includes(role)||role==='corporate'&&!isNonEmptyString(companyId)||password!==undefined&&(typeof password!=='string'||password.length<8))return res.status(400).json({error:'Valid name, email, role, corporate company and optional password required'});const current=(await pool.query('SELECT global_role FROM users WHERE id=$1',[req.params.id])).rows[0];if(!current)return res.status(404).json({error:'User not found'});if(req.params.id===res.locals.user.id&&role!=='superadmin')return res.status(409).json({error:'Cannot demote your own account'});if(current.global_role==='superadmin'&&role!=='superadmin'&&(await pool.query("SELECT count(*)::int AS count FROM users WHERE global_role='superadmin'")).rows[0].count<=1)return res.status(409).json({error:'At least one superadmin required'});if((current.global_role==='creator')!==(role==='creator'))return res.status(409).json({error:'Creator role cannot be changed; manage workspace assignments separately'});const {hashPassword}=await import('./database.ts');const result=await pool.query(`UPDATE users SET name=$1,email=$2,global_role=$3,company_id=CASE WHEN $3='superadmin' THEN NULL WHEN $3='corporate' THEN $4 ELSE company_id END,password_hash=coalesce($5,password_hash) WHERE id=$6 RETURNING id,name,email,global_role AS role,company_id AS "companyId"`,[name.trim(),email.trim().toLowerCase(),role,role==='corporate'?companyId:null,password===undefined?null:await hashPassword(password),req.params.id]);res.json(result.rows[0]);}catch(e){next(e);}});
@@ -539,6 +557,130 @@ app.post('/api/admin/memberships',globalOnly,async(req,res,next)=>{try{const {wo
 app.delete('/api/admin/memberships/:workspaceId/:userId',globalOnly,async(req,res,next)=>{try{const {workspaceId,userId}=req.params;const membership=await pool.query('SELECT 1 FROM memberships WHERE organization_id=$1 AND user_id=$2',[workspaceId,userId]);if(!membership.rowCount)return res.status(404).json({error:'Membership not found'});const other=await pool.query('SELECT 1 FROM memberships WHERE user_id=$1 AND organization_id<>$2 AND active LIMIT 1',[userId,workspaceId]);if(!other.rowCount)return res.status(409).json({error:'Last workspace assignment cannot be removed'});await pool.query('DELETE FROM memberships WHERE organization_id=$1 AND user_id=$2',[workspaceId,userId]);res.json({ok:true});}catch(e){next(e);}});
 app.get('/api/admin/audit',globalOnly,async(req,res,next)=>{try{res.json((await pool.query(`SELECT a.id,a.created_at AS "createdAt",a.action,a.actor_name AS "actorName",a.object_type AS "objectType",a.object_name AS "objectName",o.name AS "workspaceName" FROM audit_events a JOIN organizations o ON o.id=a.organization_id ORDER BY a.created_at DESC LIMIT 100`)).rows);}catch(e){next(e);}});
 app.get('/api/admin/workspaces',globalOnly,async(req,res,next)=>{try{res.json((await pool.query('SELECT id,name,code,sector,city,company_id AS "companyId" FROM organizations ORDER BY name')).rows);}catch(e){next(e);}});
+
+/**
+ * Audit trail writer.
+ *
+ * `audit_events` was read by three endpoints but never written, so the page
+ * promised "Seluruh event mutasi dicatat" while every admin mutation left no
+ * trace. Every state change below records actor, object and a short detail.
+ */
+async function writeAudit(input: {
+  workspaceId: string;
+  actorId?: string | null;
+  actorName: string;
+  actorRole: string;
+  action: string;
+  objectType: string;
+  objectId: string;
+  objectName: string;
+  details?: string;
+}): Promise<void> {
+  try {
+    await pool.query(
+      `INSERT INTO audit_events(organization_id,actor_id,actor_name,actor_role,action,object_type,object_id,object_name,details)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [
+        input.workspaceId,
+        input.actorId ?? null,
+        input.actorName,
+        input.actorRole,
+        input.action,
+        input.objectType,
+        input.objectId,
+        input.objectName,
+        input.details ?? ''
+      ]
+    );
+  } catch (error) {
+    // An audit failure must never break the operation the user asked for.
+    console.warn('[audit] failed to record event', error instanceof Error ? error.message : error);
+  }
+}
+
+/** Identity of the caller, for audit rows. */
+function actorOf(res: express.Response): { id: string | null; name: string; role: string } {
+  const u = res.locals.user || {};
+  return { id: u.id ?? null, name: u.name ?? 'Sistem', role: u.role ?? u.global_role ?? 'unknown' };
+}
+
+
+/**
+ * Content approval (T2).
+ *
+ * The dashboard advertised "Menunggu Review" and "Konten Disetujui" but no
+ * endpoint could ever move a draft into those states, so both KPIs were
+ * permanently zero. The workflow is: creator submits -> corporate approves or
+ * rejects -> only an approved draft may be scheduled.
+ */
+app.post('/api/drafts/:id/submit', contentOnly, requireWorkspace(req => req.body?.workspaceId), async (req, res, next) => {
+  try {
+    const actor = actorOf(res);
+    const draft = await pool.query(
+      'SELECT id,title,status,organization_id AS "workspaceId" FROM content_drafts WHERE id=$1',
+      [String(req.params.id)]
+    );
+    const row = draft.rows[0];
+    if (!row) return res.status(404).json({ error: 'Draf tidak ditemukan.' });
+    if (row.status === 'menunggu_review') return res.status(409).json({ error: 'Draf sudah menunggu review.' });
+    if (row.status === 'disetujui') return res.status(409).json({ error: 'Draf sudah disetujui.' });
+
+    await pool.query(
+      `UPDATE content_drafts SET status='menunggu_review', updated_at=now() WHERE id=$1`,
+      [row.id]
+    );
+    await writeAudit({
+      workspaceId: row.workspaceId,
+      actorId: actor.id, actorName: actor.name, actorRole: actor.role,
+      action: 'Draft submitted for review', objectType: 'draft', objectId: row.id,
+      objectName: row.title, details: `Status: ${row.status} -> menunggu_review`
+    });
+    res.json({ id: row.id, status: 'menunggu_review' });
+  } catch (error) { next(error); }
+});
+
+app.post('/api/drafts/:id/approval', corporateOnly, requireWorkspace(req => req.body?.workspaceId), async (req, res, next) => {
+  try {
+    const actor = actorOf(res);
+    const decision = String(req.body?.decision || '');
+    const note = typeof req.body?.note === 'string' ? req.body.note.slice(0, 500) : '';
+    if (!['disetujui', 'ditolak', 'revisi_diminta'].includes(decision)) {
+      return res.status(400).json({ error: 'Keputusan harus disetujui, ditolak, atau revisi_diminta.' });
+    }
+
+    const draft = await pool.query(
+      'SELECT id,title,status,organization_id AS "workspaceId" FROM content_drafts WHERE id=$1',
+      [String(req.params.id)]
+    );
+    const row = draft.rows[0];
+    if (!row) return res.status(404).json({ error: 'Draf tidak ditemukan.' });
+    // A decision only makes sense on something that was submitted.
+    if (row.status !== 'menunggu_review' && row.status !== 'revisi_diminta') {
+      return res.status(409).json({ error: 'Hanya draf yang menunggu review dapat diputuskan.' });
+    }
+
+    const approvalInfo = {
+      decision,
+      note,
+      decidedBy: actor.name,
+      decidedById: actor.id,
+      decidedAt: new Date().toISOString()
+    };
+    await pool.query(
+      `UPDATE content_drafts SET status=$2, approval_info=$3::jsonb, updated_at=now() WHERE id=$1`,
+      [row.id, decision, JSON.stringify(approvalInfo)]
+    );
+    await writeAudit({
+      workspaceId: row.workspaceId,
+      actorId: actor.id, actorName: actor.name, actorRole: actor.role,
+      action: decision === 'disetujui' ? 'Draft approved' : decision === 'ditolak' ? 'Draft rejected' : 'Revision requested',
+      objectType: 'draft', objectId: row.id, objectName: row.title,
+      details: note ? `Catatan: ${note}` : `Status: ${row.status} -> ${decision}`
+    });
+    res.json({ id: row.id, status: decision, approvalInfo });
+  } catch (error) { next(error); }
+});
+
 /**
  * Workspace field rules.
  *
@@ -565,9 +707,21 @@ function validateWorkspaceFields(input: { name?: unknown; code?: unknown; sector
   return { name, code, sector, city };
 }
 
-app.post('/api/admin/workspaces',globalOnly,async(req,res,next)=>{try{const {companyId,name,code,sector,city}=req.body||{};if(!isNonEmptyString(companyId))return res.status(400).json({error:'companyId wajib diisi'});const v=validateWorkspaceFields({name,code,sector,city});if('error' in v)return res.status(400).json({error:v.error});res.status(201).json((await pool.query('INSERT INTO organizations(id,company_id,name,code,sector,city) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,name,code,company_id AS "companyId"',[`org-${randomUUID()}`,companyId,name,code.toUpperCase(),sector,city])).rows[0]);}catch(e){next(e);}});
+app.post('/api/admin/workspaces',globalOnly,async(req,res,next)=>{try{const {companyId,name,code,sector,city}=req.body||{};if(!isNonEmptyString(companyId))return res.status(400).json({error:'companyId wajib diisi'});const v=validateWorkspaceFields({name,code,sector,city});if('error' in v)return res.status(400).json({error:v.error});const created=(await pool.query('INSERT INTO organizations(id,company_id,name,code,sector,city) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,name,code,company_id AS "companyId"',[`org-${randomUUID()}`,companyId,v.name,v.code,v.sector,v.city])).rows[0];
+    const a=actorOf(res);
+    await writeAudit({workspaceId:created.id,actorId:a.id,actorName:a.name,actorRole:a.role,action:'Workspace created',objectType:'workspace',objectId:created.id,objectName:created.name,details:`Kode ${created.code}`});
+    res.status(201).json(created);}catch(e){next(e);}});
 app.put('/api/admin/workspaces/:id',globalOnly,async(req,res,next)=>{try{const {companyId,name,code,sector,city}=req.body||{};if(![companyId,name,code,sector,city].every(isNonEmptyString))return res.status(400).json({error:'companyId, name, code, sector, city required'});const previous=(await pool.query('SELECT company_id FROM organizations WHERE id=$1',[req.params.id])).rows[0];if(!previous)return res.status(404).json({error:'Workspace not found'});if(previous.company_id!==companyId&&(await pool.query(`SELECT 1 FROM memberships WHERE organization_id=$1 UNION ALL SELECT 1 FROM content_drafts WHERE organization_id=$1 UNION ALL SELECT 1 FROM content_briefs WHERE organization_id=$1 UNION ALL SELECT 1 FROM knowledge_sources WHERE organization_id=$1 LIMIT 1`,[req.params.id])).rowCount)return res.status(409).json({error:'Remove workspace members and content before moving it to another company'});const result=await pool.query('UPDATE organizations SET company_id=$1,name=$2,code=$3,sector=$4,city=$5 WHERE id=$6 RETURNING id,name,code,sector,city,company_id AS "companyId"',[companyId,name.trim(),code.trim().toUpperCase(),sector.trim(),city.trim(),req.params.id]);res.json(result.rows[0]);}catch(e){next(e);}});
-app.delete('/api/admin/workspaces/:id',globalOnly,async(req,res,next)=>{try{const result=await pool.query(`DELETE FROM organizations o WHERE o.id=$1 AND NOT EXISTS(SELECT 1 FROM memberships WHERE organization_id=o.id) AND NOT EXISTS(SELECT 1 FROM content_drafts WHERE organization_id=o.id) AND NOT EXISTS(SELECT 1 FROM content_briefs WHERE organization_id=o.id) AND NOT EXISTS(SELECT 1 FROM knowledge_sources WHERE organization_id=o.id) RETURNING id`,[req.params.id]);if(result.rowCount)return res.json({ok:true});if(!(await pool.query('SELECT 1 FROM organizations WHERE id=$1',[req.params.id])).rowCount)return res.status(404).json({error:'Workspace not found'});res.status(409).json({error:'Remove workspace members and content first'});}catch(e){if((e as {code?:string}).code==='23503')return res.status(409).json({error:'Workspace has dependent data and cannot be deleted'});next(e);}});
+app.delete('/api/admin/workspaces/:id',globalOnly,async(req,res,next)=>{try{const pre=await pool.query('SELECT name,code FROM organizations WHERE id=$1',[req.params.id]);
+    const result=await pool.query(`DELETE FROM organizations o WHERE o.id=$1 AND NOT EXISTS(SELECT 1 FROM memberships WHERE organization_id=o.id) AND NOT EXISTS(SELECT 1 FROM content_drafts WHERE organization_id=o.id) AND NOT EXISTS(SELECT 1 FROM content_briefs WHERE organization_id=o.id) AND NOT EXISTS(SELECT 1 FROM knowledge_sources WHERE organization_id=o.id) RETURNING id`,[req.params.id]);
+    if(result.rowCount){
+      const a=actorOf(res);
+      // The workspace is gone, so the audit row is anchored to the caller's own
+      // workspace when one exists; otherwise the event is still logged by name.
+      const anchor=(res.locals.user?.workspaces?.[0]?.id)||String(req.params.id);
+      await writeAudit({workspaceId:anchor,actorId:a.id,actorName:a.name,actorRole:a.role,action:'Workspace deleted',objectType:'workspace',objectId:String(req.params.id),objectName:pre.rows[0]?.name||String(req.params.id),details:`Kode ${pre.rows[0]?.code||'-'}`});
+      return res.json({ok:true});
+    }if(!(await pool.query('SELECT 1 FROM organizations WHERE id=$1',[req.params.id])).rowCount)return res.status(404).json({error:'Workspace not found'});res.status(409).json({error:'Remove workspace members and content first'});}catch(e){if((e as {code?:string}).code==='23503')return res.status(409).json({error:'Workspace has dependent data and cannot be deleted'});next(e);}});
 app.put('/api/corporate/settings',corporateOnly,async(req,res,next)=>{try{
   const user=res.locals.user;
   if(user.role!=='corporate'||!user.companyId)return res.status(403).json({error:'Company account required'});
@@ -611,7 +765,10 @@ app.put('/api/corporate/users/:userId',corporateOnly,async(req,res,next)=>{try{c
 app.delete('/api/corporate/users/:userId',corporateOnly,async(req,res,next)=>{try{const u=res.locals.user;if(u.role!=='corporate')return res.status(403).json({error:'Company account required'});const result=await pool.query(`DELETE FROM users WHERE id=$1 AND company_id=$2 AND global_role='creator' RETURNING id`,[req.params.userId,u.companyId]);if(!result.rowCount)return res.status(404).json({error:'Creator not found in your company'});res.json({ok:true});}catch(e){if((e as {code?:string}).code==='23503')return res.status(409).json({error:'Creator has authored content; account cannot be deleted'});next(e);}});
 app.put('/api/corporate/users/:userId/workspaces',corporateOnly,async(req,res,next)=>{try{if(res.locals.user.role!=='corporate')return res.status(403).json({error:'Company account required'});const {workspaceIds}=req.body||{};if(!Array.isArray(workspaceIds)||!workspaceIds.every(isNonEmptyString))return res.status(400).json({error:'workspaceIds must be an array of workspace IDs'});const result=await assignCompanyUser(res.locals.user.companyId,req.params.userId,workspaceIds);if(result.status!==200)return res.status(result.status).json({error:result.status===404?'Creator not found in your company':'Workspace outside your company'});res.json(result);}catch(e){next(e);}});
 app.get('/api/corporate/workspaces',corporateOnly,async(req,res,next)=>{try{const u=res.locals.user;res.json((await pool.query('SELECT id,name,code,sector,city FROM organizations WHERE $1=\'superadmin\' OR company_id=$2 ORDER BY name',[u.role,u.companyId])).rows);}catch(e){next(e);}});
-app.post('/api/corporate/workspaces',corporateOnly,async(req,res,next)=>{try{const u=res.locals.user;const {name,code,sector,city,companyId}=req.body||{};if(u.role==='superadmin'&&!isNonEmptyString(companyId))return res.status(400).json({error:'companyId wajib diisi'});const v=validateWorkspaceFields({name,code,sector,city});if('error' in v)return res.status(400).json({error:v.error});res.status(201).json((await pool.query('INSERT INTO organizations(id,company_id,name,code,sector,city) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,name,code',[`org-${randomUUID()}`,u.role==='superadmin'?companyId:u.companyId,name,code.toUpperCase(),sector,city])).rows[0]);}catch(e){next(e);}});
+app.post('/api/corporate/workspaces',corporateOnly,async(req,res,next)=>{try{const u=res.locals.user;const {name,code,sector,city,companyId}=req.body||{};if(u.role==='superadmin'&&!isNonEmptyString(companyId))return res.status(400).json({error:'companyId wajib diisi'});const v=validateWorkspaceFields({name,code,sector,city});if('error' in v)return res.status(400).json({error:v.error});const created=(await pool.query('INSERT INTO organizations(id,company_id,name,code,sector,city) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,name,code',[`org-${randomUUID()}`,u.role==='superadmin'?companyId:u.companyId,v.name,v.code,v.sector,v.city])).rows[0];
+    const a=actorOf(res);
+    await writeAudit({workspaceId:created.id,actorId:a.id,actorName:a.name,actorRole:a.role,action:'Workspace created',objectType:'workspace',objectId:created.id,objectName:created.name,details:`Kode ${created.code}`});
+    res.status(201).json(created);}catch(e){next(e);}});
 app.put('/api/corporate/workspaces/:workspaceId',corporateOnly,async(req,res,next)=>{try{const u=res.locals.user;if(u.role!=='corporate')return res.status(403).json({error:'Company account required'});const {name,code,sector,city}=req.body||{};if(![name,code,sector,city].every(isNonEmptyString))return res.status(400).json({error:'name, code, sector and city required'});const result=await pool.query('UPDATE organizations SET name=$1,code=$2,sector=$3,city=$4 WHERE id=$5 AND company_id=$6 RETURNING id,name,code,sector,city',[name.trim(),code.trim().toUpperCase(),sector.trim(),city.trim(),req.params.workspaceId,u.companyId]);if(!result.rowCount)return res.status(404).json({error:'Workspace not found in your company'});res.json(result.rows[0]);}catch(e){if((e as {code?:string}).code==='23505')return res.status(409).json({error:'Workspace code already in use'});next(e);}});
 app.delete('/api/corporate/workspaces/:workspaceId',corporateOnly,async(req,res,next)=>{try{const u=res.locals.user;if(u.role!=='corporate')return res.status(403).json({error:'Company account required'});const id=req.params.workspaceId;const result=await pool.query(`DELETE FROM organizations o WHERE o.id=$1 AND o.company_id=$2 AND NOT EXISTS(SELECT 1 FROM memberships m WHERE m.organization_id=o.id) AND NOT EXISTS(SELECT 1 FROM content_drafts d WHERE d.organization_id=o.id) AND NOT EXISTS(SELECT 1 FROM content_briefs b WHERE b.organization_id=o.id) AND NOT EXISTS(SELECT 1 FROM knowledge_sources k WHERE k.organization_id=o.id) RETURNING id`,[id,u.companyId]);if(result.rowCount)return res.json({ok:true});if(!(await pool.query('SELECT 1 FROM organizations WHERE id=$1 AND company_id=$2',[id,u.companyId])).rowCount)return res.status(404).json({error:'Workspace not found in your company'});res.status(409).json({error:'Workspace has members or content; remove them first'});}catch(e){if((e as {code?:string}).code==='23503')return res.status(409).json({error:'Workspace has dependent data and cannot be deleted'});next(e);}});
 app.post('/api/corporate/workspaces/:workspaceId/members',corporateOnly,requireWorkspace(req=>req.params.workspaceId,true),async(req,res,next)=>{try{const {name,email,role}=req.body||{};if(!isNonEmptyString(name)||!isEmail(email)||role!=='creator')return res.status(400).json({error:'name, email, creator role required'});res.status(201).json(await createUserMembership(req.params.workspaceId,{...req.body,role:'creator'}));}catch(e){if(e instanceof Error&&['Only creator accounts can join a workspace','Creator belongs to another company'].includes(e.message))return res.status(409).json({error:e.message});next(e);}});
@@ -805,7 +962,23 @@ app.post('/api/workspaces/:workspaceId/schedule-suggestion',requireMember(req=>S
 });
 app.get('/api/workspaces/:workspaceId/schedules',requireMember(req=>String(req.params.workspaceId)),async(req,res,next)=>{try{res.json(await listSchedules(req.params.workspaceId));}catch(error){next(error);}});
 app.post('/api/schedules/:id/comments',corporateOnly,async(req,res,next)=>{try{const text=typeof req.body?.text==='string'?req.body.text.trim():'';if(!text||text.length>2000)return res.status(400).json({error:'Comment must be 1–2000 characters'});res.status(201).json(await addScheduleComment(req.params.id,text,res.locals.user));}catch(error){if(error instanceof Error&&error.message==='Schedule not available to this company')return res.status(404).json({error:'Schedule not found'});next(error);}});
-app.put('/api/schedules/:id',contentOnly,requireMember(req=>req.body?.workspaceId),async(req,res,next)=>{try{const b=req.body||{};if(req.params.id!==b.id)return res.status(400).json({error:'Schedule ID mismatch'});if(!isNonEmptyString(b.workspaceId)||!isNonEmptyString(b.title))return res.status(400).json({error:'workspaceId and title are required'});if(!['instagram','facebook','twitter','linkedin','youtube'].includes(b.platform))return res.status(400).json({error:'Invalid platform'});if(!['draft','scheduled','published'].includes(b.status))return res.status(400).json({error:'Invalid status'});if(!/^\d{4}-\d{2}-\d{2}$/.test(String(b.date))||(b.time&&!/^\d{2}:\d{2}$/.test(String(b.time))))return res.status(400).json({error:'date must be YYYY-MM-DD and time HH:mm'});if(b.pillar&&!['edukasi','layanan','korporat'].includes(b.pillar))return res.status(400).json({error:'Invalid pillar'});if(b.postUrl&&!/^https?:\/\/\S+$/.test(String(b.postUrl).trim()))return res.status(400).json({error:'Link post harus diawali http:// atau https://'});const actorId=res.locals.user?.id||(req as any).user?.id||'usr-system';res.json(await saveSchedule(b,actorId));}catch(error){if(error instanceof ScheduleRuleError)return res.status(400).json({error:error.message});next(error);}});
+app.put('/api/schedules/:id',contentOnly,requireMember(req=>req.body?.workspaceId),async(req,res,next)=>{try{const b=req.body||{};if(req.params.id!==b.id)return res.status(400).json({error:'Schedule ID mismatch'});if(!isNonEmptyString(b.workspaceId)||!isNonEmptyString(b.title))return res.status(400).json({error:'workspaceId and title are required'});if(!['instagram','facebook','twitter','linkedin','youtube'].includes(b.platform))return res.status(400).json({error:'Invalid platform'});if(!['draft','scheduled','published'].includes(b.status))return res.status(400).json({error:'Invalid status'});if(!/^\d{4}-\d{2}-\d{2}$/.test(String(b.date))||(b.time&&!/^\d{2}:\d{2}$/.test(String(b.time))))return res.status(400).json({error:'date must be YYYY-MM-DD and time HH:mm'});if(b.pillar&&!['edukasi','layanan','korporat'].includes(b.pillar))return res.status(400).json({error:'Invalid pillar'});if(b.postUrl&&!/^https?:\/\/\S+$/.test(String(b.postUrl).trim()))return res.status(400).json({error:'Link post harus diawali http:// atau https://'});
+    // Approval gate: a draft that is still awaiting review (or was rejected) must
+    // not reach the calendar. Publishing additionally needs a real post URL.
+    if(b.draftId){
+      const owner=await pool.query('SELECT status,title FROM content_drafts WHERE id=$1',[String(b.draftId)]);
+      const draftRow=owner.rows[0];
+      if(draftRow){
+        if(['menunggu_review','ditolak','revisi_diminta'].includes(draftRow.status)){
+          return res.status(409).json({error:`Draf "${draftRow.title}" belum disetujui. Selesaikan review terlebih dahulu.`});
+        }
+      }
+    }
+    if(b.status==='published'&&!String(b.postUrl||'').trim())return res.status(400).json({error:'Link postingan wajib diisi sebelum menandai terbit'});
+    const actorId=res.locals.user?.id||(req as any).user?.id||'usr-system';
+    const saved=await saveSchedule(b,actorId);
+    await writeAudit({workspaceId:String(b.workspaceId),actorId,actorName:res.locals.user?.name||'Sistem',actorRole:res.locals.user?.role||'creator',action:b.status==='published'?'Schedule published':b.status==='scheduled'?'Schedule created':'Schedule saved',objectType:'schedule',objectId:String(b.id),objectName:String(b.title),details:`${b.platform} · ${b.date} ${b.time||''}`});
+    res.json(saved);}catch(error){if(error instanceof ScheduleRuleError)return res.status(400).json({error:error.message});next(error);}});
 app.post('/api/organizations/:workspaceId/schedules/:id/post-image',contentOnly,requireMember(req=>String(req.params.workspaceId)),async(req,res,next)=>{try{const workspaceId=String(req.params.workspaceId),id=String(req.params.id);const link=await getSchedulePostLink(workspaceId,id);if(!link)return res.status(404).json({error:'Jadwal tidak ditemukan'});if(!link.postUrl)return res.status(400).json({error:'Jadwal belum punya link post.'});const image=await fetchPostImage(link.postUrl,link.platform);res.json(await setSchedulePostImage(workspaceId,id,image));}catch(error){if(error instanceof PostImageError)return res.status(422).json({error:error.message});if(error instanceof Error&&(error.name==='TimeoutError'||error.name==='AbortError'))return res.status(504).json({error:'Platform tidak merespons dalam 10 detik.'});next(error);}});
 app.put('/api/organizations/:workspaceId/schedules/:id/custom-image',contentOnly,requireMember(req=>String(req.params.workspaceId)),async(req,res,next)=>{try{const{image,source}=req.body||{};if(image!==null&&!['upload','ai'].includes(source))return res.status(400).json({error:'source must be upload or ai'});const clean=image===null?null:validateImageDataUrl(image);const saved=await setScheduleCustomImage(String(req.params.workspaceId),String(req.params.id),clean,clean?source:null);if(!saved)return res.status(404).json({error:'Jadwal tidak ditemukan'});res.json(saved);}catch(error){if(error instanceof PostImageError)return res.status(400).json({error:error.message});next(error);}});
 app.delete('/api/organizations/:workspaceId/schedules/:id',contentOnly,requireMember(req=>String(req.params.workspaceId)),async(req,res,next)=>{try{const actorId=res.locals.user?.id||(req as any).user?.id||'usr-system';await deleteSchedule(String(req.params.workspaceId),String(req.params.id),actorId);res.json({ok:true});}catch(error){next(error);}});

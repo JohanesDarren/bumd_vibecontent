@@ -654,6 +654,20 @@ export function App() {
                 await loadData(activeWorkspace.id);
                 showToast('Draf dipulihkan ke daftar aktif.');
               }}
+              canApprove={authUser?.role === 'corporate' || authUser?.role === 'superadmin'}
+              onSubmitDraft={async (id) => {
+                await apiService.submitDraft(activeWorkspace.id, id);
+                await loadData(activeWorkspace.id);
+                showToast('Draf diajukan untuk review korporat.');
+              }}
+              onDecideDraft={async (id, decision) => {
+                await apiService.decideDraft(activeWorkspace.id, id, decision);
+                await loadData(activeWorkspace.id);
+                showToast(
+                  decision === 'disetujui' ? 'Draf disetujui.' :
+                  decision === 'ditolak' ? 'Draf ditolak.' : 'Revisi diminta ke kreator.'
+                );
+              }}
             />
           )}
 

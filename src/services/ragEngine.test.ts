@@ -42,7 +42,10 @@ test('unverified fallback clearly separates draft status, conditions, and CTA wi
   assert.equal((fallback.content.match(/DRAF PERLU VERIFIKASI/g) || []).length, 1);
   assert.equal((fallback.content.match(/Syarat dan ketentuan:/g) || []).length, 1);
   assert.equal((fallback.content.match(/Daftar melalui aplikasi TirtaApp/g) || []).length, 1);
-  assert.match(fallback.content, /DRAF PERLU VERIFIKASI.*?\n\n\[DRAF KORPORAT/s);
+  // The internal "[DRAF KORPORAT]" marker was removed from published copy; the
+  // verification banner remains, because it is information the reader needs.
+  assert.match(fallback.content, /DRAF PERLU VERIFIKASI/);
+  assert.doesNotMatch(fallback.content, /\[DRAF KORPORAT\]/);
   assert.doesNotMatch(fallback.content, /PERLU VERIFIKASI: periksa fakta/);
   assert.equal(fallback.qualityCheck.overallStatus, 'perlu_verifikasi');
 });

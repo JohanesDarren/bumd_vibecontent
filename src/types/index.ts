@@ -93,6 +93,8 @@ export interface BrandProfile {
   bannedWords: BannedWordItem[];
   officialCTAs: OfficialCTAItem[];
   approvedChannels: string[];
+  /** Hashtags the organisation actually uses; never hardcode a template. */
+  approvedHashtags?: string[];
   brandGuidelinesSummary: string;
   officialDisclaimer: string;
 }

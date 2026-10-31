@@ -17,7 +17,7 @@ import {
   Calendar, 
   User as UserIcon,
   Tag
-} from 'lucide-react';
+, Send } from 'lucide-react';
 
 interface LibraryViewProps {
   drafts: ContentDraft[];
@@ -27,6 +27,12 @@ interface LibraryViewProps {
   onOpenExportModal: (draft: ContentDraft) => void;
   onArchiveDraft: (draftId: string) => void;
   onRestoreDraft: (draftId: string) => void;
+  /** Creator: send a finished draft to corporate for review. */
+  onSubmitDraft?: (draftId: string) => void;
+  /** Corporate: decide on a submitted draft. */
+  onDecideDraft?: (draftId: string, decision: 'disetujui' | 'ditolak' | 'revisi_diminta') => void;
+  /** Whether the current viewer may approve (corporate / superadmin). */
+  canApprove?: boolean;
 }
 
 export const LibraryView: React.FC<LibraryViewProps> = ({
@@ -36,7 +42,10 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   onOpenEditor,
   onOpenExportModal,
   onArchiveDraft,
-  onRestoreDraft
+  onRestoreDraft,
+  onSubmitDraft,
+  onDecideDraft,
+  canApprove
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<DraftStatus | 'all'>('all');
@@ -196,6 +205,34 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               >
                           <Archive size={14}/><span>Arsipkan</span>
                         </button>
+                      )}
+                      {draft.status !== 'diarsipkan' && !canApprove && onSubmitDraft &&
+                        (draft.status === 'draft' || draft.status === 'revisi_diminta') && (
+                        <button
+                          className="btn btn-primary btn-sm"
+                          onClick={() => onSubmitDraft(draft.id)}
+                          title="Kirim draf ini untuk review korporat"
+                        >
+                          <Send size={14}/><span>Ajukan Review</span>
+                        </button>
+                      )}
+                      {canApprove && onDecideDraft && draft.status === 'menunggu_review' && (
+                        <>
+                          <button
+                            className="btn btn-primary btn-sm"
+                            onClick={() => onDecideDraft(draft.id, 'disetujui')}
+                            title="Setujui draf ini"
+                          >
+                            <CheckCircle2 size={14}/><span>Setujui</span>
+                          </button>
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => onDecideDraft(draft.id, 'revisi_diminta')}
+                            title="Minta revisi"
+                          >
+                            <AlertTriangle size={14}/><span>Minta Revisi</span>
+                          </button>
+                        </>
                       )}
                       {draft.status === 'diarsipkan' && (
                         <button

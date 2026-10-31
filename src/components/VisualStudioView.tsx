@@ -194,7 +194,17 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
           companyType={activeWorkspace.sector}
           onSave={async imageUrl => {
             setGeneratedImageUrl(imageUrl);
-            setMetadata('Visual inti · disimpan ke draf');
+            // Persist for real: writing only to local state made the "saved"
+            // message a lie, and Scheduling kept saying "belum ada gambar".
+            if (!onSaveVisual) {
+              setMetadata('Gambar dihasilkan, tetapi penyimpanan tidak tersedia.');
+              return;
+            }
+            await onSaveVisual(draft.id, {
+              ...visual,
+              generatedImageUrl: imageUrl
+            });
+            setMetadata('Gambar tersimpan ke draf.');
           }}
         />
       {metadata && <p style={{ fontSize: 12 }}>{metadata}</p>}
