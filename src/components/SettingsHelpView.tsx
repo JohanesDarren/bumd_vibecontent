@@ -561,7 +561,7 @@ const HelpSection: React.FC = () => {
 
       {helpTab === 'alur' && (
         <div className="card-panel">
-          <div className="settings-card-head"><BookOpenCheck size={20} /><h3>Alur Kerja Sepuluh Langkah</h3></div>
+          <div className="settings-card-head"><BookOpenCheck size={20} /><h3>Alur Kerja Sembilan Langkah</h3></div>
           <div className="help-steps">
             {WORKFLOW_STEPS.map((step, i) => (
               <div key={i} className={`help-step ${openStep === i ? 'open' : ''}`}>

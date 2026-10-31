@@ -149,7 +149,7 @@ export async function createDraft(input: { workspaceId:string; title:string; for
 
 export async function listWorkspaceDrafts(workspaceId:string) {
   const result = await pool.query(`SELECT d.*, COALESCE(jsonb_agg(DISTINCT jsonb_build_object('versionNumber',v.version_number,'content',v.content,'scenes',v.scenes,'citations',COALESCE((SELECT jsonb_agg(c.data) FROM draft_citations c WHERE c.draft_id=v.draft_id AND c.version_number=v.version_number),'[]'::jsonb),'unsupportedClaims',v.unsupported_claims,'qualityCheck',v.quality_check,'createdAt',v.created_at,'createdBy',v.created_by,'changeSummary',v.change_summary)) FILTER (WHERE v.draft_id IS NOT NULL),'[]') versions, COALESCE((SELECT jsonb_agg(jsonb_build_object('id',r.id,'authorName',r.author_name,'authorRole',r.author_role,'text',r.text,'targetSnippet',r.target_snippet,'createdAt',r.created_at,'resolved',r.resolved) ORDER BY r.created_at) FROM review_comments r WHERE r.draft_id=d.id),'[]') comments FROM content_drafts d LEFT JOIN draft_versions v ON v.draft_id=d.id WHERE d.organization_id=$1 GROUP BY d.id ORDER BY d.updated_at DESC`,[workspaceId]);
-  return result.rows.map(row => ({ id:row.id, workspaceId:row.organization_id, briefId:row.brief_id || '', title:row.title, format:row.format, status:row.status, currentVersionon:row.current_version, versions:row.versions.sort((a:any,b:any)=>b.versionNumber-a.versionNumber), comments:row.comments, approvalInfo:row.approval_info, visualAsset:row.visual_asset, createdAt:row.created_at, updatedAt:row.updated_at, createdBy:row.created_by, creatorName:row.creator_name }));
+  return result.rows.map(row => ({ id:row.id, workspaceId:row.organization_id, briefId:row.brief_id || '', title:row.title, format:row.format, status:row.status, currentVersion:row.current_version, versions:row.versions.sort((a:any,b:any)=>b.versionNumber-a.versionNumber), comments:row.comments, approvalInfo:row.approval_info, visualAsset:row.visual_asset, createdAt:row.created_at, updatedAt:row.updated_at, createdBy:row.created_by, creatorName:row.creator_name }));
 }
 
 export async function listBootstrap(workspaceId?:string) {
@@ -180,7 +180,7 @@ export async function replaceDraft(draft:any) {
       const savedBrief=await client.query(`INSERT INTO content_briefs(id,organization_id,created_by,data) VALUES($1,$2,$3,$4::jsonb) ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data WHERE content_briefs.organization_id=EXCLUDED.organization_id RETURNING id`,[draft.brief.id,draft.workspaceId,draft.createdBy,JSON.stringify(draft.brief)]);
       if(!savedBrief.rowCount) throw new Error('Brief ID already belongs to another workspace');
     }
-    const savedDraft=await client.query(`INSERT INTO content_drafts(id,organization_id,brief_id,title,format,status,current_version,created_by,creator_name,visual_asset,approval_info,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12,$13) ON CONFLICT(id) DO UPDATE SET title=EXCLUDED.title,status=EXCLUDED.status,current_version=EXCLUDED.current_version,visual_asset=EXCLUDED.visual_asset,approval_info=EXCLUDED.approval_info,updated_at=EXCLUDED.updated_at WHERE content_drafts.organization_id=EXCLUDED.organization_id RETURNING id`,[draft.id,draft.workspaceId,draft.briefId||null,draft.title,draft.format,draft.status,draft.currentVersionon,draft.createdBy,draft.creatorName,JSON.stringify(draft.visualAsset||null),JSON.stringify(draft.approvalInfo||null),draft.createdAt,draft.updatedAt]);
+    const savedDraft=await client.query(`INSERT INTO content_drafts(id,organization_id,brief_id,title,format,status,current_version,created_by,creator_name,visual_asset,approval_info,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12,$13) ON CONFLICT(id) DO UPDATE SET title=EXCLUDED.title,status=EXCLUDED.status,current_version=EXCLUDED.current_version,visual_asset=EXCLUDED.visual_asset,approval_info=EXCLUDED.approval_info,updated_at=EXCLUDED.updated_at WHERE content_drafts.organization_id=EXCLUDED.organization_id RETURNING id`,[draft.id,draft.workspaceId,draft.briefId||null,draft.title,draft.format,draft.status,draft.currentVersion,draft.createdBy,draft.creatorName,JSON.stringify(draft.visualAsset||null),JSON.stringify(draft.approvalInfo||null),draft.createdAt,draft.updatedAt]);
     if(!savedDraft.rowCount) throw new Error('Draft ID already belongs to another workspace');
     await client.query('DELETE FROM draft_versions WHERE draft_id=$1',[draft.id]);
     for(const version of draft.versions){
@@ -274,7 +274,33 @@ export async function createUserMembership(workspaceId:string,input:any){const c
 export async function deleteUserMembership(workspaceId:string,userId:string){const client=await pool.connect();try{await client.query('BEGIN');await client.query('DELETE FROM memberships WHERE organization_id=$1 AND user_id=$2',[workspaceId,userId]);await client.query('COMMIT');}catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}}
 export async function deleteKnowledgeSource(workspaceId:string,id:string){await pool.query('DELETE FROM knowledge_sources WHERE id=$2 AND (company_id IS NOT DISTINCT FROM (SELECT company_id FROM organizations WHERE id=$1))',[workspaceId,id]);}
 export async function deleteBrand(workspaceId:string){await pool.query('DELETE FROM brand_profiles WHERE organization_id=$1',[workspaceId]);}
-export async function deleteDraft(workspaceId:string,id:string){await pool.query('DELETE FROM content_drafts WHERE organization_id=$1 AND id=$2',[workspaceId,id]);}
+/**
+ * Delete a draft and the brief it came from.
+ *
+ * Deleting only the draft left its brief in "Riwayat Brief" forever, so the rail
+ * filled with entries that no longer opened anything. The brief is removed only
+ * when no other draft still points at it.
+ */
+export async function deleteDraft(workspaceId:string,id:string):Promise<{briefRemoved:boolean}>{
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    const found=await client.query('SELECT brief_id FROM content_drafts WHERE organization_id=$1 AND id=$2',[workspaceId,id]);
+    const briefId=found.rows[0]?.brief_id as string|undefined;
+    await client.query('DELETE FROM content_drafts WHERE organization_id=$1 AND id=$2',[workspaceId,id]);
+    let briefRemoved=false;
+    if(briefId){
+      const used=await client.query('SELECT 1 FROM content_drafts WHERE brief_id=$1 LIMIT 1',[briefId]);
+      if(!used.rowCount){
+        await client.query('DELETE FROM content_briefs WHERE id=$1 AND organization_id=$2',[briefId,workspaceId]);
+        briefRemoved=true;
+      }
+    }
+    await client.query('COMMIT');
+    return {briefRemoved};
+  }catch(error){await client.query('ROLLBACK');throw error;}
+  finally{client.release();}
+}
 
 export async function registerUser(input:{name:string;email:string;password:string;workspaceCode?:string}) {
   const client=await pool.connect();

@@ -220,7 +220,7 @@ export interface ContentDraft {
   title: string;
   format: ContentFormat;
   status: DraftStatus;
-  currentVersionon: number;
+  currentVersion: number;
   versions: DraftVersionon[];
   comments: ReviewComment[];
   approvalInfo?: ApprovalInfo;

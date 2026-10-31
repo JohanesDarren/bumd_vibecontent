@@ -55,7 +55,7 @@ test('creator workflow moves from brief to editor and visual without approval ga
   assert.doesNotMatch(dashboard, /Brief Belum Disetujui|Perlu Konfirmasi|Buka di Editor lalu setujui/);
   assert.doesNotMatch(schedule, /status === 'disetujui'|linkedDraft\?\.status !== 'disetujui'|Belum ada draf yang disetujui/);
   assert.match(visual, /availableDrafts/);
-  assert.match(visual, /currentVersionon/);
+  assert.match(visual, /currentVersion/);
   assert.doesNotMatch(help, /Review & persetujuan|Persetujuan membuka Studio Visual/);
 });
 

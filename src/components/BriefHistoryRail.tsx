@@ -86,7 +86,7 @@ export const BriefHistoryRail: React.FC<BriefHistoryRailProps> = ({
               >
                 <span className="brief-rail-item-title">{draft.title}</span>
                 <span className="brief-rail-item-meta">
-                  v{draft.currentVersionon} · {relativeTime(draft.updatedAt || draft.createdAt)}
+                  v{draft.currentVersion} · {relativeTime(draft.updatedAt || draft.createdAt)}
                 </span>
               </button>
               {onDeleteDraft && (

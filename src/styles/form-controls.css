@@ -908,3 +908,22 @@ input[type='radio']:not(.ui-check-input):focus-visible {
 }
 
 .core-preview-stack { container-type: inline-size; }
+
+/* ── Library card action row ─────────────────────────────────────────────── */
+/* The row holds up to five actions; it must wrap inside the card rather than
+   pushing the last button past the border. */
+
+.library-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.library-card-actions .btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}

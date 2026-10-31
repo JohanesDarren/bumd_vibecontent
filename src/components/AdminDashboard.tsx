@@ -102,7 +102,7 @@ export const AdminDashboard: React.FC<{ onOpen: (id: string) => void; onLogout: 
                 Ringkasan Sistem &amp; Tata Kelola
               </h2>
               <p className="page-subtitle">
-                Kondisi terkini seluruh perusahaan induk, unit kerja workspace , dan akun pengguna pada platform.
+                Kondisi terkini seluruh perusahaan induk, unit kerja workspace, dan akun pengguna pada platform.
               </p>
             </div>
 
@@ -322,7 +322,7 @@ export const AdminDashboard: React.FC<{ onOpen: (id: string) => void; onLogout: 
                   Ringkasan Sistem &amp; Tata Kelola
                 </h2>
                 <p className="page-subtitle">
-                  Kondisi terkini seluruh perusahaan induk, unit kerja workspace , dan akun pengguna pada platform.
+                  Kondisi terkini seluruh perusahaan induk, unit kerja workspace, dan akun pengguna pada platform.
                 </p>
               </div>
 

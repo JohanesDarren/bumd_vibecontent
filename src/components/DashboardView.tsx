@@ -203,7 +203,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       )}
                     </td>
                     <td style={{ padding: '12px 14px', fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>
-                      v{d.currentVersionon}
+                      v{d.currentVersion}
                     </td>
                     <td style={{ padding: '12px 14px', textAlign: 'right' }}>
                       <button 

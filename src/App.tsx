@@ -289,7 +289,7 @@ export function App() {
       title: brief.title,
       format: brief.format,
       status: 'draft',
-      currentVersionon: 1,
+      currentVersion: 1,
       versions: [initialVersionon],
       comments: [],
       visualAsset: generated.visualAsset,
@@ -312,7 +312,7 @@ export function App() {
   const handleSaveNewVersionon = async (draftId: string, version: DraftVersionon, changeSummary: string) => {
     const draft = drafts.find(item => item.id === draftId);
     if (!draft || !activeWorkspace) return;
-    await apiService.saveDraft({ ...draft, versions: [version, ...draft.versions], currentVersionon: version.versionNumber, updatedAt: new Date().toISOString() });
+    await apiService.saveDraft({ ...draft, versions: [version, ...draft.versions], currentVersion: version.versionNumber, updatedAt: new Date().toISOString() });
     await loadData(activeWorkspace.id);
     showToast(`Versi ${version.versionNumber} disimpan ke riwayat audit.`);
   };

@@ -40,7 +40,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
   onSaveVisual
 }) => {
   const [savingVisual, setSavingVisual] = useState(false);
-  const [selectedVersionNumber, setSelectedVersionNumber] = useState(draft?.currentVersionon || 1);
+  const [selectedVersionNumber, setSelectedVersionNumber] = useState(draft?.currentVersion || 1);
   const draftVisual = draft?.visualAsset;
   const defaultVisual: VisualAsset = {
     ...(draftVisual || {
@@ -87,8 +87,8 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
   const selectedVersion = draft?.versions.find(item => item.versionNumber === selectedVersionNumber) || draft?.versions[0];
 
   useEffect(() => {
-    setSelectedVersionNumber(draft?.currentVersionon || 1);
-  }, [draft?.id, draft?.currentVersionon]);
+    setSelectedVersionNumber(draft?.currentVersion || 1);
+  }, [draft?.id, draft?.currentVersion]);
 
   useEffect(() => {
     setVisual({
@@ -180,7 +180,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
         </select>
         <label className="form-label" style={{ marginTop: '12px' }}>Versi konten yang divisualisasikan</label>
         <select className="form-select" value={selectedVersion?.versionNumber ?? ''} onChange={event => setSelectedVersionNumber(Number(event.target.value))}>
-          {draft.versions.map(item => <option key={item.versionNumber} value={item.versionNumber}>v{item.versionNumber}{item.versionNumber === draft.currentVersionon ? ' · Terbaru' : ''}</option>)}
+          {draft.versions.map(item => <option key={item.versionNumber} value={item.versionNumber}>v{item.versionNumber}{item.versionNumber === draft.currentVersion ? ' · Terbaru' : ''}</option>)}
         </select>
         <label className="form-label" style={{ marginTop: '12px' }}>Konten versi terpilih</label>
         <textarea className="form-textarea" rows={4} value={selectedVersion?.content ?? ''} readOnly aria-label="Isi versi konten yang dipilih" />

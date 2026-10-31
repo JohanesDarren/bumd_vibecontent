@@ -33,6 +33,9 @@ const emptyForm = {
 
 export const AdminAccountsView: React.FC = () => {
   const [users, setUsers] = useState<AdminUser[]>([]);
+  // A superadmin must not be able to delete their own account: it would lock the
+  // platform out of its last administrator.
+  const [selfId, setSelfId] = useState<string | null>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [form, setForm] = useState(emptyForm);
@@ -56,12 +59,18 @@ export const AdminAccountsView: React.FC = () => {
       setUsers(userList);
       setCompanies(companyList);
       setWorkspaces(workspaceList);
+      if (!selfId) {
+        try {
+          const me = await apiService.me();
+          if (me?.id) setSelfId(me.id);
+        } catch { /* identity is best-effort; the row stays deletable if unknown */ }
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Gagal memuat daftar pengguna');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selfId]);
 
   useEffect(() => { void load(); }, [load]);
   useRealtimeSignal(load);
@@ -120,6 +129,11 @@ export const AdminAccountsView: React.FC = () => {
   };
 
   const remove = async (user: AdminUser) => {
+    // Deleting the signed-in superadmin would remove the last administrator.
+    if (selfId && user.id === selfId) {
+      setError('Anda tidak dapat menghapus akun Anda sendiri.');
+      return;
+    }
     if (!window.confirm(`Hapus akun pengguna ${user.name}?`)) return;
     setBusy(true); 
     setError(''); 
@@ -168,7 +182,7 @@ export const AdminAccountsView: React.FC = () => {
             Pengguna &amp; Peran Sistem
           </h2>
           <p className="page-subtitle">
-            Kelola akun superadmin, admin korporat , dan kreator beserta hak akses entitas holding.
+            Kelola akun superadmin, admin korporat, dan kreator beserta hak akses entitas holding.
           </p>
         </div>
       </div>
@@ -484,10 +498,16 @@ export const AdminAccountsView: React.FC = () => {
                         </button>
                         <button 
                           type="button" 
-                          disabled={busy}
                           className="btn btn-secondary btn-sm"
                           onClick={() => void remove(u)}
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', color: 'var(--accent-rose)' }}
+                          disabled={busy || (!!selfId && u.id === selfId)}
+                          title={selfId && u.id === selfId ? 'Akun Anda sendiri tidak dapat dihapus' : 'Hapus akun'}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: '5px',
+                            color: 'var(--accent-rose)',
+                            opacity: selfId && u.id === selfId ? 0.4 : 1,
+                            cursor: selfId && u.id === selfId ? 'not-allowed' : 'pointer'
+                          }}
                         >
                           <Trash2 size={12} />
                           <span>Hapus</span>

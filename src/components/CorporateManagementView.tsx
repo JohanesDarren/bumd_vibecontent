@@ -115,7 +115,7 @@ export const CorporateManagementView: React.FC<{ onOpen: (id: string) => void }>
             Workspace Perusahaan
           </h2>
           <p className="page-subtitle">
-            Daftar, konfigurasi, dan isolasi lingkungan kerja untuk setiap unit atau anak perusahaan .
+            Daftar, konfigurasi, dan isolasi lingkungan kerja untuk setiap unit atau anak perusahaan.
           </p>
         </div>
       </div>

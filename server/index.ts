@@ -605,6 +605,37 @@ function actorOf(res: express.Response): { id: string | null; name: string; role
 }
 
 
+
+/**
+ * Brief deletion (S9).
+ *
+ * Briefs could be created but never removed, so the history rail filled up with
+ * abandoned drafts. A brief that is still referenced by a draft is refused
+ * rather than silently orphaning that draft.
+ */
+app.delete('/api/briefs/:id', contentOnly, requireWorkspace(req => req.query?.workspaceId), async (req, res, next) => {
+  try {
+    const id = String(req.params.id);
+    const workspaceId = String(req.query.workspaceId);
+    const found = await pool.query('SELECT id FROM content_briefs WHERE id=$1 AND organization_id=$2', [id, workspaceId]);
+    if (!found.rowCount) return res.status(404).json({ error: 'Brief tidak ditemukan.' });
+
+    const used = await pool.query('SELECT id,title FROM content_drafts WHERE brief_id=$1 LIMIT 1', [id]);
+    if (used.rowCount) {
+      return res.status(409).json({
+        error: `Brief masih dipakai draf "${used.rows[0].title}". Hapus drafnya lebih dulu.`
+      });
+    }
+    await pool.query('DELETE FROM content_briefs WHERE id=$1 AND organization_id=$2', [id, workspaceId]);
+    const a = actorOf(res);
+    await writeAudit({
+      workspaceId, actorId: a.id, actorName: a.name, actorRole: a.role,
+      action: 'Brief deleted', objectType: 'brief', objectId: id, objectName: id
+    });
+    res.json({ ok: true });
+  } catch (error) { next(error); }
+});
+
 /**
  * Content approval (T2).
  *

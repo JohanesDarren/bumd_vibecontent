@@ -189,7 +189,10 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
   const [compareVersiononNumber, setCompareVersiononNumber] = useState<number>(draft.versions[1]?.versionNumber || 1);
   const [isSaving, setIsSaving] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
-  const [changeNote, setChangeNote] = useState('Editorial draft revision');
+  // Starts empty: the field is marked required, so pre-filling it let users save
+  // a version without ever describing what changed.
+  const [changeNote, setChangeNote] = useState('');
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Quick Variation state
   const [refiningId, setRefiningId] = useState<string | null>(null);
@@ -285,6 +288,13 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
 
   // Save new version
   const handleConfirmSave = () => {
+    // The label says required; the code now enforces it instead of substituting
+    // a placeholder summary the reviewer would not recognise.
+    if (!changeNote.trim()) {
+      setSaveError('Ringkasan perubahan wajib diisi agar versi ini dapat ditelusuri.');
+      return;
+    }
+    setSaveError(null);
     const newVerNumber = draft.versions.length + 1;
     const newVersionon: DraftVersionon = {
       versionNumber: newVerNumber,
@@ -295,16 +305,27 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
       qualityCheck: liveCheck,
       createdAt: new Date().toISOString(),
       createdBy: activeUser.name,
-      changeSummary: changeNote || `Version ${newVerNumber} saved by ${activeUser.name}`
+      changeSummary: changeNote.trim()
     };
 
-    onSaveNewVersionon(draft.id, newVersionon, changeNote);
+    onSaveNewVersionon(draft.id, newVersionon, changeNote.trim());
     setShowSaveModal(false);
   };
 
   // Rollback to previous version
+  // Rollback asks for confirmation inside the app: window.confirm froze the tab
+  // during testing and cannot be styled or read by a screen reader reliably.
+  const [rollbackTarget, setRollbackTarget] = useState<DraftVersionon | null>(null);
+
   const handleRollback = (ver: DraftVersionon) => {
-    if (window.confirm(`Pulihkan konten draf ke Versi ${ver.versionNumber}?`)) {
+    setRollbackTarget(ver);
+  };
+
+  const confirmRollback = () => {
+    const ver = rollbackTarget;
+    if (!ver) return;
+    setRollbackTarget(null);
+    {
       setEditedContent(ver.content);
       const rollbackVer: DraftVersionon = {
         versionNumber: draft.versions.length + 1,
@@ -340,7 +361,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
             <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-              Versi: <strong>v{draft.currentVersionon}</strong> ({draft.versions.length} versi tersimpan)
+              Versi: <strong>v{draft.currentVersion}</strong> ({draft.versions.length} versi tersimpan)
             </span>
           </div>
           <h2 className="page-title">{draft.title}</h2>
@@ -786,7 +807,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
                       padding: '12px',
                       borderRadius: '10px',
                       background: 'var(--bg-tertiary)',
-                      border: ver.versionNumber === draft.currentVersionon ? '1px solid var(--primary)' : '1px solid var(--border-subtle)',
+                      border: ver.versionNumber === draft.currentVersion ? '1px solid var(--primary)' : '1px solid var(--border-subtle)',
                       display: 'flex',
                       flexDirection: 'column',
                       gap: '6px'
@@ -794,9 +815,9 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                        Version {ver.versionNumber} {ver.versionNumber === draft.currentVersionon ? '(Active)' : ''}
+                        Version {ver.versionNumber} {ver.versionNumber === draft.currentVersion ? '(Active)' : ''}
                       </span>
-                      {ver.versionNumber !== draft.currentVersionon && (
+                      {ver.versionNumber !== draft.currentVersion && (
                         <button 
                           className="btn btn-secondary btn-sm"
                           style={{ padding: '2px 8px', fontSize: '0.72rem' }}
@@ -871,7 +892,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
             </div>
             <div className="modal-body">
               <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)' }}>
-                Versi baru akan disimpan dalam riwayat audit draf . Mohon sertakan ringkasan perubahan Anda.
+                Versi baru akan disimpan dalam riwayat audit draf. Mohon sertakan ringkasan perubahan Anda.
               </p>
               <div className="form-group">
                 <label className="form-label">Ringkasan Perubahan *</label>
@@ -899,6 +920,29 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
                 onClick={handleConfirmSave}
               >
                 Simpan Versi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rollback confirmation, in-app instead of window.confirm */}
+      {rollbackTarget && (
+        <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="rollback-title">
+          <div className="modal-card" style={{ maxWidth: '420px' }}>
+            <h3 id="rollback-title" style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '8px' }}>
+              Pulihkan Versi {rollbackTarget.versionNumber}?
+            </h3>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: '18px' }}>
+              Isi draf akan diganti dengan versi tersebut, dan pemulihan ini dicatat
+              sebagai versi {draft.versions.length + 1} di riwayat. Versi lama tidak hilang.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setRollbackTarget(null)}>
+                Batal
+              </button>
+              <button type="button" className="btn btn-primary btn-sm" onClick={confirmRollback}>
+                Pulihkan
               </button>
             </div>
           </div>

@@ -44,7 +44,19 @@ export function KnowledgeBaseView({activeWorkspace,workspaces,onNotify}:Props) {
     <h2>Knowledge Base Bersama</h2>
     <p>File otomatis masuk satu project KMS. Aplikasi membatasi penggunaannya ke workspace terpilih.</p>
     <form onSubmit={upload} style={{display:'grid',gap:12,marginTop:16}}>
-      <label>Judul dokumen <input className="form-input" required maxLength={200} value={title} onChange={e=>setTitle(e.target.value)} disabled={busy}/></label>
+      <label className="form-label">
+          Judul dokumen <span aria-hidden="true" style={{ color: '#ef4444' }}>*</span>
+          <input
+            className="form-input"
+            required
+            aria-required="true"
+            maxLength={200}
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            disabled={busy}
+            style={{ marginTop: '6px' }}
+          />
+        </label>
       <fieldset className="kms-workspaces"><legend>Digunakan di workspace</legend>
         <p className="kms-help">Pilih workspace yang boleh menggunakan dokumen ini.</p>
         <div className="kms-workspace-grid">{workspaces.map(workspace=><button key={workspace.id} type="button" className="kms-workspace-option" aria-pressed={workspaceIds.includes(workspace.id)} disabled={busy} onClick={()=>setWorkspaceIds(current=>current.includes(workspace.id)?current.filter(id=>id!==workspace.id):[...current,workspace.id])}>

@@ -128,7 +128,7 @@ test('draft PUT saves full draft with versions, comments, and approval', async (
     },
     title: 'Endpoint Draft v2',
     status: 'menunggu_review',
-    currentVersionon: 2,
+    currentVersion: 2,
     versions: [
       ...draft.versions,
       { versionNumber: 2, content: 'Edited body', citations: [], unsupportedClaims: [], qualityCheck: {}, createdAt: now, createdBy: adminId, changeSummary: 'edit' }

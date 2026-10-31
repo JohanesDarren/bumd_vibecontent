@@ -236,7 +236,7 @@ export const AdminWorkspacesView: React.FC<{ onOpen: (id: string) => void }> = (
 
           {!companies.length && (
             <div style={{ padding: '12px 16px', background: 'rgba(245, 158, 11, 0.08)', borderRadius: '10px', color: '#d97706', fontSize: '0.85rem', marginBottom: '16px' }}>
-              Peringatan: Belum ada perusahaan induk terdaftar. Silakan buat perusahaan terlebih dahulu di menu Data Master .
+              Peringatan: Belum ada perusahaan induk terdaftar. Silakan buat perusahaan terlebih dahulu di menu Data Master.
             </div>
           )}
 

@@ -193,7 +193,7 @@ export const SuperadminView: React.FC = () => {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '14px', marginBottom: '18px' }}>
             <div>
-              <label className="form-label" style={{ marginBottom: '6px' }}>Nama Perusahaan Induk /  *</label>
+              <label className="form-label" style={{ marginBottom: '6px' }}>Nama Perusahaan Induk <span aria-hidden="true">*</span></label>
               <input 
                 required 
                 className="form-input"

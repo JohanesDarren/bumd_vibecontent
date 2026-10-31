@@ -156,6 +156,7 @@ export const apiService={
   saveDraft:(draft:ContentDraft,brief?:ContentBrief)=>request<ContentDraft>(`/api/drafts/${draft.id}`,{method:'PUT',body:JSON.stringify({...draft,brief})}),
   // Approval workflow: creator submits, corporate decides. The server enforces
   // the order, so the UI can only offer the action that is currently valid.
+  deleteBrief:(workspaceId:string,briefId:string)=>request<{ok:boolean}>(`/api/briefs/${briefId}?workspaceId=${encodeURIComponent(workspaceId)}`,{method:'DELETE'}),
   submitDraft:(workspaceId:string,draftId:string)=>request<{id:string;status:string}>(`/api/drafts/${draftId}/submit`,{method:'POST',body:JSON.stringify({workspaceId})}),
   decideDraft:(workspaceId:string,draftId:string,decision:'disetujui'|'ditolak'|'revisi_diminta',note?:string)=>request<{id:string;status:string}>(`/api/drafts/${draftId}/approval`,{method:'POST',body:JSON.stringify({workspaceId,decision,note})}),
   fetchPostImage:(workspaceId:string,id:string)=>request<ScheduledContent>(`/api/organizations/${workspaceId}/schedules/${id}/post-image`,{method:'POST'}),

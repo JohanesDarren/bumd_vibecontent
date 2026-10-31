@@ -57,7 +57,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
 **Organisasi:** ${activeWorkspace.name}  
 **Format:** ${draft.format}  
 **Status:** ${draft.status.toUpperCase()}  
-**Versi:** v${draft.currentVersionon}  
+**Versi:** v${draft.currentVersion}  
 **Tanggal:** ${new Date(draft.updatedAt).toLocaleDateString('id-ID')}  
 **Dibuat oleh:** ${draft.creatorName}  
 
@@ -152,7 +152,7 @@ ${currentVer?.citations.map(c => `- **${c.documentTitle}** (${c.section}) - Rele
                   LEMBAR PUBLIKASI KORPORAT
                 </h5>
                 <div style={{ fontSize: '0.8rem', color: '#475569' }}>
-                  Format: {draft.format.replace('_', ' ').toUpperCase()} • Versi: v{draft.currentVersionon} • Tanggal: {new Date(draft.updatedAt).toLocaleDateString('id-ID')}
+                  Format: {draft.format.replace('_', ' ').toUpperCase()} • Versi: v{draft.currentVersion} • Tanggal: {new Date(draft.updatedAt).toLocaleDateString('id-ID')}
                 </div>
               </div>
 

@@ -59,7 +59,7 @@ const DOCUMENT_STATUS_LABELS: Record<KnowledgeDocument['status'], string> = {
 };
 
 export function currentVersion(draft?: ContentDraft) {
-  return draft?.versions.find(v => v.versionNumber === draft.currentVersionon) ?? draft?.versions[0];
+  return draft?.versions.find(v => v.versionNumber === draft.currentVersion) ?? draft?.versions[0];
 }
 
 /**

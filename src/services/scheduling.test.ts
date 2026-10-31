@@ -18,7 +18,7 @@ test('overdue only for scheduled entries whose time has passed', () => {
 });
 
 test('fact conflicts flag airing before the effective date and inactive sources', () => {
-  const draft = { id: 'd1', currentVersionon: 1, versions: [{ versionNumber: 1, citations: [{ documentId: 'sk55', documentTitle: 'SK 55/2026' }] }] } as unknown as ContentDraft;
+  const draft = { id: 'd1', currentVersion: 1, versions: [{ versionNumber: 1, citations: [{ documentId: 'sk55', documentTitle: 'SK 55/2026' }] }] } as unknown as ContentDraft;
   const doc = { id: 'sk55', title: 'SK 55/2026', status: 'aktif', effectiveDate: '2026-10-06' } as KnowledgeDocument;
   assert.deepEqual(factConflicts({ ...item, date: '2026-10-06' }, draft, [doc]), []);
   assert.match(factConflicts(item, draft, [doc])[0], /sebelum "SK 55\/2026" berlaku \(2026-10-06\)/);

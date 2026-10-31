@@ -146,7 +146,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '8px' }}>
                     <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                      v{draft.currentVersionon}
+                      v{draft.currentVersion}
                     </span>
                   </div>
 
@@ -176,7 +176,9 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                       </span>
                     )}
 
-                    <div style={{ display: 'flex', gap: '6px' }}>
+                    {/* Wraps instead of overflowing: with the approval buttons the
+                        row can hold five actions and used to spill outside the card. */}
+                    <div className="library-card-actions">
                       <button 
                         className="btn btn-secondary btn-sm"
                         onClick={() => onOpenEditor(draft.id)}

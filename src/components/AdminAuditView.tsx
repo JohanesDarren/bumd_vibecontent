@@ -90,7 +90,7 @@ export const AdminAuditView: React.FC = () => {
             Jejak Audit Sistem
           </h2>
           <p className="page-subtitle">
-            Rekaman aktivitas mutasi konten, perubahan entitas, dan keputusan editorial untuk kepatuhan tata kelola .
+            Rekaman aktivitas mutasi konten, perubahan entitas, dan keputusan editorial untuk kepatuhan tata kelola.
           </p>
         </div>
       </div>
