@@ -60,12 +60,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {navButton('content_scheduling', 'Penjadwalan Konten', CalendarDays)}
         </div>
 
-        {userRole !== 'corporate' && <>
-          <div className="nav-divider" aria-hidden />
-          <div className="nav-group">
-            {navButton('library', 'Pustaka & Ekspor', FolderArchive)}
-          </div>
-        </>}
+        <div className="nav-divider" aria-hidden />
+        <div className="nav-group">
+          {navButton('library', 'Pustaka & Ekspor', FolderArchive)}
+        </div>
 
         {/* Knowledge & Administration Section */}
         <div className="nav-divider" aria-hidden />

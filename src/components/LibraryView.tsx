@@ -179,22 +179,27 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     {/* Wraps instead of overflowing: with the approval buttons the
                         row can hold five actions and used to spill outside the card. */}
                     <div className="library-card-actions">
-                      <button 
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => onOpenEditor(draft.id)}
-                        title="Buka di Editor"
-                      >
-                        <Eye size={14} />
-                        <span>Buka</span>
-                      </button>
-                      <button 
-                        className="btn btn-primary btn-sm"
-                        onClick={() => onOpenExportModal(draft)}
-                        title="Ekspor Draf"
-                      >
-                        <Share2 size={14} />
-                        <span>Ekspor</span>
-                      </button>
+                      {/* An approver reviews; editing and exporting stay with the creator. */}
+                      {!canApprove && (
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => onOpenEditor(draft.id)}
+                          title="Buka di Editor"
+                        >
+                          <Eye size={14} />
+                          <span>Buka</span>
+                        </button>
+                      )}
+                      {!canApprove && (
+                        <button
+                          className="btn btn-primary btn-sm"
+                          onClick={() => onOpenExportModal(draft)}
+                          title="Ekspor Draf"
+                        >
+                          <Share2 size={14} />
+                          <span>Ekspor</span>
+                        </button>
+                      )}
                       {draft.status !== 'diarsipkan' && (
                         <button
                 className="btn btn-secondary btn-sm"

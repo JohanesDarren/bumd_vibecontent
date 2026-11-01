@@ -18,7 +18,10 @@ test('roles expose only their permitted menus', () => {
   assert.equal(canAccessTab(creator.role, 'brief_studio'), true);
   assert.equal(canAccessTab(creator.role, 'user_management'), false);
   for (const tab of ['dashboard', 'content_scheduling', 'user_management', 'corporate_management', 'corporate_users', 'settings_help'] as const) assert.equal(canAccessTab(corporate.role, tab), true, tab);
-  for (const tab of ['brief_studio', 'editor', 'visual_studio', 'library', 'brand_profile', 'audit_log', 'admin_management'] as const) assert.equal(canAccessTab(corporate.role, tab), false, tab);
+  // 'library' is intentionally NOT in this list: the approval buttons live there,
+  // so denying it made the review workflow unreachable for the approver role.
+  for (const tab of ['brief_studio', 'editor', 'visual_studio', 'brand_profile', 'audit_log', 'admin_management'] as const) assert.equal(canAccessTab(corporate.role, tab), false, tab);
+  assert.equal(canAccessTab(corporate.role, 'library'), true, 'corporate approves drafts in the library');
   assert.equal(canAccessTab(creator.role, 'corporate_management'), false);
   assert.equal(canAccessTab(superadmin.role, 'admin_management'), true);
 });
