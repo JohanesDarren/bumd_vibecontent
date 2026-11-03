@@ -643,7 +643,18 @@ app.get('/api/admin/rag/orphans', globalOnly, async (req, res, next) => {
 app.post('/api/admin/rag/orphans/purge', globalOnly, async (req, res, next) => {
   try {
     const workspaceId = String(req.body?.workspaceId || res.locals.user.workspaces?.[0]?.id || '');
-    const { orphans } = await ragOrphanReport(workspaceId);
+    const { total, orphans } = await ragOrphanReport(workspaceId);
+
+    // Safety rail: if every vector looks orphaned, the document table is probably
+    // unreachable or empty rather than the corpus being dirty. Refuse instead of
+    // wiping the whole knowledge base.
+    const documentCount = Number((await pool.query('SELECT count(*)::int AS n FROM kms_documents')).rows[0]?.n || 0);
+    if (documentCount === 0) {
+      return res.status(409).json({ error: 'Tidak ada dokumen di tabel KMS. Pembersihan dibatalkan agar knowledge base tidak terhapus seluruhnya.' });
+    }
+    if (total > 0 && orphans.length === total) {
+      return res.status(409).json({ error: 'Semua vektor tampak yatim. Pembersihan dibatalkan — periksa koneksi database terlebih dahulu.' });
+    }
     const deleted: string[] = [];
     const failed: string[] = [];
     for (const doc of orphans as any[]) {

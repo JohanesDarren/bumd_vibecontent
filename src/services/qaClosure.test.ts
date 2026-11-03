@@ -22,6 +22,14 @@ test('purging only touches vectors with no source document', async () => {
   assert.match(block, /Orphan vectors purged/, 'the purge must be audited');
 });
 
+test('the purge refuses to run when everything looks orphaned', async () => {
+  const s = await read('../../server/index.ts');
+  const block = s.slice(s.indexOf('/api/admin/rag/orphans/purge'), s.indexOf('/api/admin/rag/orphans/purge') + 2200);
+  assert.match(block, /documentCount === 0/, 'an empty document table must abort');
+  assert.match(block, /orphans\.length === total/, 'a fully-orphaned corpus is treated as an error');
+  assert.match(block, /dibatalkan/);
+});
+
 /* ── S12: the schedule suggestion survives fenced / array / chatty replies ── */
 
 test('a fenced JSON reply is accepted', () => {
