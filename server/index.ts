@@ -627,6 +627,7 @@ async function ragOrphanReport(scopeId: string) {
 
 app.get('/api/admin/rag/orphans', globalOnly, async (req, res, next) => {
   try {
+    // The corpus is shared, so a platform admin needs no workspace of their own.
     const workspaceId = String(req.query.workspaceId || res.locals.user.workspaces?.[0]?.id || '');
     const { total, orphans } = await ragOrphanReport(workspaceId);
     res.json({

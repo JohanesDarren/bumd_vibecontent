@@ -157,9 +157,9 @@ export const apiService={
   // Approval workflow: creator submits, corporate decides. The server enforces
   // the order, so the UI can only offer the action that is currently valid.
   /** Lists vectors that no longer have a source document (read-only). */
-  ragOrphans:(workspaceId:string)=>request<{total:number;orphanCount:number;orphans:Array<{id:string;name:string}>}>(`/api/admin/rag/orphans?workspaceId=${encodeURIComponent(workspaceId)}`),
+  ragOrphans:(workspaceId?:string)=>request<{total:number;orphanCount:number;orphans:Array<{id:string;name:string}>}>(`/api/admin/rag/orphans${workspaceId?`?workspaceId=${encodeURIComponent(workspaceId)}`:''}`),
   /** Deletes only those orphan vectors. */
-  ragPurgeOrphans:(workspaceId:string)=>request<{deleted:number;failed:number;ids:string[]}>('/api/admin/rag/orphans/purge',{method:'POST',body:JSON.stringify({workspaceId})}),
+  ragPurgeOrphans:(workspaceId?:string)=>request<{deleted:number;failed:number;ids:string[]}>('/api/admin/rag/orphans/purge',{method:'POST',body:JSON.stringify({workspaceId})}),
   deleteBrief:(workspaceId:string,briefId:string)=>request<{ok:boolean}>(`/api/briefs/${briefId}?workspaceId=${encodeURIComponent(workspaceId)}`,{method:'DELETE'}),
   submitDraft:(workspaceId:string,draftId:string)=>request<{id:string;status:string}>(`/api/drafts/${draftId}/submit`,{method:'POST',body:JSON.stringify({workspaceId})}),
   decideDraft:(workspaceId:string,draftId:string,decision:'disetujui'|'ditolak'|'revisi_diminta',note?:string)=>request<{id:string;status:string}>(`/api/drafts/${draftId}/approval`,{method:'POST',body:JSON.stringify({workspaceId,decision,note})}),

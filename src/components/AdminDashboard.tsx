@@ -6,6 +6,7 @@ import { AdminWorkspacesView } from './AdminWorkspacesView';
 import { AdminAccountsView } from './AdminAccountsView';
 import { AdminCreatorsView } from './AdminCreatorsView';
 import { AdminAuditView } from './AdminAuditView';
+import { AdminMaintenanceView } from './AdminMaintenanceView';
 import { 
   LayoutDashboard, 
   Building2, 
@@ -23,7 +24,7 @@ import {
   CheckCircle2
 } from 'lucide-react';
 
-type Tab = 'ringkasan' | 'perusahaan' | 'workspace' | 'pengguna' | 'kreator' | 'audit';
+type Tab = 'ringkasan' | 'perusahaan' | 'workspace' | 'pengguna' | 'kreator' | 'audit' | 'pemeliharaan';
 
 const TABS: { id: Tab; label: string; icon: React.ComponentType<{ size?: number }> }[] = [
   { id: 'ringkasan', label: 'Ringkasan Admin', icon: LayoutDashboard },
@@ -32,6 +33,9 @@ const TABS: { id: Tab; label: string; icon: React.ComponentType<{ size?: number 
   { id: 'pengguna', label: 'Pengguna & Peran', icon: Users },
   { id: 'kreator', label: 'Kreator Perusahaan', icon: UserCheck },
   { id: 'audit', label: 'Jejak Audit', icon: ShieldCheck },
+  // Platform-wide upkeep belongs to the administrator, not to a workspace's
+  // settings page: a superadmin has no workspace of their own.
+  { id: 'pemeliharaan', label: 'Pemeliharaan Platform', icon: Database },
 ];
 
 export const AdminDashboard: React.FC<{ onOpen: (id: string) => void; onLogout: () => void; embedded?: boolean }> = ({ onOpen, onLogout, embedded = false }) => {
@@ -237,6 +241,7 @@ export const AdminDashboard: React.FC<{ onOpen: (id: string) => void; onLogout: 
       {activeTab === 'pengguna' && <AdminAccountsView />}
       {activeTab === 'kreator' && <AdminCreatorsView />}
       {activeTab === 'audit' && <AdminAuditView />}
+            {activeTab === 'pemeliharaan' && <AdminMaintenanceView />}
     </div>
   );
 
@@ -457,6 +462,7 @@ export const AdminDashboard: React.FC<{ onOpen: (id: string) => void; onLogout: 
         {activeTab === 'pengguna' && <AdminAccountsView />}
         {activeTab === 'kreator' && <AdminCreatorsView />}
         {activeTab === 'audit' && <AdminAuditView />}
+            {activeTab === 'pemeliharaan' && <AdminMaintenanceView />}
       </main>
     </div>
   );

@@ -80,3 +80,34 @@ test('a DOM re-sync does not overwrite what the user just typed', async () => {
   const src = await read('../components/BriefStudioView.tsx');
   assert.match(src, /innerHTML !== next/, 'only rewrite when the markup actually differs');
 });
+
+/* ── K2 placement: platform upkeep belongs to the admin console ──────────── */
+
+test('the admin console owns a platform maintenance tab', async () => {
+  const dash = await read('../components/AdminDashboard.tsx');
+  assert.match(dash, /'pemeliharaan'/, 'the tab must exist');
+  assert.match(dash, /Pemeliharaan Platform/);
+  assert.match(dash, /AdminMaintenanceView/);
+});
+
+test('workspace settings no longer host the platform cleanup', async () => {
+  const settings = await read('../components/SettingsHelpView.tsx');
+  assert.doesNotMatch(settings, /isSuperadmin/, 'the role prop must be gone');
+  assert.doesNotMatch(settings, /ragPurgeOrphans/, 'the purge must not be here');
+  assert.doesNotMatch(settings, /Pemeliharaan Cepat/);
+});
+
+test('the maintenance panel checks before it deletes', async () => {
+  const panel = await read('../components/AdminMaintenanceView.tsx');
+  assert.match(panel, /ragOrphans/, 'it must list first');
+  assert.match(panel, /ragPurgeOrphans/, 'then purge');
+  assert.match(panel, /window\.confirm/, 'and ask before deleting');
+  assert.match(panel, /orphanCount === 0/, 'the purge button stays disabled with nothing to do');
+});
+
+test('a superadmin does not need a workspace of their own', async () => {
+  const panel = await read('../components/AdminMaintenanceView.tsx');
+  assert.match(panel, /workspaceId\?: string/, 'the workspace must be optional');
+  const api = await read('../services/apiService.ts');
+  assert.match(api, /ragOrphans:\(workspaceId\?:string\)/);
+});

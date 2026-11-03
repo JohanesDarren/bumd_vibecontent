@@ -45,8 +45,6 @@ interface SettingsHelpViewProps {
   /** Persist the settings for the active workspace. */
   onSaveSettings: (settings: AppSettings) => void | Promise<void>;
   onNotify?: (message: string) => void;
-  /** Orphan-vector cleanup is a platform-wide action; only superadmins may run it. */
-  isSuperadmin?: boolean;
 }
 
 type TabKey = 'pengaturan' | 'grounding' | 'privasi' | 'alur';
@@ -119,7 +117,7 @@ const FAQS = [
 
 /* ── Component ───────────────────────────────────────────────────────── */
 
-export const SettingsHelpView: React.FC<SettingsHelpViewProps> = ({ activeWorkspace, settings: serverSettings, onSaveSettings, onNotify, isSuperadmin }) => {
+export const SettingsHelpView: React.FC<SettingsHelpViewProps> = ({ activeWorkspace, settings: serverSettings, onSaveSettings, onNotify }) => {
   const [tab, setTab] = useState<TabKey>('pengaturan');
   // Local editing copy; changes are debounced and written to the server.
   const [settings, setSettings] = useState<AppSettings>(() => normalizeSettings(serverSettings));
@@ -333,38 +331,7 @@ export const SettingsHelpView: React.FC<SettingsHelpViewProps> = ({ activeWorksp
             </p>
           </div>
 
-          {isSuperadmin && (
-          <div className="card-panel">
-            <div className="settings-card-head"><Wrench size={20} /><h3>Pemeliharaan Cepat</h3></div>
-            <p className="settings-hint" style={{ marginBottom: '12px' }}>
-              Periksa vektor yang tidak lagi punya dokumen sumber (mis. unggahan yang dihapus sebelum selesai diindeks) dan bersihkan agar tidak ikut terambil saat retrieval. Dokumen asli tidak dihapus.
-            </p>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={async () => {
-                try {
-                  const report = await apiService.ragOrphans(activeWorkspace.id);
-                  if (!report.orphanCount) {
-                    onNotify?.(`Tidak ada vektor yatim. ${report.total} vektor semuanya punya dokumen sumber.`);
-                    return;
-                  }
-                  const names = report.orphans.map(o => o.name || o.id).join(', ');
-                  const ok = window.confirm(
-                    `Ditemukan ${report.orphanCount} vektor tanpa dokumen sumber:\n${names}\n\nHapus vektor ini? Dokumen asli tidak tersentuh.`
-                  );
-                  if (!ok) return;
-                  const done = await apiService.ragPurgeOrphans(activeWorkspace.id);
-                  onNotify?.(`Pembersihan selesai: ${done.deleted} vektor yatim dihapus, ${done.failed} gagal.`);
-                } catch (error) {
-                  onNotify?.(`Pembersihan gagal: ${error instanceof Error ? error.message : String(error)}`);
-                }
-              }}
-            >
-              <Trash2 size={13} /> Periksa &amp; Bersihkan Vektor Yatim
-            </button>
-          </div>
-          )}
+          
         
         </div>
       )}
