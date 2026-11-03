@@ -606,6 +606,69 @@ function actorOf(res: express.Response): { id: string | null; name: string; role
 
 
 
+
+/**
+ * Orphan vector reconciliation (QA K2).
+ *
+ * A vector can outlive its `kms_documents` row: an upload deleted before indexing
+ * finished, or one produced by an older flow. Those orphans are still retrieved by
+ * RAG — one of them contained internal specification text — but no screen could
+ * list or remove them, and the old /api/rag/prune was disabled. This exposes a
+ * dry run plus an explicit purge that only ever touches vectors with no document.
+ */
+async function ragOrphanReport(scopeId: string) {
+  const listed = await ragListDocuments(scopeId);
+  const docs: any[] = Array.isArray((listed as any)?.documents) ? (listed as any).documents : [];
+  const rows = await pool.query('SELECT id FROM kms_documents');
+  const known = new Set(rows.rows.map((row: any) => String(row.id)));
+  const orphans = docs.filter(doc => !known.has(String(doc?.id ?? '')));
+  return { total: docs.length, orphans };
+}
+
+app.get('/api/admin/rag/orphans', globalOnly, async (req, res, next) => {
+  try {
+    const workspaceId = String(req.query.workspaceId || res.locals.user.workspaces?.[0]?.id || '');
+    const { total, orphans } = await ragOrphanReport(workspaceId);
+    res.json({
+      total,
+      orphanCount: orphans.length,
+      orphans: orphans.map((doc: any) => ({
+        id: String(doc.id),
+        name: String(doc.name ?? doc.filename ?? doc.title ?? '')
+      }))
+    });
+  } catch (error) { next(error); }
+});
+
+app.post('/api/admin/rag/orphans/purge', globalOnly, async (req, res, next) => {
+  try {
+    const workspaceId = String(req.body?.workspaceId || res.locals.user.workspaces?.[0]?.id || '');
+    const { orphans } = await ragOrphanReport(workspaceId);
+    const deleted: string[] = [];
+    const failed: string[] = [];
+    for (const doc of orphans as any[]) {
+      const id = String(doc.id);
+      try {
+        await ragDeleteDocument(workspaceId, id);
+        deleted.push(id);
+      } catch {
+        // One unreachable vector must not abort the whole cleanup.
+        failed.push(id);
+      }
+    }
+    if (deleted.length) {
+      const a = actorOf(res);
+      await writeAudit({
+        workspaceId, actorId: a.id, actorName: a.name, actorRole: a.role,
+        action: 'Orphan vectors purged', objectType: 'knowledge', objectId: deleted.join(','),
+        objectName: `${deleted.length} vektor`,
+        details: `Tanpa dokumen sumber: ${deleted.join(', ')}`
+      });
+    }
+    res.json({ deleted: deleted.length, failed: failed.length, ids: deleted });
+  } catch (error) { next(error); }
+});
+
 /**
  * Brief deletion (S9).
  *
@@ -914,12 +977,15 @@ app.put('/api/workspaces/:workspaceId/settings',requireWorkspace(req=>String(req
  * Deterministic free-slot search used only when the model cannot answer.
  * Mirrors the client rules: prefer platform weekdays, one post per day.
  */
-function freeScheduleSlot(platform:string,todayStr:string,booked:Array<{date:string;time:string}>){
+function freeScheduleSlot(platform:string,todayStr:string,booked:Array<{date:string;time:string}>,timeOffset=0){
   const WEEKDAYS:Record<string,number[]>={instagram:[2,3,4],facebook:[3,4,5],twitter:[1,2,3],linkedin:[2,3,4],youtube:[5,6,0]};
   const TIMES:Record<string,string>={instagram:'19:00',facebook:'12:00',twitter:'12:00',linkedin:'08:00',youtube:'17:00'};
   const preferred=WEEKDAYS[platform]||[2,3,4];
   const baseTime=TIMES[platform]||'19:00';
-  const times=[baseTime,'12:00','09:00','20:00','17:00','08:00'];
+  const ordered=[baseTime,'12:00','09:00','20:00','17:00','08:00'];
+  // Rotate the preferred hour per suggestion: without this every alternative
+  // landed on 19:00, so the three options looked identical.
+  const times=[...ordered.slice(timeOffset % ordered.length),...ordered.slice(0,timeOffset % ordered.length)];
   const taken=new Set(booked.map(b=>`${b.date}T${b.time}`));
   const busyDates=new Set(booked.map(b=>b.date));
   const base=new Date(`${todayStr}T00:00:00`);
@@ -948,7 +1014,7 @@ function freeScheduleAlternatives(platform:string,todayStr:string,booked:Array<{
   const taken=[...booked,{date:chosen.date,time:chosen.time}];
   let cursor=todayStr;
   while(out.length<2){
-    const slot=freeScheduleSlot(platform,cursor,taken);
+    const slot=freeScheduleSlot(platform,cursor,taken,out.length+1);
     if(!slot||out.some(o=>o.date===slot.date)||slot.date===chosen.date)break;
     out.push(slot);
     taken.push({date:slot.date,time:slot.time});

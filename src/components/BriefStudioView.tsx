@@ -82,6 +82,32 @@ function toCitation(hit: RagHit, index: number): GroundedCitation {
   };
 }
 
+/**
+ * Read a contentEditable back as plain text without losing characters.
+ *
+ * `innerText` is layout-aware: it collapses runs of spaces, drops trailing
+ * newlines and trims line ends, so the stored text silently lost characters the
+ * user had typed. Walking the DOM keeps every text node, and turns <br> and block
+ * boundaries into a single newline.
+ */
+function serializeEditable(node: Node): string {
+  let out = '';
+  const walk = (current: Node) => {
+    if (current.nodeType === Node.TEXT_NODE) {
+      out += current.nodeValue ?? '';
+      return;
+    }
+    if (current.nodeType !== Node.ELEMENT_NODE) return;
+    const el = current as HTMLElement;
+    if (el.tagName === 'BR') { out += '\n'; return; }
+    const isBlock = /^(DIV|P|LI|TR|H[1-6]|BLOCKQUOTE)$/.test(el.tagName);
+    if (isBlock && out && !out.endsWith('\n')) out += '\n';
+    el.childNodes.forEach(walk);
+  };
+  node.childNodes.forEach(walk);
+  return out;
+}
+
 function renderEditorMarkup(text:string){
   return text
     .replace(/&/g, '&amp;')
@@ -205,7 +231,10 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
   // React rewrite the canvas (and reset the caret) on every keystroke.
   useEffect(() => {
     if (!isStreaming && editorRef.current) {
-      editorRef.current.innerHTML = renderEditorMarkup(editorContent);
+      // Only rewrite when the rendered markup actually differs, so finishing a
+      // stream does not overwrite text the user already corrected.
+      const next = renderEditorMarkup(editorContent);
+      if (editorRef.current.innerHTML !== next) editorRef.current.innerHTML = next;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isStreaming]);
@@ -694,7 +723,8 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
 
               onInput={(e) => {
                 if (!isStreaming) {
-                  setEditorContent((e.target as HTMLDivElement).innerText);
+                  // Was innerText, which silently dropped spaces and newlines.
+                  setEditorContent(serializeEditable(e.currentTarget));
                 }
               }}
               dangerouslySetInnerHTML={isStreaming ? {

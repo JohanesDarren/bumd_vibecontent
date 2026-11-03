@@ -669,6 +669,48 @@ export type ScheduleSlotSuggestion = {
  * concrete free slot. The date/time is validated server-side; if the model
  * answers something unusable we fall back to deterministic free-slot search.
  */
+
+/**
+ * Pull the JSON schedule out of a model reply.
+ *
+ * Providers differ: some return `content` as a string, others as an array of
+ * parts, and most models wrap JSON in a markdown fence or a sentence. The old code
+ * only accepted a plain string matched with /\{[\s\S]*\}/, so a fenced or
+ * array-shaped answer was reported as "model tidak mengembalikan jadwal" and the
+ * UI silently fell back to 19:00 every time.
+ */
+export function scheduleJsonFrom(message: { content?: unknown; reasoning_content?: unknown } | undefined): string | null {
+  if (!message) return null;
+  const collect = (value: unknown): string => {
+    if (typeof value === 'string') return value;
+    if (Array.isArray(value)) {
+      return value
+        .map(part => {
+          if (typeof part === 'string') return part;
+          if (part && typeof part === 'object') {
+            const text = (part as { text?: unknown }).text;
+            if (typeof text === 'string') return text;
+          }
+          return '';
+        })
+        .join('');
+    }
+    return '';
+  };
+  const raw = collect(message.content) || collect(message.reasoning_content);
+  if (!raw) return null;
+  // Drop a markdown code fence if present, then take the outermost object.
+  const unfenced = raw.replace(/```(?:json)?/gi, '').trim();
+  const match = unfenced.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try {
+    JSON.parse(match[0]);
+    return match[0];
+  } catch {
+    return null;
+  }
+}
+
 export async function ragSuggestSchedule(input: {
   platform: string;
   title: string;
@@ -740,9 +782,34 @@ export async function ragSuggestSchedule(input: {
   }
   if (!response?.ok) throw new Error(`Penyusun jadwal gagal (HTTP ${response?.status})`);
 
-  const body = parseFirstJson(raw) as { choices?: Array<{ message?: { content?: unknown } }> };
-  const content = typeof body.choices?.[0]?.message?.content === 'string' ? body.choices[0].message.content : '';
-  const jsonText = content.match(/\{[\s\S]*\}/)?.[0];
+  let body = parseFirstJson(raw) as { choices?: Array<{ message?: { content?: unknown; reasoning_content?: unknown } }> };
+  let jsonText = scheduleJsonFrom(body.choices?.[0]?.message);
+
+  if (!jsonText) {
+    // One strict retry: ask again with the same context and no room for prose.
+    console.warn('[schedule] unparseable suggestion, retrying strictly');
+    const retry = await fetch(`${config.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: models[0],
+        temperature: 0,
+        max_tokens: 400,
+        reasoning_effort: 'none',
+        messages: [
+          ...messages,
+          { role: 'user', content: 'Ulangi. Balas HANYA objek JSON valid, tanpa penjelasan, tanpa pagar kode.' }
+        ]
+      }),
+      signal: AbortSignal.timeout(Number(process.env['9ROUTER_TIMEOUT_MS'] || 60000))
+    });
+    if (retry.ok) {
+      raw = await retry.text();
+      body = parseFirstJson(raw) as typeof body;
+      jsonText = scheduleJsonFrom(body.choices?.[0]?.message);
+    }
+  }
+
   if (!jsonText) throw new Error('Model tidak mengembalikan jadwal yang bisa dibaca');
   const parsed = JSON.parse(jsonText) as { date?: string; time?: string; reason?: string; alternatives?: Array<{ date?: string; time?: string; reason?: string }> };
 
