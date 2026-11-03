@@ -27,10 +27,34 @@ export interface PrivacySettings {
   persistGeneratedDrafts: boolean;
 }
 
+/**
+ * Policies a company enforces on its own workspaces.
+ *
+ * These are corporate decisions, not platform ones: which output language is
+ * allowed, whether creators may pick another tone, and whether the official
+ * brand identity is mandatory on every draft.
+ */
+export interface CompanyPolicySettings {
+  /** 'id' | 'en' | 'both'. 'both' lets each brief choose. */
+  allowedLanguages: 'id' | 'en' | 'both';
+  /** When false, a brief may not override the default tone of voice. */
+  allowToneOverride: boolean;
+  /** When true, drafts must carry the official disclaimer and CTA. */
+  requireBrandIdentity: boolean;
+}
+
+export const DEFAULT_COMPANY_POLICY: CompanyPolicySettings = {
+  allowedLanguages: 'both',
+  allowToneOverride: true,
+  requireBrandIdentity: false
+};
+
 export interface AppSettings {
   defaultLanguage: 'id' | 'en';
   grounding: GroundingSettings;
   privacy: PrivacySettings;
+  /** Company-level content policy (enforced for every workspace of the company). */
+  companyPolicy: CompanyPolicySettings;
 }
 
 /** The 5-point grounding scale. Level 3 is the balanced default. */
@@ -59,7 +83,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
     includeBrandContextInQuery: true,
     includeSourceExcerpts: true,
     persistGeneratedDrafts: true
-  }
+  },
+  companyPolicy: { ...DEFAULT_COMPANY_POLICY }
 };
 
 /** Build a grounding object from a preset level. */
@@ -94,6 +119,20 @@ export function normalizeSettings(raw: unknown): AppSettings {
       includeBrandContextInQuery: typeof p.includeBrandContextInQuery === 'boolean' ? p.includeBrandContextInQuery : base.privacy.includeBrandContextInQuery,
       includeSourceExcerpts: typeof p.includeSourceExcerpts === 'boolean' ? p.includeSourceExcerpts : base.privacy.includeSourceExcerpts,
       persistGeneratedDrafts: typeof p.persistGeneratedDrafts === 'boolean' ? p.persistGeneratedDrafts : base.privacy.persistGeneratedDrafts
+    },
+    companyPolicy: {
+      allowedLanguages:
+        input.companyPolicy?.allowedLanguages === 'id' || input.companyPolicy?.allowedLanguages === 'en'
+          ? input.companyPolicy.allowedLanguages
+          : base.companyPolicy.allowedLanguages,
+      allowToneOverride:
+        typeof input.companyPolicy?.allowToneOverride === 'boolean'
+          ? input.companyPolicy.allowToneOverride
+          : base.companyPolicy.allowToneOverride,
+      requireBrandIdentity:
+        typeof input.companyPolicy?.requireBrandIdentity === 'boolean'
+          ? input.companyPolicy.requireBrandIdentity
+          : base.companyPolicy.requireBrandIdentity
     }
   };
 }

@@ -43,6 +43,19 @@ export const AdminMaintenanceView: React.FC<{ workspaceId?: string }> = ({ works
 
   return (
     <div style={{ display: 'grid', gap: '16px', maxWidth: '860px' }}>
+      {/* Make the level explicit: this console governs the whole application. */}
+      <div className="scope-banner" role="note" style={{ marginBottom: 0 }}>
+        <ShieldCheck size={16} />
+        <div>
+          <strong>Pengaturan tingkat aplikasi</strong>
+          <span>
+            Berlaku untuk seluruh perusahaan, seluruh workspace, dan seluruh peran.
+            Pengaturan milik satu perusahaan (bahasa, kebijakan merek) dikelola akun
+            korporat di halaman Pengaturan &amp; Bantuan mereka sendiri.
+          </span>
+        </div>
+      </div>
+
       <div className="card-panel">
         <div className="settings-card-head">
           <Database size={20} />

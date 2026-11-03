@@ -946,3 +946,22 @@ input[type='radio']:not(.ui-check-input):focus-visible {
   line-height: 1.45;
 }
 .core-warn svg { flex: 0 0 auto; margin-top: 1px; }
+
+/* ── Scope banner ────────────────────────────────────────────────────────── */
+/* Makes the level of a settings page unmistakable: company policy here, platform
+   policy in the admin console. */
+
+.scope-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  border-radius: 10px;
+  background: rgba(13, 12, 189, 0.05);
+  border: 1px solid rgba(13, 12, 189, 0.16);
+  color: var(--text-secondary);
+}
+.scope-banner svg { flex: 0 0 auto; margin-top: 2px; color: #0d0cbd; }
+.scope-banner strong { display: block; font-size: 0.82rem; color: var(--text-primary); margin-bottom: 2px; }
+.scope-banner span { font-size: 0.76rem; line-height: 1.5; }

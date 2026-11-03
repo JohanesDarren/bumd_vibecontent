@@ -593,15 +593,25 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
               <label className="form-label">
                 <span>Nada Suara (Panduan Merek)</span>
               </label>
-              <select 
+              <select
                 className="form-select"
                 value={tone}
                 onChange={e => setTone(e.target.value)}
+                // Corporate may forbid creators from changing the official tone.
+                disabled={settings.companyPolicy?.allowToneOverride === false}
+                title={settings.companyPolicy?.allowToneOverride === false
+                  ? 'Nada suara dikunci oleh kebijakan perusahaan.'
+                  : undefined}
               >
                 {brandProfile.toneOfVoice.map((t, idx) => (
                   <option key={idx} value={t}>{t}</option>
                 ))}
               </select>
+              {settings.companyPolicy?.allowToneOverride === false && (
+                <p className="settings-hint" style={{ marginTop: '4px' }}>
+                  Dikunci oleh kebijakan perusahaan.
+                </p>
+              )}
             </div>
           </div>
 

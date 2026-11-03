@@ -23,7 +23,7 @@ import {
   Search,
   Layers,
   EyeOff
-} from 'lucide-react';
+, Building2 } from 'lucide-react';
 import { ClipLoader } from 'react-spinners';
 import type { Workspace } from '../types';
 import { apiService, RagStatus } from '../services/apiService';
@@ -274,6 +274,19 @@ export const SettingsHelpView: React.FC<SettingsHelpViewProps> = ({ activeWorksp
       {/* ── Tab: Pengaturan Umum ── */}
       {tab === 'pengaturan' && (
         <div className="settings-panel-grid">
+          {/* Scope banner: these are company-level settings, not platform-wide. */}
+          <div className="scope-banner" role="note">
+            <Building2 size={16} />
+            <div>
+              <strong>Pengaturan tingkat perusahaan</strong>
+              <span>
+                Berlaku untuk seluruh workspace di bawah {activeWorkspace.name}. Pengaturan
+                tingkat aplikasi (seluruh perusahaan dan peran) dikelola superadmin di
+                Administrasi Aplikasi → Pemeliharaan Platform.
+              </span>
+            </div>
+          </div>
+
           <div className="card-panel">
             <div className="settings-card-head"><Languages size={20} /><h3>Bahasa &amp; Output</h3></div>
             <SettingRow title="Bahasa konten bawaan" desc="Dipakai saat brief baru dibuat dan disimpan ke draf.">
@@ -290,6 +303,55 @@ export const SettingsHelpView: React.FC<SettingsHelpViewProps> = ({ activeWorksp
             <p className="settings-hint">
               Bahasa ini mengisi kolom bahasa pada brief hasil generasi. Anda tetap dapat mengganti bahasa per brief.
             </p>
+
+          {/* Company-level content policy: corporate decides what its creators may do. */}
+          <div className="card-panel">
+            <div className="settings-card-head"><Building2 size={20} /><h3>Kebijakan Konten Perusahaan</h3></div>
+            <p className="settings-hint" style={{ marginBottom: '4px' }}>
+              Berlaku untuk seluruh workspace di perusahaan Anda, bukan hanya workspace yang sedang dibuka.
+            </p>
+
+            <SettingRow title="Bahasa yang diizinkan" desc="Batasi pilihan bahasa pada brief yang dibuat kreator.">
+              <select
+                className="form-select"
+                style={{ minWidth: '180px' }}
+                value={settings.companyPolicy.allowedLanguages}
+                onChange={e => persist({
+                  ...settings,
+                  companyPolicy: {
+                    ...settings.companyPolicy,
+                    allowedLanguages: e.target.value as 'id' | 'en' | 'both'
+                  }
+                })}
+              >
+                <option value="both">Indonesia &amp; Inggris</option>
+                <option value="id">Hanya Bahasa Indonesia</option>
+                <option value="en">Hanya English</option>
+              </select>
+            </SettingRow>
+
+            <SettingRow title="Kreator boleh mengganti nada" desc="Jika dimatikan, brief memakai nada resmi dari Profil & Merek.">
+              <Toggle
+                checked={settings.companyPolicy.allowToneOverride}
+                onChange={v => persist({
+                  ...settings,
+                  companyPolicy: { ...settings.companyPolicy, allowToneOverride: v }
+                })}
+                label="Izinkan kreator mengganti nada"
+              />
+            </SettingRow>
+
+            <SettingRow title="Identitas merek wajib" desc="Draf wajib memuat disclaimer resmi dan CTA resmi sebelum dapat diajukan.">
+              <Toggle
+                checked={settings.companyPolicy.requireBrandIdentity}
+                onChange={v => persist({
+                  ...settings,
+                  companyPolicy: { ...settings.companyPolicy, requireBrandIdentity: v }
+                })}
+                label="Wajibkan identitas merek"
+              />
+            </SettingRow>
+          </div>
           </div>
 
           <div className="card-panel">
