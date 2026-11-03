@@ -37,6 +37,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigate,
   onSelectDraft
 }) => {
+  // Archived drafts are out of circulation, so they must not inflate the counts.
+  const activeDrafts = drafts.filter(draft => draft.status !== 'diarsipkan');
 
   return (
     <div>
@@ -90,8 +92,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
           <div>
             <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>Total Draf</div>
-            <div style={{ fontSize: '1.65rem', fontWeight: 800 }}>{drafts.length}</div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--accent-cyan)' }}>{drafts.filter(d => d.format === 'copy_caption').length} Caption • {drafts.filter(d => d.format === 'naskah_singkat').length} Video</div>
+            <div style={{ fontSize: '1.65rem', fontWeight: 800 }}>{activeDrafts.length}</div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--accent-cyan)' }}>
+              {/* The breakdown listed only Caption and Video, so it never added up to
+                  the total: Siaran Pers and Panduan Visual were missing. Archived
+                  drafts are excluded here and from the total (they are not in play). */}
+              {activeDrafts.filter(d => d.format === 'copy_caption').length} Caption •{' '}
+              {activeDrafts.filter(d => d.format === 'naskah_singkat').length} Video •{' '}
+              {activeDrafts.filter(d => d.format === 'teks_promosi').length} Siaran Pers •{' '}
+              {activeDrafts.filter(d => d.format === 'brief_visual').length} Panduan Visual
+            </div>
           </div>
         </div>
 

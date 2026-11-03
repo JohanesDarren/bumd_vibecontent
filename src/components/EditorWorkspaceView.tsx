@@ -294,6 +294,14 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
       setSaveError('Ringkasan perubahan wajib diisi agar versi ini dapat ditelusuri.');
       return;
     }
+    // A version that still contains a banned term must not enter the history:
+    // the checker already found it, so saving would knowingly store a violation.
+    if ((liveCheck?.bannedWordsFound?.length || 0) > 0) {
+      setSaveError(
+        `Perbaiki kata terlarang sebelum menyimpan: ${liveCheck.bannedWordsFound.join(', ')}.`
+      );
+      return;
+    }
     setSaveError(null);
     const newVerNumber = draft.versions.length + 1;
     const newVersionon: DraftVersionon = {

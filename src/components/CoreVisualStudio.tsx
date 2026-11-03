@@ -242,6 +242,22 @@ export function CoreVisualStudio({
     a.click();
   };
 
+  // A validation message about the previous mode must not survive a switch:
+  // "Mode product only butuh referensi" stayed on screen after choosing Poster.
+  useEffect(() => {
+    setError('');
+  }, [mode, publication, aspectRatio]);
+
+  /**
+   * The default mode is "product only", which forbids people in the frame. A request
+   * like "mahasiswa mengerjakan proyek" used to be silently discarded. Say so, and
+   * point at the mode that can honour it.
+   */
+  const humanRequested = /\b(orang|manusia|mahasiswa|siswa|dosen|siswi|pelanggan|petugas|karyawan|warga|anak|perempuan|pria|wanita|people|person|student|team|model)\b/i.test(
+    `${remark} ${headline}`
+  );
+  const modeConflict = mode === 'product' && humanRequested;
+
   const previewBox = () => {
     if (aspectRatio === '9:16') return { width: 240, height: 427 };
     if (aspectRatio === '16:9') return { width: 427, height: 240 };
@@ -374,6 +390,16 @@ export function CoreVisualStudio({
             <p className="core-help">
               Tulis singkat. Sistem menyesuaikan sendiri bagian yang perlu diubah.
             </p>
+            {modeConflict && (
+              <div className="core-warn" role="status">
+                <AlertCircle size={14} />
+                <span>
+                  Permintaan ini menyebut orang, sedangkan mode <strong>Product only</strong>{' '}
+                  melarang manusia di dalam gambar. Pilih <strong>Dengan model</strong> agar
+                  permintaan dipakai.
+                </span>
+              </div>
+            )}
           </div>
         </section>
 

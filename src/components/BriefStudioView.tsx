@@ -487,7 +487,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
               <input 
                 type="text" 
                 className="form-input" 
-                placeholder="cth.: Kampanye Edukasi Sambungan Air Baru 2026"
+                placeholder="cth.: Kampanye Layanan Baru 2026"
                 value={title}
                 onChange={e => setTitle(e.target.value)}
                 required
@@ -501,7 +501,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
               <input 
                 type="text" 
                 className="form-input" 
-                placeholder="cth.: Program Kesejahteraan Air Bersih"
+                placeholder="cth.: Program Unggulan Tahun Ini"
                 value={campaign}
                 onChange={e => setCampaign(e.target.value)}
               />
@@ -630,7 +630,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
             <input 
               type="text" 
               className="form-input"
-              placeholder="Cth.: Hanya berlaku untuk pelanggan dengan daya listrik maksimal 900 VA"
+              placeholder="Cth.: Hanya berlaku untuk peserta yang mendaftar sebelum 31 Desember"
               value={limitations}
               onChange={e => setLimitations(e.target.value)}
             />

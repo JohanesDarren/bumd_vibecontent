@@ -927,3 +927,22 @@ input[type='radio']:not(.ui-check-input):focus-visible {
   flex: 0 0 auto;
   white-space: nowrap;
 }
+
+/* ── Mode/request conflict notice ─────────────────────────────────────────── */
+/* A request that contradicts the selected visual mode used to be dropped
+   silently; the user deserves to know why nothing changed. */
+
+.core-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.10);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #92400e;
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+.core-warn svg { flex: 0 0 auto; margin-top: 1px; }

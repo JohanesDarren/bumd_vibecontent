@@ -392,12 +392,20 @@ export function runQualityCheck(
   const hasCta = Boolean(expectedCta && normalizedContent.includes(expectedCta.toLowerCase()));
 
   // 3. Factual Grounding
-  const totalClaims = 1 + unsupportedClaims.length;
-  const groundedClaims = citations.length > 0 ? 1 : 0;
+  // Counting "any citation = 1 grounded claim out of 1" reported 100% support even
+  // when a sentence had no source at all. Grounding is now the ratio of claims that
+  // are actually backed by a citation to every claim the checker knows about.
+  const unsupported = unsupportedClaims.length;
+  const hasCitations = citations.length > 0;
+  const totalClaims = Math.max(1, unsupported + (hasCitations ? 1 : 0));
+  const groundedClaims = hasCitations ? Math.max(0, totalClaims - unsupported) : 0;
   const groundingScore = Math.round((groundedClaims / totalClaims) * 100);
-  const groundingPassed = groundedClaims === 1 && unsupportedClaims.length === 0;
+  // Support is only "passed" when there is a real citation AND nothing is unverified.
+  const groundingPassed = hasCitations && unsupported === 0 && citations.some(c => Boolean(c.documentTitle || c.claimExcerpt));
 
   // 4. Tone Compliance
+  // The message used to hardcode "Formal" regardless of what the brief asked for.
+  const requestedTone = (brief.tone || brandProfile.toneOfVoice?.[0] || 'netral').trim();
   let toneScore = 95;
   if (bannedWordsFound.length > 0) toneScore -= bannedWordsFound.length * 15;
   if (content.length < 50) toneScore -= 20;
@@ -424,9 +432,9 @@ export function runQualityCheck(
     },
     toneCompliance: {
       score: Math.max(50, toneScore),
-      details: bannedWordsFound.length === 0 
-        ? `Tidak ditemukan kata terlarang; kecocokan nada "${brief.tone || 'Formal'}" tetap perlu ditinjau manual.`
-        : `Non-recommended terms found: "${bannedWordsFound.join(', ')}".`,
+      details: bannedWordsFound.length === 0
+        ? `Tidak ditemukan kata terlarang. Nada diminta: "${requestedTone}" — kecocokan tetap perlu ditinjau manual.`
+        : `Istilah tidak dianjurkan ditemukan: "${bannedWordsFound.join(', ')}".`,
       passed: bannedWordsFound.length === 0 && validationIssues.length === 0
     },
     factualGrounding: {

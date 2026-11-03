@@ -156,16 +156,50 @@ export async function listBootstrap(workspaceId?:string) {
   const workspacesResult=await pool.query('SELECT id,name,code,sector,city,company_id AS "companyId",tagline,primary_color AS "primaryColor",accent_color AS "accentColor",description FROM organizations ORDER BY created_at');
   const targetWorkspaceId=workspaceId || workspacesResult.rows[0]?.id;
   if(!targetWorkspaceId) return {workspaces:[],users:[],documents:[],drafts:[],briefs:[],auditLogs:[],brandProfile:null,settings:null};
-  const [users,documents,drafts,briefs,auditLogs,brand,settings] = await Promise.all([
+  const [users,documents,drafts,briefs,auditLogs,brand,settings,kmsBook] = await Promise.all([
     pool.query('SELECT u.id,u.name,u.email,u.avatar,u.title,u.department,m.organization_id AS "workspaceId",m.role FROM users u JOIN memberships m ON m.user_id=u.id WHERE m.organization_id=$1 AND m.active',[targetWorkspaceId]),
     pool.query(`SELECT s.id,s.organization_id AS "workspaceId",s.title,s.category,s.owner,s.version,s.effective_date AS "effectiveDate",s.status,s.upload_date AS "uploadDate",s.file_size AS "fileSize",s.summary,COALESCE((SELECT jsonb_agg(jsonb_build_object('workspaceId',a.workspace_id,'enabled',a.enabled) ORDER BY o.name) FROM knowledge_source_workspaces a JOIN organizations o ON o.id=a.workspace_id WHERE a.source_id=s.id),'[]') AS "workspaceAssignments",COALESCE(jsonb_agg(jsonb_build_object('id',c.id,'documentId',c.source_id,'section',c.section,'page',c.page,'content',c.content,'keywords',c.keywords)) FILTER (WHERE c.id IS NOT NULL),'[]') chunks FROM knowledge_sources s LEFT JOIN knowledge_chunks c ON c.source_id=s.id WHERE (s.company_id IS NOT NULL AND s.company_id=(SELECT company_id FROM organizations WHERE id=$1)) OR (s.company_id IS NULL AND s.organization_id=$1) GROUP BY s.id`,[targetWorkspaceId]),
     listWorkspaceDrafts(targetWorkspaceId),
     pool.query('SELECT data FROM content_briefs WHERE organization_id=$1 ORDER BY created_at DESC',[targetWorkspaceId]),
     pool.query('SELECT id::text,organization_id AS "workspaceId",created_at AS timestamp,actor_name AS "actorName",actor_role AS "actorRole",action,object_type AS "objectType",object_id AS "objectId",object_name AS "objectName",details FROM audit_events WHERE organization_id=$1 ORDER BY created_at DESC',[targetWorkspaceId]),
     pool.query('SELECT data FROM brand_profiles WHERE organization_id=$1',[targetWorkspaceId]),
-    pool.query('SELECT COALESCE((SELECT data FROM company_settings WHERE company_id=(SELECT company_id FROM organizations WHERE id=$1)),(SELECT data FROM workspace_settings WHERE organization_id=$1)) AS data',[targetWorkspaceId])
+    pool.query('SELECT COALESCE((SELECT data FROM company_settings WHERE company_id=(SELECT company_id FROM organizations WHERE id=$1)),(SELECT data FROM workspace_settings WHERE organization_id=$1)) AS data',[targetWorkspaceId]),
+    // Documents actually live in kms_documents. The bootstrap query above reads the
+    // legacy knowledge_sources table, which is empty in production, so the UI
+    // reported "0 dokumen knowledge base" while the KB held several files.
+    pool.query(`SELECT k.id,k.workspace_id AS "workspaceId",k.title,k.category,k.filename,
+        k.created_at AS "uploadDate",k.indexed,k.media_type AS "mediaType",
+        COALESCE((SELECT jsonb_agg(jsonb_build_object('workspaceId',a.workspace_id,'enabled',true) ORDER BY o.name)
+          FROM kms_document_workspaces a JOIN organizations o ON o.id=a.workspace_id
+          WHERE a.document_id=k.id),'[]') AS "workspaceAssignments"
+      FROM kms_documents k
+      WHERE k.workspace_id=$1
+         OR EXISTS(SELECT 1 FROM kms_document_workspaces a WHERE a.document_id=k.id AND a.workspace_id=$1)
+      ORDER BY k.created_at DESC`,[targetWorkspaceId])
   ]);
-  return { workspaces:workspacesResult.rows, users:users.rows, documents:documents.rows, drafts, briefs:briefs.rows.map(row=>row.data), auditLogs:auditLogs.rows, brandProfile:brand.rows[0]?.data ?? null, settings:settings.rows[0]?.data ?? null };
+  // Merge the legacy rows (if any) with the real KMS documents, deduplicated by id,
+  // mapped to the KnowledgeDocument shape the UI already expects.
+  const kmsDocs = (kmsBook?.rows || []).map((row:any) => ({
+    id: row.id,
+    workspaceId: row.workspaceId,
+    workspaceAssignments: row.workspaceAssignments || [],
+    title: row.title,
+    category: row.category || 'Lainnya',
+    owner: row.filename || 'KMS',
+    version: '1',
+    effectiveDate: (row.uploadDate instanceof Date ? row.uploadDate.toISOString() : String(row.uploadDate || '')).slice(0,10),
+    status: 'aktif',
+    uploadDate: row.uploadDate instanceof Date ? row.uploadDate.toISOString() : String(row.uploadDate || ''),
+    fileSize: '',
+    summary: row.mediaType && row.mediaType !== 'document' ? `Media ${row.mediaType}` : '',
+    chunks: [],
+    kmsDocumentId: row.id,
+    kmsStatus: row.indexed ? 'indexed' : 'pending'
+  }));
+  const merged = [...documents.rows];
+  const seen = new Set(merged.map((d:any) => String(d.id)));
+  for (const doc of kmsDocs) if (!seen.has(String(doc.id))) { merged.push(doc); seen.add(String(doc.id)); }
+  return { workspaces:workspacesResult.rows, users:users.rows, documents:merged, drafts, briefs:briefs.rows.map(row=>row.data), auditLogs:auditLogs.rows, brandProfile:brand.rows[0]?.data ?? null, settings:settings.rows[0]?.data ?? null };
 }
 
 export async function replaceDraft(draft:any) {
@@ -198,6 +232,13 @@ export async function replaceDraft(draft:any) {
     await client.query('DELETE FROM review_comments WHERE draft_id=$1',[draft.id]);
     for(const comment of draft.comments||[]) await client.query('INSERT INTO review_comments(id,draft_id,author_id,author_name,author_role,text,target_snippet,resolved,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)',[comment.id,draft.id,draft.createdBy,comment.authorName,comment.authorRole,comment.text,comment.targetSnippet||null,comment.resolved,comment.createdAt]);
     await client.query(`INSERT INTO audit_events(organization_id,actor_id,actor_name,actor_role,action,object_type,object_id,object_name,details) VALUES($1,$2,$3,$4,'Draft saved','draft',$5,$6,'Persisted by API')`,[draft.workspaceId,draft.createdBy,member.rows[0].name,member.rows[0].role,draft.id,draft.title]);
+    // Archiving a draft must stop it from going out. Its future schedule slots are
+    // returned to plain drafts (not deleted) so the calendar keeps its history.
+    await client.query(
+      `UPDATE content_schedules SET status='draft', updated_at=now()
+        WHERE draft_id=$1 AND status<>'published' AND publish_date >= CURRENT_DATE`,
+      [draft.id]
+    );
     await client.query('COMMIT');
     return (await listWorkspaceDrafts(draft.workspaceId)).find(item=>item.id===draft.id);
   } catch(error){await client.query('ROLLBACK');throw error;} finally{client.release();}
