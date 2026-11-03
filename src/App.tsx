@@ -717,6 +717,7 @@ export function App() {
               settings={appSettings}
               onSaveSettings={handleSaveSettings}
               onNotify={showToast}
+              isSuperadmin={authUser?.role === 'superadmin'}
             />
           )}
           </Suspense>

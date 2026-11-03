@@ -45,6 +45,8 @@ interface SettingsHelpViewProps {
   /** Persist the settings for the active workspace. */
   onSaveSettings: (settings: AppSettings) => void | Promise<void>;
   onNotify?: (message: string) => void;
+  /** Orphan-vector cleanup is a platform-wide action; only superadmins may run it. */
+  isSuperadmin?: boolean;
 }
 
 type TabKey = 'pengaturan' | 'grounding' | 'privasi' | 'alur';
@@ -117,7 +119,7 @@ const FAQS = [
 
 /* ── Component ───────────────────────────────────────────────────────── */
 
-export const SettingsHelpView: React.FC<SettingsHelpViewProps> = ({ activeWorkspace, settings: serverSettings, onSaveSettings, onNotify }) => {
+export const SettingsHelpView: React.FC<SettingsHelpViewProps> = ({ activeWorkspace, settings: serverSettings, onSaveSettings, onNotify, isSuperadmin }) => {
   const [tab, setTab] = useState<TabKey>('pengaturan');
   // Local editing copy; changes are debounced and written to the server.
   const [settings, setSettings] = useState<AppSettings>(() => normalizeSettings(serverSettings));
@@ -331,6 +333,7 @@ export const SettingsHelpView: React.FC<SettingsHelpViewProps> = ({ activeWorksp
             </p>
           </div>
 
+          {isSuperadmin && (
           <div className="card-panel">
             <div className="settings-card-head"><Wrench size={20} /><h3>Pemeliharaan Cepat</h3></div>
             <p className="settings-hint" style={{ marginBottom: '12px' }}>
@@ -361,6 +364,8 @@ export const SettingsHelpView: React.FC<SettingsHelpViewProps> = ({ activeWorksp
               <Trash2 size={13} /> Periksa &amp; Bersihkan Vektor Yatim
             </button>
           </div>
+          )}
+        
         </div>
       )}
 
