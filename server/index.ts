@@ -616,13 +616,41 @@ function actorOf(res: express.Response): { id: string | null; name: string; role
  * list or remove them, and the old /api/rag/prune was disabled. This exposes a
  * dry run plus an explicit purge that only ever touches vectors with no document.
  */
+/**
+ * Vectors whose source document is gone.
+ *
+ * Two rules matter here, and both were wrong once (QA v2 sa-15 reported all 13
+ * vectors as orphans, with id "undefined"):
+ *   1. the RAG service returns `document_id`, not `id`;
+ *   2. a vector is only an orphan when its document is missing OR already marked
+ *      `deleted` while still holding vectors — a deleted document that still
+ *      retrieves is exactly the leak we are hunting.
+ */
 async function ragOrphanReport(scopeId: string) {
   const listed = await ragListDocuments(scopeId);
   const docs: any[] = Array.isArray((listed as any)?.documents) ? (listed as any).documents : [];
+
   const rows = await pool.query('SELECT id FROM kms_documents');
   const known = new Set(rows.rows.map((row: any) => String(row.id)));
-  const orphans = docs.filter(doc => !known.has(String(doc?.id ?? '')));
-  return { total: docs.length, orphans };
+
+  const normalised = docs.map(doc => {
+    const id = String(doc?.document_id ?? doc?.id ?? '');
+    return {
+      id,
+      name: String(doc?.document_name ?? doc?.name ?? ''),
+      status: String(doc?.status ?? ''),
+      vectors: Number(doc?.vectors_in_store ?? doc?.chunks ?? 0) || 0
+    };
+  }).filter(doc => doc.id !== '');
+
+  const orphans = normalised.filter(doc => {
+    const missing = !known.has(doc.id);
+    // A document marked deleted but still holding vectors is a live leak.
+    const deletedButIndexed = doc.status === 'deleted' && doc.vectors > 0;
+    return missing || deletedButIndexed;
+  });
+
+  return { total: normalised.length, orphans };
 }
 
 app.get('/api/admin/rag/orphans', globalOnly, async (req, res, next) => {
@@ -655,6 +683,13 @@ app.post('/api/admin/rag/orphans/purge', globalOnly, async (req, res, next) => {
     }
     if (total > 0 && orphans.length === total) {
       return res.status(409).json({ error: 'Semua vektor tampak yatim. Pembersihan dibatalkan — periksa koneksi database terlebih dahulu.' });
+    }
+    // Second rail: every orphan must carry an id that the RAG service actually
+    // returned. Blank or "undefined" ids mean the mapping broke, not that the
+    // corpus is dirty — deleting on those would wipe real vectors.
+    const invalid = (orphans as any[]).filter(doc => !doc.id || doc.id === 'undefined' || doc.id === 'null');
+    if (invalid.length) {
+      return res.status(409).json({ error: 'Sebagian vektor tidak punya id yang sah. Pembersihan dibatalkan agar tidak menghapus vektor yang masih dipakai.' });
     }
     const deleted: string[] = [];
     const failed: string[] = [];
@@ -817,7 +852,7 @@ app.post('/api/admin/workspaces',globalOnly,async(req,res,next)=>{try{const {com
     const a=actorOf(res);
     await writeAudit({workspaceId:created.id,actorId:a.id,actorName:a.name,actorRole:a.role,action:'Workspace created',objectType:'workspace',objectId:created.id,objectName:created.name,details:`Kode ${created.code}`});
     res.status(201).json(created);}catch(e){next(e);}});
-app.put('/api/admin/workspaces/:id',globalOnly,async(req,res,next)=>{try{const {companyId,name,code,sector,city}=req.body||{};if(![companyId,name,code,sector,city].every(isNonEmptyString))return res.status(400).json({error:'companyId, name, code, sector, city required'});const previous=(await pool.query('SELECT company_id FROM organizations WHERE id=$1',[req.params.id])).rows[0];if(!previous)return res.status(404).json({error:'Workspace not found'});if(previous.company_id!==companyId&&(await pool.query(`SELECT 1 FROM memberships WHERE organization_id=$1 UNION ALL SELECT 1 FROM content_drafts WHERE organization_id=$1 UNION ALL SELECT 1 FROM content_briefs WHERE organization_id=$1 UNION ALL SELECT 1 FROM knowledge_sources WHERE organization_id=$1 LIMIT 1`,[req.params.id])).rowCount)return res.status(409).json({error:'Remove workspace members and content before moving it to another company'});const result=await pool.query('UPDATE organizations SET company_id=$1,name=$2,code=$3,sector=$4,city=$5 WHERE id=$6 RETURNING id,name,code,sector,city,company_id AS "companyId"',[companyId,name.trim(),code.trim().toUpperCase(),sector.trim(),city.trim(),req.params.id]);res.json(result.rows[0]);}catch(e){next(e);}});
+app.put('/api/admin/workspaces/:id',globalOnly,async(req,res,next)=>{try{const {companyId,name,code,sector,city}=req.body||{};const v=validateWorkspaceFields({name,code,sector,city});if('error' in v)return res.status(400).json({error:v.error});const previous=(await pool.query('SELECT company_id FROM organizations WHERE id=$1',[req.params.id])).rows[0];if(!previous)return res.status(404).json({error:'Workspace not found'});if(previous.company_id!==companyId&&(await pool.query(`SELECT 1 FROM memberships WHERE organization_id=$1 UNION ALL SELECT 1 FROM content_drafts WHERE organization_id=$1 UNION ALL SELECT 1 FROM content_briefs WHERE organization_id=$1 UNION ALL SELECT 1 FROM knowledge_sources WHERE organization_id=$1 LIMIT 1`,[req.params.id])).rowCount)return res.status(409).json({error:'Remove workspace members and content before moving it to another company'});const result=await pool.query('UPDATE organizations SET company_id=$1,name=$2,code=$3,sector=$4,city=$5 WHERE id=$6 RETURNING id,name,code,sector,city,company_id AS "companyId"',[companyId,name.trim(),code.trim().toUpperCase(),sector.trim(),city.trim(),req.params.id]);res.json(result.rows[0]);}catch(e){next(e);}});
 app.delete('/api/admin/workspaces/:id',globalOnly,async(req,res,next)=>{try{const pre=await pool.query('SELECT name,code FROM organizations WHERE id=$1',[req.params.id]);
     const result=await pool.query(`DELETE FROM organizations o WHERE o.id=$1 AND NOT EXISTS(SELECT 1 FROM memberships WHERE organization_id=o.id) AND NOT EXISTS(SELECT 1 FROM content_drafts WHERE organization_id=o.id) AND NOT EXISTS(SELECT 1 FROM content_briefs WHERE organization_id=o.id) AND NOT EXISTS(SELECT 1 FROM knowledge_sources WHERE organization_id=o.id) RETURNING id`,[req.params.id]);
     if(result.rowCount){
@@ -875,7 +910,7 @@ app.post('/api/corporate/workspaces',corporateOnly,async(req,res,next)=>{try{con
     const a=actorOf(res);
     await writeAudit({workspaceId:created.id,actorId:a.id,actorName:a.name,actorRole:a.role,action:'Workspace created',objectType:'workspace',objectId:created.id,objectName:created.name,details:`Kode ${created.code}`});
     res.status(201).json(created);}catch(e){next(e);}});
-app.put('/api/corporate/workspaces/:workspaceId',corporateOnly,async(req,res,next)=>{try{const u=res.locals.user;if(u.role!=='corporate')return res.status(403).json({error:'Company account required'});const {name,code,sector,city}=req.body||{};if(![name,code,sector,city].every(isNonEmptyString))return res.status(400).json({error:'name, code, sector and city required'});const result=await pool.query('UPDATE organizations SET name=$1,code=$2,sector=$3,city=$4 WHERE id=$5 AND company_id=$6 RETURNING id,name,code,sector,city',[name.trim(),code.trim().toUpperCase(),sector.trim(),city.trim(),req.params.workspaceId,u.companyId]);if(!result.rowCount)return res.status(404).json({error:'Workspace not found in your company'});res.json(result.rows[0]);}catch(e){if((e as {code?:string}).code==='23505')return res.status(409).json({error:'Workspace code already in use'});next(e);}});
+app.put('/api/corporate/workspaces/:workspaceId',corporateOnly,async(req,res,next)=>{try{const u=res.locals.user;if(u.role!=='corporate')return res.status(403).json({error:'Company account required'});const {name,code,sector,city}=req.body||{};const v=validateWorkspaceFields({name,code,sector,city});if('error' in v)return res.status(400).json({error:v.error});const result=await pool.query('UPDATE organizations SET name=$1,code=$2,sector=$3,city=$4 WHERE id=$5 AND company_id=$6 RETURNING id,name,code,sector,city',[name.trim(),code.trim().toUpperCase(),sector.trim(),city.trim(),req.params.workspaceId,u.companyId]);if(!result.rowCount)return res.status(404).json({error:'Workspace not found in your company'});res.json(result.rows[0]);}catch(e){if((e as {code?:string}).code==='23505')return res.status(409).json({error:'Workspace code already in use'});next(e);}});
 app.delete('/api/corporate/workspaces/:workspaceId',corporateOnly,async(req,res,next)=>{try{const u=res.locals.user;if(u.role!=='corporate')return res.status(403).json({error:'Company account required'});const id=req.params.workspaceId;const result=await pool.query(`DELETE FROM organizations o WHERE o.id=$1 AND o.company_id=$2 AND NOT EXISTS(SELECT 1 FROM memberships m WHERE m.organization_id=o.id) AND NOT EXISTS(SELECT 1 FROM content_drafts d WHERE d.organization_id=o.id) AND NOT EXISTS(SELECT 1 FROM content_briefs b WHERE b.organization_id=o.id) AND NOT EXISTS(SELECT 1 FROM knowledge_sources k WHERE k.organization_id=o.id) RETURNING id`,[id,u.companyId]);if(result.rowCount)return res.json({ok:true});if(!(await pool.query('SELECT 1 FROM organizations WHERE id=$1 AND company_id=$2',[id,u.companyId])).rowCount)return res.status(404).json({error:'Workspace not found in your company'});res.status(409).json({error:'Workspace has members or content; remove them first'});}catch(e){if((e as {code?:string}).code==='23503')return res.status(409).json({error:'Workspace has dependent data and cannot be deleted'});next(e);}});
 app.post('/api/corporate/workspaces/:workspaceId/members',corporateOnly,requireWorkspace(req=>req.params.workspaceId,true),async(req,res,next)=>{try{const {name,email,role}=req.body||{};if(!isNonEmptyString(name)||!isEmail(email)||role!=='creator')return res.status(400).json({error:'name, email, creator role required'});res.status(201).json(await createUserMembership(req.params.workspaceId,{...req.body,role:'creator'}));}catch(e){if(e instanceof Error&&['Only creator accounts can join a workspace','Creator belongs to another company'].includes(e.message))return res.status(409).json({error:e.message});next(e);}});
 app.delete('/api/corporate/workspaces/:workspaceId/members/:userId',corporateOnly,requireWorkspace(req=>req.params.workspaceId,true),async(req,res,next)=>{try{await deleteUserMembership(req.params.workspaceId,req.params.userId);res.json({ok:true});}catch(e){next(e);}});
@@ -1093,6 +1128,14 @@ app.put('/api/organizations/:workspaceId/schedules/:id/custom-image',contentOnly
 app.delete('/api/organizations/:workspaceId/schedules/:id',contentOnly,requireMember(req=>String(req.params.workspaceId)),async(req,res,next)=>{try{const actorId=res.locals.user?.id||(req as any).user?.id||'usr-system';await deleteSchedule(String(req.params.workspaceId),String(req.params.id),actorId);res.json({ok:true});}catch(error){next(error);}});
 // Only local workspace assignments may reach the shared provider; never accept document IDs from clients.
 async function authorizedKmsIds(workspaceId:string){return (await pool.query('SELECT document_id FROM kms_document_workspaces WHERE workspace_id=$1',[workspaceId])).rows.map((r:{document_id:string})=>r.document_id);}
+/**
+ * Titles of the documents this workspace may read.
+ *
+ * Older uploads were indexed under a slug id (`d3_..._bjo85`) while the KMS row
+ * keeps `doc-...`. Passing the titles lets the retrieval filter recognise those
+ * chunks without widening the workspace boundary.
+ */
+async function authorizedKmsNames(workspaceId:string){return (await pool.query(`SELECT DISTINCT k.title FROM kms_documents k JOIN kms_document_workspaces a ON a.document_id=k.id WHERE a.workspace_id=$1`,[workspaceId])).rows.map((r:{title:string})=>String(r.title||'')).filter(Boolean);}
 
 // Long provider calls must not hold an HTTP request open until a proxy timeout.
 // Jobs live in PostgreSQL because the app runs on multiple PM2 workers: an
@@ -1110,7 +1153,7 @@ async function runRagJob(id:string,workspaceId:string,query:string){
   try{
     // Brief/Editor are RAG work, not KMS work: RAG retrieves matched knowledge
     // and writes the copy. KMS only stores corporate-uploaded documents.
-    const answer=await ragQuery(workspaceId,query,undefined,await authorizedKmsIds(String(workspaceId)));
+    const answer=await ragQuery(workspaceId,query,undefined,await authorizedKmsIds(String(workspaceId)),await authorizedKmsNames(String(workspaceId)));
     if(answer.grounded)await markSourcesIndexed(answer.sources,ids=>pool.query('UPDATE kms_documents SET indexed=true WHERE id=ANY($1::text[])',[ids]),error=>console.warn('[rag] indexed metadata update failed',error instanceof Error?error.message:error));
     await pool.query("UPDATE rag_jobs SET status='done',answer=$2::jsonb WHERE id=$1",[id,JSON.stringify(answer)]);
   }catch(error){
@@ -1122,7 +1165,7 @@ async function runRagJob(id:string,workspaceId:string,query:string){
 // ── RAG service proxy routes ──
 app.get('/api/rag/status',async(_req,res)=>{try{const status=await ragStatus();const deps=status?.dependencies||{};const ready=status?.status==='ready'&&['qdrant','embedding','reranker','llm'].every(name=>String((deps as any)[name]||'')==='ok');res.json({configured:true,ready,dependencies:deps,detail:status?.detail||{}});}catch(error){const message=error instanceof Error?error.message:'RAG status unavailable';res.json({configured:ragConfigured(),ready:false,detail:message});}});
 app.post('/api/rag/search',contentOnly,requireWorkspace(req=>req.body?.workspaceId),(_req,res)=>res.status(410).json({error:'KMS tidak menyediakan pencarian kutipan terpisah; gunakan sumber dari jawaban RAG'}));
-app.post('/api/rag/query',contentOnly,requireWorkspace(req=>req.body?.workspaceId),async(req,res)=>{try{const{workspaceId,query}=req.body||{};if(!isNonEmptyString(workspaceId))return res.status(400).json({error:'workspaceId is required'});if(!isNonEmptyString(query))return res.status(400).json({error:'query is required'});const answer=await ragQuery(workspaceId,query,undefined,await authorizedKmsIds(String(workspaceId)));if(answer.grounded){await markSourcesIndexed(answer.sources,ids=>pool.query('UPDATE kms_documents SET indexed=true WHERE id=ANY($1::text[])',[ids]),error=>console.warn('[rag] indexed metadata update failed',error instanceof Error?error.message:error));}res.json(answer);}catch(error){const message=error instanceof Error?error.message:'unknown error';console.error('[rag] query failed',{message,cause:error instanceof Error&&error.cause?String(error.cause):undefined});res.status(502).json({error:`KMS query gagal: ${message}`});}});
+app.post('/api/rag/query',contentOnly,requireWorkspace(req=>req.body?.workspaceId),async(req,res)=>{try{const{workspaceId,query}=req.body||{};if(!isNonEmptyString(workspaceId))return res.status(400).json({error:'workspaceId is required'});if(!isNonEmptyString(query))return res.status(400).json({error:'query is required'});const answer=await ragQuery(workspaceId,query,undefined,await authorizedKmsIds(String(workspaceId)),await authorizedKmsNames(String(workspaceId)));if(answer.grounded){await markSourcesIndexed(answer.sources,ids=>pool.query('UPDATE kms_documents SET indexed=true WHERE id=ANY($1::text[])',[ids]),error=>console.warn('[rag] indexed metadata update failed',error instanceof Error?error.message:error));}res.json(answer);}catch(error){const message=error instanceof Error?error.message:'unknown error';console.error('[rag] query failed',{message,cause:error instanceof Error&&error.cause?String(error.cause):undefined});res.status(502).json({error:`KMS query gagal: ${message}`});}});
 app.post('/api/rag/jobs',contentOnly,requireWorkspace(req=>req.body?.workspaceId),async(req,res)=>{try{const{workspaceId,query}=req.body||{};if(!isNonEmptyString(workspaceId)||!isNonEmptyString(query))return res.status(400).json({error:'workspaceId and query are required'});const id=randomUUID();await pool.query("INSERT INTO rag_jobs(id,workspace_id,user_id,status) VALUES($1,$2,$3,'running')",[id,workspaceId,String(res.locals.user?.id||'')]);await sweepRagJobs();void runRagJob(id,workspaceId,query);res.status(202).json({jobId:id,status:'running'});}catch(error){next(error);}});
 app.get('/api/rag/jobs/:id',async(req,res,next)=>{try{const result=await pool.query('SELECT workspace_id AS "workspaceId",status,answer,error FROM rag_jobs WHERE id=$1',[String(req.params.id)]);const job=result.rows[0];if(!job)return res.status(404).json({error:'Job not found or expired'});if(!permitted(res.locals.user,job.workspaceId))return res.status(403).json({error:'Workspace access denied'});if(job.status==='done')return res.json({status:'done',answer:job.answer});if(job.status==='error')return res.json({status:'error',error:job.error});res.json({status:'running'});}catch(error){next(error);}});
 app.post('/api/rag/refine',contentOnly,requireWorkspace(req=>req.body?.workspaceId),async(req,res,next)=>{try{const{draftContent,promptAction,kind}=req.body||{};if(!isNonEmptyString(draftContent)||!isNonEmptyString(promptAction))return res.status(400).json({error:'draftContent and promptAction required'});res.json(await ragRefine(String(req.body.workspaceId),draftContent,promptAction,typeof kind==='string'?kind:undefined));}catch(error){next(error);}});

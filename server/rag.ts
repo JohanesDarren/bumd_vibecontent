@@ -288,7 +288,7 @@ async function writeCopyFromExcerpts(briefFacts: string, excerpts: string, fetch
   if (!config.apiKey) throw new Error('Penulis naskah belum dikonfigurasi (9ROUTER_API_KEY)');
   // Providers throttle per model, so a single model is not reliable enough for a
   // user-facing draft. Try the preferred model first, then known-good fallbacks.
-  const models = [config.model, ...(process.env['9ROUTER_WRITER_FALLBACKS'] || 'ocg/deepseek-flash,ocg/glm-5.3-flash')
+  const models = [config.model, ...(process.env['9ROUTER_WRITER_FALLBACKS'] || 'groq/openai/gpt-oss-120b')
     .split(',').map(m => m.trim()).filter(Boolean)].filter((m, i, all) => m && all.indexOf(m) === i);
 
   const messages = [
@@ -330,7 +330,7 @@ async function writeCopyFromExcerpts(briefFacts: string, excerpts: string, fetch
           temperature: 0.6,
           max_tokens: 900,
           // Ask reasoning-capable models to answer directly: their trace is not copy.
-          reasoning_effort: 'none',
+          ...reasoningEffortField(),
           messages
         }),
         signal: AbortSignal.timeout(Number(process.env['9ROUTER_TIMEOUT_MS'] || 120000))
@@ -379,7 +379,8 @@ export async function ragQuery(
   scopeId: string,
   query: string,
   options?: unknown,
-  allowedDocumentIds?: string[]
+  allowedDocumentIds?: string[],
+  allowedDocumentNames?: string[]
 ): Promise<RagQueryResult> {
   // An empty allow-list is a deny-all, not a skip-filter.
   if (allowedDocumentIds && allowedDocumentIds.length === 0) {
@@ -398,10 +399,28 @@ export async function ragQuery(
   const found = await ragSearch(scopeId, retrievalQuery, { top_k: clean.top_k, use_reranker: clean.use_reranker, use_hybrid: clean.use_hybrid });
   const allow = allowedDocumentIds ? new Set(allowedDocumentIds) : null;
   const sourceIdOf = (hit: RagSearchHit): string => String(hit.document_id ?? '');
+
+  /**
+   * Documents indexed by an older flow carry a slug id (`d3_..._bjo85`) instead of
+   * the KMS id (`doc-...`). The allow-list only knows KMS ids, so those chunks were
+   * dropped and generation answered "tidak ada dokumen yang cocok" even though the
+   * knowledge base held the exact document. Match on the document *name* as a
+   * fallback — still a workspace-scoped allow-list, never a client-supplied id.
+   */
+  const allowedNames = new Set(
+    (allowedDocumentNames || []).map(name => String(name || '').trim().toLowerCase()).filter(Boolean)
+  );
+  const isAllowed = (hit: RagSearchHit): boolean => {
+    if (!allow) return true;
+    if (allow.has(sourceIdOf(hit))) return true;
+    const name = String(hit.document_name || '').trim().toLowerCase();
+    return Boolean(name) && allowedNames.has(name);
+  };
+
   const hits = (found.results || [])
     .filter(hit => typeof hit.content === 'string' && hit.content.trim())
     // Drop anything outside the workspace before scoring or prompting.
-    .filter(hit => !allow || allow.has(sourceIdOf(hit)));
+    .filter(isAllowed);
   const threshold = typeof clean.threshold === 'number' ? clean.threshold : 0.2;
   const usable = hits.filter(hit => normalizeScore(hit.score) >= threshold);
 
@@ -482,11 +501,52 @@ export type RagRefineResult = {
  * the whole generation, which surfaced as "This key already has 2 queries
  * running" while the request was actually fine.
  */
+/**
+ * Pull the assistant text out of a chat completion body.
+ *
+ * Some upstreams ignore `stream:false` and answer with an SSE stream
+ * (`data: {...}\n\ndata: [DONE]`). Parsing that as JSON threw and the whole
+ * request surfaced as a 500 "Penulis naskah gagal", so both shapes are handled.
+ */
+/**
+ * `reasoning_effort` is not universal: OpenAI-compatible models such as
+ * gpt-oss only accept low|medium|high and reject 'none' with HTTP 400, which
+ * surfaced as "Penyusun caption gagal (HTTP 400)". Send it only when the
+ * deployment explicitly opts in.
+ */
+function reasoningEffortField(): Record<string, string> {
+  const value = String(process.env['9ROUTER_REASONING_EFFORT'] || '').trim();
+  return ['low', 'medium', 'high'].includes(value) ? { reasoning_effort: value } : {};
+}
+
+function completionText(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+  if (trimmed.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      const direct = parsed?.choices?.[0]?.message?.content;
+      if (typeof direct === 'string' && direct.trim()) return direct.trim();
+    } catch { /* fall through to the SSE reader */ }
+  }
+  const parts: string[] = [];
+  for (const line of trimmed.split(/\r?\n/)) {
+    const payload = line.startsWith('data:') ? line.slice(5).trim() : '';
+    if (!payload || payload === '[DONE]') continue;
+    try {
+      const chunk = JSON.parse(payload);
+      const piece = chunk?.choices?.[0]?.delta?.content ?? chunk?.choices?.[0]?.message?.content;
+      if (typeof piece === 'string') parts.push(piece);
+    } catch { /* ignore keep-alives and partial frames */ }
+  }
+  return parts.join('').trim();
+}
+
 async function callWriterJson(prompt: string, temperature = 0.6): Promise<RagRefineResult> {
   const config = writerConfig();
   if (!config.apiKey) throw new Error('Penulis naskah belum dikonfigurasi (9ROUTER_API_KEY)');
 
-  const models = [config.model, ...(process.env['9ROUTER_WRITER_FALLBACKS'] || 'ocg/deepseek-flash,ocg/glm-5.3-flash')
+  const models = [config.model, ...(process.env['9ROUTER_WRITER_FALLBACKS'] || 'groq/openai/gpt-oss-120b')
     .split(',').map(m => m.trim()).filter(Boolean)].filter((m, i, all) => m && all.indexOf(m) === i);
 
   let lastError: Error | undefined;
@@ -501,7 +561,8 @@ async function callWriterJson(prompt: string, temperature = 0.6): Promise<RagRef
             model,
             temperature,
             max_tokens: 1600,
-            reasoning_effort: 'none',
+            ...reasoningEffortField(),
+            stream: false,
             messages: [
               {
                 role: 'system',
@@ -518,9 +579,8 @@ async function callWriterJson(prompt: string, temperature = 0.6): Promise<RagRef
       }
       const raw = await response.text();
       if (response.ok) {
-        const parsed = (() => { try { return JSON.parse(raw); } catch { return null; } })();
-        const answer = parsed?.choices?.[0]?.message?.content;
-        if (typeof answer === 'string' && answer.trim()) return { answer: answer.trim(), model };
+        const answer = completionText(raw);
+        if (answer) return { answer, model };
         lastError = new Error('Model tidak mengembalikan naskah');
         continue;
       }
@@ -556,7 +616,7 @@ export async function ragRefine(scopeId: string, draftContent: string, promptAct
     { role: 'user', content: `INSTRUKSI:\n${promptAction}\n\nDRAF ASLI:\n${draftContent}` }
   ];
 
-  const models = [config.model, ...(process.env['9ROUTER_WRITER_FALLBACKS'] || 'ocg/deepseek-flash,ocg/glm-5.3-flash')
+  const models = [config.model, ...(process.env['9ROUTER_WRITER_FALLBACKS'] || 'groq/openai/gpt-oss-120b')
     .split(',').map(m => m.trim()).filter(Boolean)].filter((m, i, all) => m && all.indexOf(m) === i);
 
   const callModel = async (): Promise<string> => {
@@ -567,7 +627,7 @@ export async function ragRefine(scopeId: string, draftContent: string, promptAct
         response = await fetch(`${config.baseUrl}/chat/completions`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model, temperature: 0.5, max_tokens: 1200, reasoning_effort: 'none', messages }),
+          body: JSON.stringify({ model, temperature: 0.5, max_tokens: 1200, ...reasoningEffortField(), messages }),
           signal: AbortSignal.timeout(Number(process.env['9ROUTER_TIMEOUT_MS'] || 120000))
         });
         raw = await response.text();
@@ -761,7 +821,7 @@ export async function ragSuggestSchedule(input: {
     }
   ];
 
-  const models = [config.model, ...(process.env['9ROUTER_WRITER_FALLBACKS'] || 'ocg/deepseek-flash,ocg/glm-5.3-flash')
+  const models = [config.model, ...(process.env['9ROUTER_WRITER_FALLBACKS'] || 'groq/openai/gpt-oss-120b')
     .split(',').map(m => m.trim()).filter(Boolean)].filter((m, i, all) => m && all.indexOf(m) === i);
 
   let response: Response | undefined;
@@ -771,7 +831,7 @@ export async function ragSuggestSchedule(input: {
       response = await fetch(`${config.baseUrl}/chat/completions`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model, temperature: 0.4, max_tokens: 500, reasoning_effort: 'none', messages }),
+        body: JSON.stringify({ model, temperature: 0.4, max_tokens: 500, ...reasoningEffortField(), messages }),
         signal: AbortSignal.timeout(Number(process.env['9ROUTER_TIMEOUT_MS'] || 60000))
       });
       raw = await response.text();
@@ -795,7 +855,7 @@ export async function ragSuggestSchedule(input: {
         model: models[0],
         temperature: 0,
         max_tokens: 400,
-        reasoning_effort: 'none',
+        ...reasoningEffortField(),
         messages: [
           ...messages,
           { role: 'user', content: 'Ulangi. Balas HANYA objek JSON valid, tanpa penjelasan, tanpa pagar kode.' }
