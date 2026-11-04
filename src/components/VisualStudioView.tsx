@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { CoreVisualStudio } from './CoreVisualStudio';
+import { DraftPicker } from './ui/DraftPicker';
 
 
 import { apiService } from '../services/apiService';
@@ -151,10 +152,16 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
       <h2 className="page-title">Pilih Draf Konten</h2>
       <p className="page-subtitle">Pilih draf untuk melanjutkan pembuatan aset visual.</p>
       {availableDrafts.length > 0 ? (
-        <select className="form-select" style={{ maxWidth: '420px', margin: '18px auto 0' }} defaultValue="" onChange={event => event.target.value && onSelectDraft(event.target.value)}>
-          <option value="" disabled>Pilih draf konten</option>
-          {availableDrafts.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
-        </select>
+        <div style={{ maxWidth: '420px', margin: '18px auto 0', textAlign: 'left' }}>
+          <DraftPicker
+            drafts={availableDrafts}
+            value={null}
+            onChange={onSelectDraft}
+            label=""
+            placeholder="Pilih draf konten"
+            excludeArchived={false}
+          />
+        </div>
       ) : (
         <p style={{ marginTop: '14px', color: 'var(--text-muted)' }}>Belum ada draf. Buat draf dari Brief &amp; Generasi terlebih dahulu.</p>
       )}
@@ -175,9 +182,13 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
 
       <div className="card-panel" style={{ marginBottom: '20px', padding: '14px' }}>
         <label className="form-label">Brief / Konten</label>
-        <select className="form-select" value={draft.id} onChange={event => onSelectDraft(event.target.value)}>
-          {availableDrafts.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
-        </select>
+        <DraftPicker
+            drafts={availableDrafts}
+            value={draft.id}
+            onChange={onSelectDraft}
+            label="Draf yang divisualkan"
+            excludeArchived={false}
+          />
         <label className="form-label" style={{ marginTop: '12px' }}>Versi konten yang divisualisasikan</label>
         <select className="form-select" value={selectedVersion?.versionNumber ?? ''} onChange={event => setSelectedVersionNumber(Number(event.target.value))}>
           {draft.versions.map(item => <option key={item.versionNumber} value={item.versionNumber}>v{item.versionNumber}{item.versionNumber === draft.currentVersion ? ' · Terbaru' : ''}</option>)}

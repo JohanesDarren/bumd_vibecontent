@@ -30,6 +30,7 @@ import { AuthView } from './components/AuthView';
 
 
 import { canAccessTab, filterUsersForWorkspace, resolveDraftActor } from './services/policies';
+import { DraftPicker } from './components/ui/DraftPicker';
 
 /* ── Route-level code splitting ────────────────────────────────────────────
    Each view is loaded on demand so the login page no longer ships the
@@ -576,10 +577,12 @@ export function App() {
             selectedDraft ? (
               <div>
                 <div className="card-panel" style={{ marginBottom: '18px', padding: '14px' }}>
-                  <label className="form-label">Brief Hasil Generasi</label>
-                  <select className="form-select" value={selectedDraft.id} onChange={event => setSelectedDraftId(event.target.value)}>
-                    {drafts.map(draft => <option key={draft.id} value={draft.id}>{draft.title} — {draft.status.replace('_', ' ')}</option>)}
-                  </select>
+                  <DraftPicker
+                    drafts={drafts}
+                    value={selectedDraft.id}
+                    onChange={setSelectedDraftId}
+                    label="Brief Hasil Generasi"
+                  />
                 </div>
                 <EditorWorkspaceView 
                   draft={selectedDraft}
