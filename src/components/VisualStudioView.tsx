@@ -41,8 +41,7 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
   onSaveVisual
 }) => {
   const [savingVisual, setSavingVisual] = useState(false);
-  const [selectedVersionNumber, setSelectedVersionNumber] = useState(draft?.currentVersion || 1);
-  const draftVisual = draft?.visualAsset;
+    const draftVisual = draft?.visualAsset;
   const defaultVisual: VisualAsset = {
     ...(draftVisual || {
     id: `vis-${draft?.id || 'new'}-${Date.now()}`,
@@ -85,11 +84,9 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
   const [generationError, setGenerationError] = useState('');
   const [mediaError, setMediaError] = useState('');
   const availableDrafts = drafts.filter(item => item.status !== 'diarsipkan');
-  const selectedVersion = draft?.versions.find(item => item.versionNumber === selectedVersionNumber) || draft?.versions[0];
-
-  useEffect(() => {
-    setSelectedVersionNumber(draft?.currentVersion || 1);
-  }, [draft?.id, draft?.currentVersion]);
+  // The newest version is always the one visualised — the version picker is gone,
+  // so there is nothing to select here.
+  const selectedVersion = draft?.versions.find(item => item.versionNumber === draft?.currentVersion) || draft?.versions[0];
 
   useEffect(() => {
     setVisual({
@@ -181,20 +178,15 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
       </div>
 
       <div className="card-panel" style={{ marginBottom: '20px', padding: '14px' }}>
-        <label className="form-label">Brief / Konten</label>
+        {/* Only the brief is a choice here: the version and its copy are picked in
+            the editor, so repeating them made this page ask twice. */}
         <DraftPicker
-            drafts={availableDrafts}
-            value={draft.id}
-            onChange={onSelectDraft}
-            label="Draf yang divisualkan"
-            excludeArchived={false}
-          />
-        <label className="form-label" style={{ marginTop: '12px' }}>Versi konten yang divisualisasikan</label>
-        <select className="form-select" value={selectedVersion?.versionNumber ?? ''} onChange={event => setSelectedVersionNumber(Number(event.target.value))}>
-          {draft.versions.map(item => <option key={item.versionNumber} value={item.versionNumber}>v{item.versionNumber}{item.versionNumber === draft.currentVersion ? ' · Terbaru' : ''}</option>)}
-        </select>
-        <label className="form-label" style={{ marginTop: '12px' }}>Konten versi terpilih</label>
-        <textarea className="form-textarea" rows={4} value={selectedVersion?.content ?? ''} readOnly aria-label="Isi versi konten yang dipilih" />
+          drafts={availableDrafts}
+          value={draft.id}
+          onChange={onSelectDraft}
+          label="Brief yang akan divisualkan"
+          excludeArchived={false}
+        />
       </div>
 
       <CoreVisualStudio
