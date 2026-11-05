@@ -11,8 +11,15 @@ test('Brief and Editor generation go to RAG, never to KMS', () => {
   // shared, so isolation comes from the assigned documents, not the collection.
   assert.match(
     indexSrc,
-    /const answer=await ragQuery\(workspaceId,query,undefined,await authorizedKmsIds\(String\(workspaceId\)\)\)/,
+    /const answer\s*=\s*await ragQuery\(\s*workspaceId,\s*query,\s*undefined,\s*await authorizedKmsIds\(String\(workspaceId\)\)/,
     'generation must scope RAG to the workspace documents'
+  );
+  // Documents indexed by the older flow carry a slug id instead of the KMS id, so
+  // the authorised *names* travel with the call as well — still workspace-scoped.
+  assert.match(
+    indexSrc,
+    /await authorizedKmsNames\(String\(workspaceId\)\)/,
+    'generation must also scope by authorised document names'
   );
   assert.ok(
     !/queryKnowledge\(query,kmsConfig\(\)/.test(indexSrc),

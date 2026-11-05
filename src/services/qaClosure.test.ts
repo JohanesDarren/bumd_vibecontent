@@ -16,15 +16,17 @@ test('admin can list orphan vectors without deleting anything', async () => {
 
 test('purging only touches vectors with no source document', async () => {
   const s = await read('../../server/index.ts');
-  const block = s.slice(s.indexOf('/api/admin/rag/orphans/purge'), s.indexOf('/api/admin/rag/orphans/purge') + 1600);
+  const block = s.slice(s.indexOf('/api/admin/rag/orphans/purge'), s.indexOf('/api/admin/rag/orphans/purge') + 3200);
   assert.match(block, /orphans as any\[\]/, 'must iterate the orphan list only');
   assert.match(block, /ragDeleteDocument/, 'must delete through the RAG client');
   assert.match(block, /Orphan vectors purged/, 'the purge must be audited');
+  // New rail: a vector whose id failed to map must block the purge entirely.
+  assert.match(block, /doc\.id === 'undefined'/, 'unmapped ids must abort the purge');
 });
 
 test('the purge refuses to run when everything looks orphaned', async () => {
   const s = await read('../../server/index.ts');
-  const block = s.slice(s.indexOf('/api/admin/rag/orphans/purge'), s.indexOf('/api/admin/rag/orphans/purge') + 2200);
+  const block = s.slice(s.indexOf('/api/admin/rag/orphans/purge'), s.indexOf('/api/admin/rag/orphans/purge') + 3600);
   assert.match(block, /documentCount === 0/, 'an empty document table must abort');
   assert.match(block, /orphans\.length === total/, 'a fully-orphaned corpus is treated as an error');
   assert.match(block, /dibatalkan/);

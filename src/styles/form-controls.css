@@ -26,7 +26,7 @@
 .form-textarea {
   appearance: none;
   -webkit-appearance: none;
-  background: var(--ui-surface);
+  background-color: var(--ui-surface);
   border: 1px solid var(--ui-hairline);
   border-radius: 11px;
   padding: 9px 13px;
@@ -61,7 +61,7 @@
 .form-select:hover:not(:disabled):not(:focus),
 .form-textarea:hover:not(:disabled):not(:focus) {
   border-color: var(--ui-hairline-strong);
-  background: #fdfdff;
+  background-color: #fdfdff;
 }
 
 .form-input:focus,
@@ -69,29 +69,36 @@
 .form-textarea:focus {
   border-color: var(--primary);
   box-shadow: var(--ui-ring);
-  background: var(--ui-surface);
+  background-color: var(--ui-surface);
 }
 
 .form-input:disabled,
 .form-select:disabled,
 .form-textarea:disabled {
-  background: var(--ui-surface-sunken);
+  background-color: var(--ui-surface-sunken);
   color: var(--text-muted);
   cursor: not-allowed;
   box-shadow: none;
 }
 
-/* Select needs its own chevron now that the native arrow is removed. */
+/* Select needs its own chevron now that the native arrow is removed.
+   background-repeat/position are re-declared on every state that swaps the
+   image: a `background` shorthand anywhere resets them to repeat/0 0 and the
+   chevron then tiles across the whole field while focused. */
 .form-select {
   background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 11px center;
+  background-size: 14px 14px;
   padding-right: 34px;
   cursor: pointer;
 }
 
 .form-select:focus {
   background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%230d0cbd' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 11px center;
+  background-size: 14px 14px;
 }
 
 /* Invalid state, driven by aria-invalid so it works without extra classes. */

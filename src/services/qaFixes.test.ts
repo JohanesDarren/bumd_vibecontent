@@ -12,13 +12,29 @@ test('ragQuery accepts and enforces a document allow-list', async () => {
   // An empty list must deny, not skip filtering.
   assert.match(rag, /allowedDocumentIds\.length === 0/, 'empty allow-list must deny');
   assert.match(rag, /const allow = allowedDocumentIds \? new Set/, 'hits must be filtered');
-  assert.match(rag, /filter\(hit => !allow \|\| allow\.has/, 'non-allowed chunks must be dropped');
+  // Chunks outside the workspace are dropped through the named predicate.
+  assert.match(rag, /\.filter\(isAllowed\)/, 'non-allowed chunks must be dropped');
+  assert.match(rag, /if \(!allow\) return true;/, 'no allow-list means no filtering');
+  assert.match(rag, /if \(allow\.has\(sourceIdOf\(hit\)\)\) return true;/, 'a KMS id on the allow-list must pass');
+});
+
+test('a chunk is also accepted when its document name is authorised', async () => {
+  const rag = await read('../../server/rag.ts');
+  // Documents indexed by the older flow store a slug id (d3_..._bjo85) rather than
+  // the KMS id (doc-...), so matching on name keeps the workspace boundary while
+  // refusing to answer "no documents" for a document that is clearly there.
+  assert.match(rag, /allowedDocumentNames\?: string\[\]/, 'ragQuery must accept authorised names');
+  assert.match(rag, /const allowedNames = new Set/, 'authorised names must be normalised');
+  assert.match(rag, /return Boolean\(name\) && allowedNames\.has\(name\);/, 'name match must be scoped to the allow-list');
+  // The name path must never widen beyond the workspace.
+  assert.doesNotMatch(rag, /allowedNames\.has\([^)]*\)\s*\|\|\s*true/, 'name match must not fall open');
 });
 
 test('the RAG query endpoint passes the workspace document list', async () => {
   const server = await read('../../server/index.ts');
   const m = /ragQuery\(workspaceId,query,undefined,await authorizedKmsIds/.exec(server);
   assert.ok(m, 'the query endpoint must pass authorizedKmsIds');
+  assert.match(server, /authorizedKmsNames\(String\(workspaceId\)\)/, 'the endpoint must also pass authorised names');
 });
 
 /* ── K3: no demo credentials in the bundle ────────────────────────────────── */

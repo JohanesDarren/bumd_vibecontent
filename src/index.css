@@ -965,7 +965,7 @@ body {
 }
 
 .form-input, .form-select, .form-textarea {
-  background: var(--bg-primary);
+  background-color: var(--bg-primary);
   border: 1px solid var(--border-subtle);
   border-radius: 10px;
   padding: 10px 14px;
