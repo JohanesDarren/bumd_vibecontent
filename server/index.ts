@@ -522,10 +522,26 @@ app.get('/api/admin/overview',globalOnly,async(_req,res,next)=>{try{
   res.json({companies:companies.rows,workspaces:workspaces.rows[0].count,users:users.rows[0],drafts:drafts.rows[0].count,knowledgeSources:sources.rows[0].count,auditEvents:audit.rows[0].count});
 }catch(e){next(e);}});
 app.get('/api/admin/companies',globalOnly,async(req,res,next)=>{try{res.json((await pool.query('SELECT id,name FROM companies ORDER BY name')).rows);}catch(e){next(e);}});
+/**
+ * Company names are user-facing and appear in the audit trail, so they are
+ * validated the same way everywhere: trimmed, non-empty, capped, and unique
+ * case-insensitively. Without the uniqueness check two "PT Tirta" rows were
+ * created and every picker became ambiguous.
+ */
+async function companyNameError(name: string, exceptId?: string): Promise<string | null> {
+  if (!name) return 'Nama perusahaan induk wajib diisi.';
+  if (name.length > 120) return 'Nama perusahaan induk maksimal 120 karakter.';
+  const clash = await pool.query(
+    'SELECT 1 FROM companies WHERE lower(name)=lower($1) AND ($2::text IS NULL OR id<>$2) LIMIT 1',
+    [name, exceptId ?? null]
+  );
+  return clash.rowCount ? 'Nama perusahaan induk sudah dipakai.' : null;
+}
+
 app.post('/api/admin/companies',globalOnly,async(req,res,next)=>{try{
   const name=typeof req.body?.name==='string'?req.body.name.trim():'';
-  if(!name)return res.status(400).json({error:'Nama perusahaan induk wajib diisi'});
-  if(name.length>120)return res.status(400).json({error:'Nama perusahaan induk maksimal 120 karakter'});
+  const nameError=await companyNameError(name);
+  if(nameError)return res.status(400).json({error:nameError});
   const created=(await pool.query('INSERT INTO companies(id,name) VALUES($1,$2) RETURNING id,name',[`co-${randomUUID()}`,name])).rows[0];
   // Companies are not owned by a workspace, so the audit row is attached to the
   // first workspace of that company when one exists.
@@ -534,7 +550,14 @@ app.post('/api/admin/companies',globalOnly,async(req,res,next)=>{try{
   if(ws.rows[0])await writeAudit({workspaceId:ws.rows[0].id,actorId:a.id,actorName:a.name,actorRole:a.role,action:'Company created',objectType:'company',objectId:created.id,objectName:created.name});
   res.status(201).json(created);
 }catch(e){next(e);}});
-app.put('/api/admin/companies/:id',globalOnly,async(req,res,next)=>{try{if(!isNonEmptyString(req.body?.name))return res.status(400).json({error:'name required'});const result=await pool.query('UPDATE companies SET name=$1 WHERE id=$2 RETURNING id,name',[req.body.name.trim(),req.params.id]);if(!result.rowCount)return res.status(404).json({error:'Company not found'});res.json(result.rows[0]);}catch(e){next(e);}});
+app.put('/api/admin/companies/:id',globalOnly,async(req,res,next)=>{try{
+  const name=typeof req.body?.name==='string'?req.body.name.trim():'';
+  const nameError=await companyNameError(name,String(req.params.id));
+  if(nameError)return res.status(400).json({error:nameError});
+  const result=await pool.query('UPDATE companies SET name=$1 WHERE id=$2 RETURNING id,name',[name,req.params.id]);
+  if(!result.rowCount)return res.status(404).json({error:'Company not found'});
+  res.json(result.rows[0]);
+}catch(e){next(e);}});
 app.delete('/api/admin/companies/:id',globalOnly,async(req,res,next)=>{try{const preC=await pool.query('SELECT name FROM companies WHERE id=$1',[req.params.id]);
     const result=await pool.query(`DELETE FROM companies c WHERE c.id=$1 AND NOT EXISTS(SELECT 1 FROM organizations WHERE company_id=c.id) AND NOT EXISTS(SELECT 1 FROM users WHERE company_id=c.id) RETURNING id`,[req.params.id]);
     if(result.rowCount){

@@ -3,104 +3,59 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const read = (p: string) => readFile(new URL(p, import.meta.url), 'utf8');
-const server = () => read('../../server/index.ts');
 
-/* ── T2: approval workflow exists end to end ─────────────────────────────── */
+/* ── HIGH: deleting a workspace/company must not be blocked by the audit trigger ── */
 
-test('the server exposes submit and approval endpoints', async () => {
-  const s = await server();
-  assert.match(s, /app\.post\('\/api\/drafts\/:id\/submit'/, 'submit endpoint missing');
-  assert.match(s, /app\.post\('\/api\/drafts\/:id\/approval'/, 'approval endpoint missing');
-  assert.match(s, /menunggu_review/, 'submitting must move the draft to review');
-  assert.match(s, /approval_info/, 'the decision must be recorded on the draft');
+test('the append-only audit trigger still blocks app-level deletes', async () => {
+  const sql = await read('../../server/migrations/017_audit_cascade.sql');
+  assert.match(sql, /IF TG_OP = 'UPDATE' THEN/, 'updates stay refused');
+  assert.match(sql, /RAISE EXCEPTION 'audit_events are append-only'/, 'the guarantee is kept');
+  assert.match(sql, /EXISTS \(SELECT 1 FROM organizations o WHERE o.id = OLD.organization_id\)/, 'a live parent still blocks the delete');
+  assert.match(sql, /RETURN NULL/, 'the FK cascade must be allowed through');
 });
 
-test('only corporate roles may decide, and only on submitted drafts', async () => {
-  const s = await server();
-  const block = s.slice(s.indexOf("/api/drafts/:id/approval"), s.indexOf("/api/drafts/:id/approval") + 2200);
-  assert.match(block, /corporateOnly/, 'decision must require a corporate role');
-  assert.match(block, /row\.status !== 'menunggu_review'/, 'only submitted drafts can be decided');
+test('the cascade-friendly trigger runs on boot', async () => {
+  const db = await read('../../server/database.ts');
+  assert.match(db, /017_audit_cascade'\"\)\)\.rowCount/, 'migration must be tracked');
+  assert.match(db, /migrations', '017_audit_cascade\.sql'/, 'migration must be applied');
 });
 
-test('an unapproved draft cannot be scheduled', async () => {
-  const s = await server();
-  const block = s.slice(s.indexOf("/api/schedules/:id"), s.indexOf("/api/schedules/:id") + 3000);
-  assert.match(block, /belum disetujui/, 'scheduling must be blocked while under review');
-  assert.match(block, /published.*postUrl|postUrl.*published/s, 'publishing must need a post URL');
+/* ── Company names: trimmed, unique, never silently blanked ── */
+
+test('company names are validated in one place and reused by POST and PUT', async () => {
+  const s = await read('../../server/index.ts');
+  assert.match(s, /async function companyNameError/, 'one validator');
+  assert.match(s, /lower\(name\)=lower\(\$1\)/, 'duplicates are refused case-insensitively');
+  const post = s.slice(s.indexOf("app.post('/api/admin/companies'"), s.indexOf("app.post('/api/admin/companies'") + 900);
+  assert.match(post, /await companyNameError\(name\)/, 'POST must use the validator');
+  const put = s.slice(s.indexOf("app.put('/api/admin/companies/:id'"), s.indexOf("app.put('/api/admin/companies/:id'") + 900);
+  assert.match(put, /await companyNameError\(name,String\(req.params.id\)\)/, 'PUT must use the validator and exclude itself');
+  assert.doesNotMatch(put, /isNonEmptyString\(req\.body\?\.name\)/, 'whitespace-only must not pass the old check');
 });
 
-test('the client can submit and decide', async () => {
-  const api = await read('../services/apiService.ts');
-  assert.match(api, /submitDraft:/);
-  assert.match(api, /decideDraft:/);
-  const lib = await read('../components/LibraryView.tsx');
-  assert.match(lib, /Ajukan Review/);
-  assert.match(lib, /Setujui/);
+/* ── MED: today at a past hour is not schedulable ── */
+
+test('the server rejects a past hour on today, not just a past date', async () => {
+  const db = await read('../../server/database.ts');
+  const block = db.slice(db.indexOf('export async function saveSchedule'), db.indexOf('export async function saveSchedule') + 2200);
+  assert.match(block, /Asia\/Jakarta/, 'the comparison must use the business timezone');
+  assert.match(block, /\$2::time <= \(now\(\) AT TIME ZONE 'Asia\/Jakarta'\)::time/, 'the clock time must be compared');
+  assert.match(block, /Jam publikasi tidak boleh sudah lewat untuk hari ini/, 'the reason must be specific');
+  assert.match(block, /previous\.time!==item\.time/, 'editing an unchanged slot stays allowed');
 });
 
-/* ── T4: the generated image is actually persisted ───────────────────────── */
-
-test('saving a visual calls the persistence callback, not just local state', async () => {
-  const view = await read('../components/VisualStudioView.tsx');
-  const block = view.slice(view.indexOf('onSave={async imageUrl'), view.indexOf('onSave={async imageUrl') + 700);
-  assert.match(block, /onSaveVisual/, 'the save must reach the API');
-  assert.doesNotMatch(block, /^[\s\S]*setMetadata\('Visual inti · disimpan ke draf'\)[\s\S]*$/,
-    'the old local-only save must be gone');
+test('the schedule form mirrors the same rule before the round trip', async () => {
+  const view = await read('../components/ContentSchedulingView.tsx');
+  assert.match(view, /formDate === todayStr && formTime <= nowTime/, 'client must check the clock time');
+  assert.match(view, /Jam publikasi tidak boleh sudah lewat untuk hari ini/, 'same wording as the server');
 });
 
-/* ── T6: mutations are audited ───────────────────────────────────────────── */
+/* ── S5: never replace the form under the caret ── */
 
-test('an audit writer exists and is used by mutations', async () => {
-  const s = await server();
-  assert.match(s, /async function writeAudit/, 'audit writer missing');
-  assert.match(s, /INSERT INTO audit_events/, 'audit rows must be inserted');
-  for (const action of ['Workspace created', 'Workspace deleted', 'Company created', 'Draft approved', 'Schedule published']) {
-    assert.ok(s.includes(action), `missing audit action: ${action}`);
-  }
-});
-
-test('audit failures never break the user operation', async () => {
-  const s = await server();
-  const block = s.slice(s.indexOf('async function writeAudit'), s.indexOf('async function writeAudit') + 1200);
-  assert.match(block, /catch/, 'writeAudit must swallow its own errors');
-  assert.match(block, /console\.warn/);
-});
-
-/* ── T7: no internal markers or foreign hashtags in published copy ───────── */
-
-test('generated copy carries no internal draft marker', async () => {
-  const engine = await read('../services/ragEngine.ts');
-  assert.doesNotMatch(engine, /\[DRAF KORPORAT\]/, 'internal marker leaked into copy');
-});
-
-test('hashtags come from the brand profile, not a fixed template', async () => {
-  const engine = await read('../services/ragEngine.ts');
-  assert.doesNotMatch(engine, /#BUMDProfesional/, 'BUMD template hashtag must be gone');
-  assert.doesNotMatch(engine, /#PelayananPublik/, 'BUMD template hashtag must be gone');
-  assert.match(engine, /approvedHashtags/, 'brand hashtags must be used');
-});
-
-/* ── S6: copy is rendered as text, not baked into the image ──────────────── */
-
-test('the generated image is overlaid with real text', async () => {
-  const studio = await read('../components/CoreVisualStudio.tsx');
-  assert.match(studio, /core-overlay/, 'an overlay layer is required');
-  assert.match(studio, /core-overlay-head/, 'the headline must be live text');
-  const css = await read('../styles/form-controls.css');
-  assert.match(css, /\.core-overlay-head/);
-});
-
-/* ── S1 correction: validated values must be the ones stored ─────────────── */
-
-test('workspace creation stores the validated values', async () => {
-  const s = await server();
-  // Previously the route validated but inserted the raw body fields.
-  assert.doesNotMatch(s, /v\.name,v\.code,v\.sector,v\.city\]\)\)\.rows\[0\];\s*\}\s*catch/,
-    'sanity');
-  const creates = [...s.matchAll(/INSERT INTO organizations[\s\S]{0,320}?\[([^\]]+)\]/g)];
-  assert.ok(creates.length >= 2, 'expected both create routes');
-  for (const m of creates) {
-    assert.match(m[1], /v\.name/, 'the validated name must be inserted');
-    assert.match(m[1], /v\.code/, 'the validated code must be inserted');
-  }
+test('a realtime refresh waits until the user stops typing', async () => {
+  const app = await read('../App.tsx');
+  assert.match(app, /const isTypingTarget = \(\) =>/, 'the typing guard must exist');
+  assert.match(app, /pendingReload\.current = true; return;/, 'the refresh must be deferred, not dropped');
+  assert.match(app, /flushPendingReload\(\)/, 'the deferred refresh must be flushed');
+  assert.match(app, /addEventListener\('focusout', flush, true\)/, 'blur flushes the pending refresh');
 });

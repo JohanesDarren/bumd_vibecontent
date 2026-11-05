@@ -83,6 +83,12 @@ export async function runMigrations() {
   if (!(await pool.query("SELECT 1 FROM schema_migrations WHERE name='014_draft_citations_kms'")).rowCount) await pool.query(await readFile(join(here, 'migrations', '014_draft_citations_kms.sql'), 'utf8'));
   if (!(await pool.query("SELECT 1 FROM schema_migrations WHERE name='015_rag_jobs'")).rowCount) await pool.query(await readFile(join(here, 'migrations', '015_rag_jobs.sql'), 'utf8'));
   if (!(await pool.query("SELECT 1 FROM schema_migrations WHERE name='016_kms_vision'")).rowCount) await pool.query(await readFile(join(here, 'migrations', '016_kms_vision.sql'), 'utf8'));
+  // The append-only trigger also blocked the FK cascade, making every company or
+  // workspace delete fail with HTTP 500. Narrow it to application deletes.
+  if (!(await pool.query("SELECT 1 FROM schema_migrations WHERE name='017_audit_cascade'")).rowCount) {
+    await pool.query(await readFile(join(here, 'migrations', '017_audit_cascade.sql'), 'utf8'));
+    await pool.query(`INSERT INTO schema_migrations(name) VALUES ('017_audit_cascade') ON CONFLICT DO NOTHING`);
+  }
   } finally {
     if (locked) {
       try { await migrationLock.query('SELECT pg_advisory_unlock($1, $2)', [19031, 1]); }
@@ -418,13 +424,26 @@ export async function saveSchedule(item:any,actorId:string){
   try{
     await client.query('BEGIN');
     const actor=await scheduleActor(client,item.workspaceId,actorId);
-    const existing=await client.query(`SELECT to_char(publish_date,'YYYY-MM-DD') AS date,status,draft_id AS "draftId" FROM content_schedules WHERE id=$1 AND organization_id=$2`,[item.id,item.workspaceId]);
-    const previous=existing.rows[0] as {date:string;status:string;draftId:string|null}|undefined;
+    const existing=await client.query(`SELECT to_char(publish_date,'YYYY-MM-DD') AS date,to_char(publish_time,'HH24:MI') AS time,status,draft_id AS "draftId" FROM content_schedules WHERE id=$1 AND organization_id=$2`,[item.id,item.workspaceId]);
+    const previous=existing.rows[0] as {date:string;time:string;status:string;draftId:string|null}|undefined;
     // New or moved entries cannot land in the past; editing an old entry in place
     // (e.g. marking it published after the fact) stays allowed.
-    if(!previous||previous.date!==item.date){
-      const past=await client.query('SELECT $1::date < current_date AS past',[item.date]);
-      if(past.rows[0].past) throw new ScheduleRuleError('Tanggal publikasi tidak boleh di masa lalu.');
+    //
+    // The date check alone let a user schedule 07:00 for today at 14:00, which the
+    // calendar immediately rendered as "Terlewat". Compare the wall clock in the
+    // same timezone the business runs in.
+    if(!previous||previous.date!==item.date||previous.time!==item.time){
+      const past=await client.query(
+        `SELECT ($1::date < (now() AT TIME ZONE 'Asia/Jakarta')::date)
+             OR ($1::date = (now() AT TIME ZONE 'Asia/Jakarta')::date
+                 AND $2::time <= (now() AT TIME ZONE 'Asia/Jakarta')::time) AS past`,
+        [item.date,item.time]);
+      if(past.rows[0].past){
+        const sameDay=await client.query(`SELECT $1::date = (now() AT TIME ZONE 'Asia/Jakarta')::date AS today`,[item.date]);
+        throw new ScheduleRuleError(sameDay.rows[0].today
+          ? 'Jam publikasi tidak boleh sudah lewat untuk hari ini.'
+          : 'Tanggal publikasi tidak boleh di masa lalu.');
+      }
     }
 
     // Upsert scoped to the workspace: an id owned by another organization is never overwritten.

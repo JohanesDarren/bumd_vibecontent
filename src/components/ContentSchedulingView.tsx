@@ -392,6 +392,9 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
     if (!formPlatforms.length) return setFormError('Pilih minimal satu platform.');
     // Mirrors the server rules so the user gets the reason before the round trip.
     if (formDate < todayStr && formDate !== editing?.date) return setFormError('Tanggal publikasi tidak boleh di masa lalu.');
+    // Same day still needs a future clock time, otherwise the entry is born "Terlewat".
+    const unchangedSlot = editing && editing.date === formDate && editing.time === formTime;
+    if (formDate === todayStr && formTime <= nowTime && !unchangedSlot) return setFormError('Jam publikasi tidak boleh sudah lewat untuk hari ini.');
 
     if (formStatus === 'published' && formPostUrl.trim() && !isPostUrl(formPostUrl)) {
       return setFormError('Link post harus diawali http:// atau https://.');

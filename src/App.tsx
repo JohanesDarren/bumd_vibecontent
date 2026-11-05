@@ -138,11 +138,43 @@ export function App() {
   // never shows a stale copy. Coalesced so a burst of writes = one refetch.
   const reloadRef = useRef<() => void>(() => {});
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const pendingReload = useRef(false);
   useEffect(() => { reloadRef.current = () => { void loadData().catch(() => {}); }; });
+
+  /**
+   * A refetch replaces every prop of whatever form is mounted. Doing that while
+   * the caret sits in a text field is what dropped characters ("Telko", "nam",
+   * "Kta"): the subtree re-renders mid-composition and the in-flight keystroke
+   * is lost. Hold the refresh until focus leaves the field, then flush it.
+   */
+  const isTypingTarget = () => {
+    const el = document.activeElement as HTMLElement | null;
+    if (!el) return false;
+    return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable === true;
+  };
+  const flushPendingReload = () => {
+    if (!pendingReload.current) return;
+    pendingReload.current = false;
+    reloadRef.current();
+  };
+
   useRealtimeSignal(() => {
     if (refreshTimer.current) clearTimeout(refreshTimer.current);
-    refreshTimer.current = setTimeout(() => reloadRef.current(), 250);
+    refreshTimer.current = setTimeout(() => {
+      if (isTypingTarget()) { pendingReload.current = true; return; }
+      reloadRef.current();
+    }, 400);
   }, authenticated);
+
+  useEffect(() => {
+    const flush = () => { if (!isTypingTarget()) flushPendingReload(); };
+    document.addEventListener('focusout', flush, true);
+    document.addEventListener('visibilitychange', flush);
+    return () => {
+      document.removeEventListener('focusout', flush, true);
+      document.removeEventListener('visibilitychange', flush);
+    };
+  }, []);
 
   // After email login: activate workspace by id and set the authenticated user as active
   // `user` is passed explicitly because React state (authUser) is not yet updated in the same tick.
