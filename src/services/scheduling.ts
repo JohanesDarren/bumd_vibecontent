@@ -69,6 +69,7 @@ export function currentVersion(draft?: ContentDraft) {
 export function factConflicts(item: ScheduledContent, draft: ContentDraft | undefined, documents: KnowledgeDocument[]): string[] {
   const citations = currentVersion(draft)?.citations || [];
   const issues: string[] = [];
+  const missingCount = new Map<string, number>();
   // Citations come from the vector store and carry its own chunk/document id,
   // which is not the same string as the knowledge-base document id. Matching on
   // id alone therefore reported "document no longer exists" for documents that
@@ -86,14 +87,12 @@ export function factConflicts(item: ScheduledContent, draft: ContentDraft | unde
       (citation.documentTitle ? byTitle.get(citation.documentTitle.trim().toLowerCase()) : undefined);
 
     if (!doc) {
-      // Deduplicate: one missing document must produce one warning, not one per chunk.
-      const key = `missing:${documentId}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        issues.push(
-          `Dokumen sumber "${citation.documentTitle || documentId}" sudah tidak ada di Knowledge Base.`
-        );
-      }
+      // Deduplicate per dokumen DAN per alasan (QA v2 F04): dulu key hanya id,
+      // padahal chunk dari dokumen SAMA bisa berbeda id; hasilnya pesan yang
+      // identik tampil dua kali. Juga sebut banyaknya kutipan terdampak.
+      const key = `missing:${documentId}:${citation.documentTitle || ''}`;
+      if (!seen.has(key)) seen.add(key), missingCount.set(key, 0);
+      missingCount.set(key, (missingCount.get(key) || 0) + 1);
       continue;
     }
     if (doc.status !== 'aktif') issues.push(`Dokumen sumber "${doc.title}" berstatus ${DOCUMENT_STATUS_LABELS[doc.status]}.`);
@@ -101,6 +100,12 @@ export function factConflicts(item: ScheduledContent, draft: ContentDraft | unde
     if (/^\d{4}-\d{2}-\d{2}$/.test(effective || '') && item.date < effective!) {
       issues.push(`Tayang sebelum "${doc.title}" berlaku (${effective}).`);
     }
+  }
+  // Satu baris per dokumen yang hilang, plus jumlah kutipan yang merujuknya.
+  for (const [key, count] of missingCount) {
+    const [, , ...titleParts] = key.split(':');
+    const title = titleParts.join(':') || key.split(':')[1];
+    issues.push(`Dokumen sumber "${title}" sudah tidak ada di Knowledge Base (${count} kutipan terdampak).`);
   }
   return issues;
 }

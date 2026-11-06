@@ -753,7 +753,7 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
               onClick={handleSaveOnly}
             >
               <Save size={16} />
-              <span>{savedBrief?.key === briefKey ? 'Draf Tersimpan' : 'Simpan Draf'}</span>
+              <span>{savedBrief?.key === briefKey ? 'Draf Tersimpan' : 'Simpan Draf + Generate'}</span>
             </button>
             <button
               type="button"

@@ -85,7 +85,7 @@ const SettingRow: React.FC<{ title: string; desc: string; children: React.ReactN
 /* ── Static help content ─────────────────────────────────────────────── */
 
 const WORKFLOW_STEPS: Array<{ title: string; detail: string; tabs: string[] }> = [
-  { title: '1. Siapkan dokumen resmi', detail: 'Unggah/atur dokumen resmi di Pustaka & Ekspor. Hanya dokumen berstatus "aktif" yang boleh dipakai untuk generasi. Dokumen yang menunggu persetujuan atau usang otomatis tidak dipakai.', tabs: ['Pustaka & Ekspor'] },
+  { title: '1. Siapkan dokumen resmi', detail: 'Unggah dokumen resmi di Knowledge Base; atur status & cakupan di Pustaka & Ekspor. Hanya dokumen berstatus "aktif" yang boleh dipakai untuk generasi. Dokumen yang menunggu persetujuan atau usang otomatis tidak dipakai.', tabs: ['Knowledge Base', 'Pustaka & Ekspor'] },
   { title: '2. Atur panduan merek', detail: 'Isi terminologi wajib, kata terlarang, CTA resmi, kanal yang disetujui, dan disclaimer di Profil & Merek. Panduan ini otomatis dipakai saat generasi.', tabs: ['Profil & Merek'] },
   { title: '3. Atur batas grounding', detail: 'Buka tab Batas Grounding di halaman ini. Atur skala keketatan, ambang relevansi, dan jumlah potongan pengetahuan (top-k). Perubahan langsung berlaku pada generasi berikutnya.', tabs: ['Pengaturan & Bantuan'] },
   { title: '4. Susun brief', detail: 'Di Brief & Generasi Konten, isi judul, pesan kunci, target audiens, format, kanal, dan CTA. Semakin spesifik pesan kunci, semakin akurat pencocokan RAG.', tabs: ['Brief & Generasi Konten'] },
@@ -280,7 +280,7 @@ export const SettingsHelpView: React.FC<SettingsHelpViewProps> = ({ activeWorksp
             <div>
               <strong>Pengaturan tingkat perusahaan</strong>
               <span>
-                Berlaku untuk seluruh workspace di bawah {activeWorkspace.name}. Pengaturan
+                Berlaku untuk seluruh workspace di bawah perusahaan Anda. Pengaturan
                 tingkat aplikasi (seluruh perusahaan dan peran) dikelola superadmin di
                 Administrasi Aplikasi → Pemeliharaan Platform.
               </span>

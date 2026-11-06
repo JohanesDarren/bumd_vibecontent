@@ -1,6 +1,7 @@
 import React from 'react';
 import { 
   ContentDraft, 
+  DraftStatus,
 
   BrandProfile, 
   User, 
@@ -115,13 +116,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
               <h3 style={{ fontSize: '1.05rem', fontWeight: 700 }}>Panduan Tone & Terminologi Resmi</h3>
             </div>
-            <button 
-              className="btn btn-secondary btn-sm"
-              onClick={() => onNavigate('brand_profile')}
-            >
-              <span>Edit Profil</span>
-              <ArrowRight size={14} />
-            </button>
+            {/* Hanya tampil untuk role yang punya akses tab brand_profile —
+                QA v2: creator menekan tombol ini dan tidak terjadi apa-apa. */}
+            {activeUser?.role !== 'creator' && (
+              <button 
+                className="btn btn-secondary btn-sm"
+                onClick={() => onNavigate('brand_profile')}
+              >
+                <span>Edit Profil</span>
+                <ArrowRight size={14} />
+              </button>
+            )}
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -202,6 +207,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       {d.format === 'brief_visual' && 'Grafis Visual'}
                     </td>
                     <td style={{ padding: '12px 14px' }}>
+                      <WorkflowStatus draft={d} />
+                    </td>
+                    <td style={{ padding: '12px 14px' }}>
                       {latestVer?.unsupportedClaims?.length === 0 ? (
                         <span className="grounding-badge verified">
                           <CheckCircle2 size={12} /> {latestVer.citations.length} Referensi
@@ -237,3 +245,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     </div>
   );
 };
+
+/**
+ * Kolom "Status Alur Kerja": workflow state badge, bukan grounding.
+ * QA v2 menemukan badge grounding hijaul di kolom status, sehingga isi tidak
+ * sesuai header. Badge per-status agar tiap baris punya sel status yang benar.
+ */
+function WorkflowStatus({ draft }: { draft: { status: DraftStatus } }) {
+  const label: Record<DraftStatus, string> = {
+    draft: 'Draf',
+    menunggu_review: 'Menunggu Review',
+    revisi_diminta: 'Revisi Diminta',
+    disetujui: 'Disetujui',
+    ditolak: 'Ditolak',
+    diarsipkan: 'Diarsipkan'
+  };
+  const ok = draft.status === 'disetujui';
+  return (
+    <span className={`grounding-badge ${ok ? 'verified' : 'warning'}`}>
+      {ok ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />}
+      {label[draft.status] || draft.status}
+    </span>
+  );
+}

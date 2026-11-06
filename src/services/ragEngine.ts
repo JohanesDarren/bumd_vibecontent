@@ -115,6 +115,13 @@ function extractNumbers(text: string): string[] {
   return [...text.matchAll(/\d[\d.,/-]*\d|\d/g)].map(([value]) => value.replace(/\D/g, '')).filter(Boolean);
 }
 
+/** Core digits of an alphanumerik token: QA-V2-5519 beda identitas, digit sama. */
+function numberPlainForms(text: string): Set<string> {
+  return new Set(
+    [...text.toUpperCase().matchAll(/[A-Z]*?(\d+)[A-Z]*/g)].map(match => match[1].replace(/^0+/, '') || '0')
+  );
+}
+
 function numberWords(value: number): string | null {
   const small = ['nol', 'satu', 'dua', 'tiga', 'empat', 'lima', 'enam', 'tujuh', 'delapan', 'sembilan', 'sepuluh', 'sebelas'];
   if (value < 0 || value > 99) return null;
@@ -139,6 +146,15 @@ function hasNumber(text: string, number: string): boolean {
   if (extractNumbers(expandAmountWords(text)).includes(number)) return true;
   const words = numberWords(Number(number));
   return Boolean(words && new RegExp(`\\b${words}\\b`, 'i').test(text.toLocaleLowerCase('id-ID')));
+}
+
+/* Angka di dalam token alfanumerik ("QA-V2-5519", "Tahun-2026") adalah identitas,
+ * bukan kuantitas berdiri sendiri. Draf yang menyebut 5519 dari QA-V2-5519 tetap
+ * dianggap didukung: digit muncul di dalam token pada sumber. QA v2 nomor F03. */
+function appearsInsideToken(text: string, number: string): boolean {
+  const digits = number.replace(/^0+/, '');
+  if (!digits) return false;
+  return new RegExp(`[\\w-]*${digits}[\\w-]*`, 'i').test(text.toUpperCase());
 }
 
 function meaningfulWords(text: string): string[] {
@@ -224,8 +240,11 @@ export function reviewRagCopy(
     blocking.push('Naskah memuat potongan teks rusak (mis. "~" atau "/kata").');
   }
 
-  const supportedNumbers = new Set(extractNumbers(expandAmountWords(`${suppliedText} ${sourceText}`)));
-  const extraNumbers = [...new Set(extractNumbers(expandAmountWords(text)).filter(number => !supportedNumbers.has(number)))];
+  const supportedSource = `${suppliedText} ${sourceText}`;
+  const supportedNumbers = new Set(extractNumbers(expandAmountWords(supportedSource)));
+  const extraNumbers = [...new Set(extractNumbers(expandAmountWords(text)).filter(number =>
+    !supportedNumbers.has(number) && !appearsInsideToken(supportedSource, number)
+  ))];
   if (extraNumbers.length) {
     warnings.push(`Naskah memuat angka yang tidak ada pada brief atau sumber rujukan (${extraNumbers.join(', ')}); mohon dicek.`);
   }
