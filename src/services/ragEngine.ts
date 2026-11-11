@@ -115,11 +115,17 @@ function extractNumbers(text: string): string[] {
   return [...text.matchAll(/\d[\d.,/-]*\d|\d/g)].map(([value]) => value.replace(/\D/g, '')).filter(Boolean);
 }
 
-/** Core digits of an alphanumerik token: QA-V2-5519 beda identitas, digit sama. */
-function numberPlainForms(text: string): Set<string> {
-  return new Set(
-    [...text.toUpperCase().matchAll(/[A-Z]*?(\d+)[A-Z]*/g)].map(match => match[1].replace(/^0+/, '') || '0')
-  );
+/**
+ * Digit runs inside hyphenated identifiers ("QA-V2-5519", "Tahun-2026").
+ * extractNumbers reads "QA-V2-5519" as 25519, so a draft that writes 5519 was
+ * flagged (QA v2 F03). Only identifiers containing a letter count; plain
+ * numbers such as 5.000.000 or 2019 are NOT split, so 500 or 19 stay unsupported.
+ */
+function identifierNumbers(text: string): string[] {
+  return [...text.matchAll(/[\p{L}\d]+(?:-[\p{L}\d]+)+/gu)]
+    .map(([token]) => token)
+    .filter(token => /\p{L}/u.test(token))
+    .flatMap(token => token.match(/\d+/g) || []);
 }
 
 function numberWords(value: number): string | null {
@@ -146,15 +152,6 @@ function hasNumber(text: string, number: string): boolean {
   if (extractNumbers(expandAmountWords(text)).includes(number)) return true;
   const words = numberWords(Number(number));
   return Boolean(words && new RegExp(`\\b${words}\\b`, 'i').test(text.toLocaleLowerCase('id-ID')));
-}
-
-/* Angka di dalam token alfanumerik ("QA-V2-5519", "Tahun-2026") adalah identitas,
- * bukan kuantitas berdiri sendiri. Draf yang menyebut 5519 dari QA-V2-5519 tetap
- * dianggap didukung: digit muncul di dalam token pada sumber. QA v2 nomor F03. */
-function appearsInsideToken(text: string, number: string): boolean {
-  const digits = number.replace(/^0+/, '');
-  if (!digits) return false;
-  return new RegExp(`[\\w-]*${digits}[\\w-]*`, 'i').test(text.toUpperCase());
 }
 
 function meaningfulWords(text: string): string[] {
@@ -241,10 +238,11 @@ export function reviewRagCopy(
   }
 
   const supportedSource = `${suppliedText} ${sourceText}`;
-  const supportedNumbers = new Set(extractNumbers(expandAmountWords(supportedSource)));
-  const extraNumbers = [...new Set(extractNumbers(expandAmountWords(text)).filter(number =>
-    !supportedNumbers.has(number) && !appearsInsideToken(supportedSource, number)
-  ))];
+  const supportedNumbers = new Set([
+    ...extractNumbers(expandAmountWords(supportedSource)),
+    ...identifierNumbers(supportedSource)
+  ]);
+  const extraNumbers = [...new Set(extractNumbers(expandAmountWords(text)).filter(number => !supportedNumbers.has(number)))];
   if (extraNumbers.length) {
     warnings.push(`Naskah memuat angka yang tidak ada pada brief atau sumber rujukan (${extraNumbers.join(', ')}); mohon dicek.`);
   }

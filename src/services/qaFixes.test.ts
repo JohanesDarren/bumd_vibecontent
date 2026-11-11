@@ -68,7 +68,8 @@ test('banned words are split on slashes and matched individually', async () => {
 test('fact conflicts resolve citations by id then title and deduplicate', async () => {
   const sched = await read('../services/scheduling.ts');
   assert.match(sched, /byTitle/, 'title fallback is required');
-  assert.match(sched, /seen\.has\(key\)/, 'warnings must be deduplicated');
+  // Behavioural dedup coverage lives in qa-v2-report.test.ts (F04).
+  assert.match(sched, /missingCount\.set\(key/, 'warnings must be deduplicated per document');
 });
 
 /* ── S2: database errors must not leak schema names ───────────────────────── */
