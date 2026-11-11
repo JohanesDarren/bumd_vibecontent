@@ -165,7 +165,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     <span>{new Date(draft.updatedAt).toLocaleDateString('id-ID')}</span>
                   </div>
 
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                  <div className="library-card-footer-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
                     {latestVer?.citations?.length > 0 ? (
                       <span className="grounding-badge verified">
                         <CheckCircle2 size={12} /> {latestVer.citations.length} Referensi

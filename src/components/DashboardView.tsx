@@ -64,7 +64,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <ShieldCheck size={12} /> Grounding Terverifikasi
               </span>
             </div>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '6px', color: 'var(--text-primary)' }}>
+            <h2 className="page-title" style={{ marginBottom: '6px' }}>
               Selamat datang, {activeUser.name}
             </h2>
             <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', maxWidth: '650px' }}>
@@ -85,30 +85,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-      {/* Metric Cards Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '32px' }}>
-        <div className="card-panel" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+      {/* One stat card stretched across the page left a wide empty band; it now
+          sits beside the tone guide, and the pair stacks on narrow screens. */}
+      <div className="creator-dash-overview">
+        <div className="card-panel" style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
           <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(13, 12, 189, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
             <FileText size={24} />
           </div>
           <div>
             <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>Total Draf</div>
             <div style={{ fontSize: '1.65rem', fontWeight: 800 }}>{activeDrafts.length}</div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--accent-cyan)' }}>
+            <div className="creator-dash-breakdown">
               {/* The breakdown listed only Caption and Video, so it never added up to
                   the total: Siaran Pers and Panduan Visual were missing. Archived
                   drafts are excluded here and from the total (they are not in play). */}
-              {activeDrafts.filter(d => d.format === 'copy_caption').length} Caption •{' '}
-              {activeDrafts.filter(d => d.format === 'naskah_singkat').length} Video •{' '}
-              {activeDrafts.filter(d => d.format === 'teks_promosi').length} Siaran Pers •{' '}
-              {activeDrafts.filter(d => d.format === 'brief_visual').length} Panduan Visual
+              <span><b>{activeDrafts.filter(d => d.format === 'copy_caption').length}</b> Caption</span>
+              <span><b>{activeDrafts.filter(d => d.format === 'naskah_singkat').length}</b> Video</span>
+              <span><b>{activeDrafts.filter(d => d.format === 'teks_promosi').length}</b> Siaran Pers</span>
+              <span><b>{activeDrafts.filter(d => d.format === 'brief_visual').length}</b> Panduan Visual</span>
             </div>
           </div>
         </div>
 
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: '24px', marginBottom: '32px' }}>
         {/* Brand & Grounding Guidelines Quickcard */}
         <div className="card-panel">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
@@ -181,7 +179,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+          <table className="creator-drafts-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
                 <th style={{ padding: '12px 14px' }}>Judul Draf</th>

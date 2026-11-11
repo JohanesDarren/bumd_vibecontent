@@ -3577,10 +3577,53 @@ td {
   .page-header-row > div { flex-wrap: wrap; max-width: 100%; }
 }
 @media (max-width: 640px) {
-  .creator-top-menu { flex-wrap: wrap; overflow-x: visible; }
+  /* Even 3-column grid: plain wrapping left ragged rows (two items on one
+     line, one on the next). */
+  .creator-top-menu { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); flex: 1 1 100%; width: 100%; overflow-x: visible; }
+  .creator-top-menu-item { justify-content: center; padding: 7px 4px; }
 }
 
 /* Editor: draft beside its sources; stacks on narrow screens instead of
    forcing a 360px second column onto a phone. */
 .editor-split { display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(360px, 1.2fr); gap: 24px; align-items: start; }
 @media (max-width: 980px) { .editor-split { grid-template-columns: minmax(0, 1fr); } }
+
+/* Recent-drafts table on a phone: titles squeezed to one word per line.
+   Keep a readable width and let its overflow-x wrapper scroll. */
+.creator-drafts-table { min-width: 640px; }
+
+/* ── Live audit 2026-11-11 (creator) ─────────────────────────────────────── */
+/* Creator dashboard: total-draft stat beside the tone guide instead of one
+   stat card stretched over the full width. */
+.creator-dash-overview {
+  display: grid;
+  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+  gap: 24px;
+  margin-bottom: 32px;
+  align-items: start;
+}
+.creator-dash-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+.creator-dash-breakdown b { color: var(--accent-cyan); font-weight: 700; margin-right: 4px; }
+@media (max-width: 900px) {
+  .creator-dash-overview { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Calendar: the month card was stretched to the height of the side column,
+   so every day cell grew to ~220px of empty space. Columns size to their own
+   content now. */
+.scheduling-main-grid { align-items: start; }
+
+/* Library card: the reference badge shared a row with four buttons, which
+   then wrapped into a ragged second line. Badge gets its own line; the
+   buttons fill the row evenly. */
+.library-card-footer-row { flex-direction: column; align-items: stretch !important; }
+.library-card-footer-row > .grounding-badge { align-self: flex-start; }
+.library-card-footer-row > .library-card-actions { justify-content: flex-start; }
+.library-card-footer-row > .library-card-actions .btn { flex: 1 1 auto; justify-content: center; }
