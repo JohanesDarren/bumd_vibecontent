@@ -1321,7 +1321,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 
 .scheduling-main-grid.corporate-full-width,
 .scheduling-main-grid.corporate-scheduling-readonly.no-sidebar {
-  grid-template-columns: 1fr !important;
+  grid-template-columns: minmax(0, 1fr) !important;
 }
 
 .corporate-ws-item {
@@ -1915,7 +1915,9 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 /* ── Responsive ── */
 @media (max-width: 1200px) {
   .scheduling-main-grid {
-    grid-template-columns: 1fr !important;
+    /* minmax(0,…): a bare 1fr track grows to its widest child and pushed the
+       whole page 15px past a phone screen. */
+    grid-template-columns: minmax(0, 1fr) !important;
   }
   .scheduling-sidebar {
     flex-direction: row;
@@ -1924,7 +1926,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   .sidebar-preview-panel,
   .corporate-sidebar .sidebar-preview-panel {
     flex: 1 1 280px;
-    min-width: 260px;
+    min-width: min(260px, 100%);
   }
   .sidebar-legend-panel {
     flex: 1;
@@ -3488,3 +3490,97 @@ th,
 td {
   font-family: var(--font-sans);
 }
+
+/* ── UI consistency pass (2026-11-11) ─────────────────────────────────────── */
+
+/* A. The rail is a fixed-width column. Without flex-shrink:0 a wide page
+   (tables, three-column grids) squeezed it to 52-72px, so the icons jumped
+   position from page to page. */
+.app-sidebar {
+  flex: 0 0 var(--sidebar-rail-width);
+  min-width: var(--sidebar-rail-width);
+}
+
+/* Shared page header (src/components/ui/PageHeader.tsx). */
+.page-header-row {
+  gap: 16px;
+}
+.page-header-text {
+  min-width: 0;
+}
+.page-eyebrow {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent-cyan);
+  margin-bottom: 6px;
+}
+.page-title-with-icon {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.page-title-icon {
+  display: inline-flex;
+  color: var(--primary);
+  flex-shrink: 0;
+}
+.page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+/* F. Knowledge Base: upload form beside the document list. */
+.kms-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+.kms-form { display: grid; gap: 16px; }
+.kms-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 36px 16px; text-align: center; color: var(--text-muted); border: 1px dashed var(--border-subtle); border-radius: 12px; }
+.kms-empty strong { color: var(--text-primary); font-size: .9rem; }
+.kms-empty span { font-size: .8rem; max-width: 320px; }
+.kms-doc-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.kms-doc-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--border-subtle); border-radius: 12px; }
+.kms-doc-icon { display: grid; place-items: center; flex: 0 0 32px; height: 32px; border-radius: 9px; background: var(--primary-light); color: var(--primary); }
+.kms-doc-meta { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.kms-doc-meta strong { font-size: .86rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kms-doc-meta span { font-size: .74rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kms-doc-row .status-pill { flex-shrink: 0; }
+.kms-file-input { font-size: .85rem; padding: 10px 12px; }
+.kms-file-input::file-selector-button { padding: 8px 14px; font-size: .82rem; }
+@media (max-width: 980px) { .kms-layout { grid-template-columns: minmax(0, 1fr); } }
+
+/* D. Six KPI cards: auto-fit made 5 columns at ~1300px and left the sixth
+   card alone on a second row. Six always divides into 6 / 3 / 2 columns. */
+.corporate-kpi-grid--six { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.corporate-kpi-grid--six .corporate-kpi-label { overflow-wrap: anywhere; }
+@media (max-width: 1360px) { .corporate-kpi-grid--six { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 720px) { .corporate-kpi-grid--six { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* G. Status badges never break into two lines; the action group wraps instead. */
+.grounding-badge { white-space: nowrap; flex-shrink: 0; }
+.library-card-actions { flex: 1 1 auto; justify-content: flex-end; }
+
+/* H. Widget headers: the title keeps one line and the action drops below it
+   when the column is narrow, instead of squeezing the title into two lines. */
+.sidebar-preview-header { flex-wrap: wrap; gap: 8px; }
+.sidebar-preview-title { white-space: nowrap; }
+
+/* Mobile: page-header action rows wrap instead of widening the page (the
+   editor's three actions made the whole document 570px wide on a phone), and
+   the creator menu wraps so every destination is visible, not hidden behind
+   an invisible horizontal scroll. */
+@media (max-width: 768px) {
+  .page-header-row { flex-wrap: wrap; }
+  .page-header-row > div { flex-wrap: wrap; max-width: 100%; }
+}
+@media (max-width: 640px) {
+  .creator-top-menu { flex-wrap: wrap; overflow-x: visible; }
+}
+
+/* Editor: draft beside its sources; stacks on narrow screens instead of
+   forcing a 360px second column onto a phone. */
+.editor-split { display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(360px, 1.2fr); gap: 24px; align-items: start; }
+@media (max-width: 980px) { .editor-split { grid-template-columns: minmax(0, 1fr); } }

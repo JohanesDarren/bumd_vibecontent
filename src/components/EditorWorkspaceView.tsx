@@ -400,7 +400,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
       </div>
 
       {/* Main Split View: Left (Editor + Quick Refinements) | Right (Grounding, Scorecard, Versionon Diff) */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.8fr) minmax(360px, 1.2fr)', gap: '24px', alignItems: 'start' }}>
+      <div className="editor-split">
         {/* Left Column: Editor */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* Quick Refinements Toolbar */}
@@ -628,7 +628,7 @@ export const EditorWorkspaceView: React.FC<EditorWorkspaceViewProps> = ({
         {/* Right Column: Grounding Citations, Scorecard, Versionon Diff */}
         <div className="card-panel" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* Sub-tabs switcher */}
-          <div style={{ display: 'flex', background: 'var(--bg-tertiary)', padding: '4px', borderRadius: '10px', gap: '4px' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', background: 'var(--bg-tertiary)', padding: '4px', borderRadius: '10px', gap: '4px' }}>
             <button 
               className={`btn btn-sm ${activeTabSide === 'grounding' ? 'btn-primary' : 'btn-secondary'}`}
               style={{ flex: 1, padding: '6px 8px' }}

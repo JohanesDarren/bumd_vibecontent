@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Database, ShieldCheck, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { apiService } from '../services/apiService';
+import { PageHeader } from './ui/PageHeader';
 
 /**
  * Platform maintenance (superadmin only).
@@ -42,7 +43,14 @@ export const AdminMaintenanceView: React.FC<{ workspaceId?: string }> = ({ works
   };
 
   return (
-    <div style={{ display: 'grid', gap: '16px', maxWidth: '860px' }}>
+    <div style={{ display: 'grid', gap: '16px' }}>
+      <PageHeader
+        style={{ marginBottom: 0 }}
+        eyebrow="Superadmin • Pemeliharaan Platform"
+        icon={Database}
+        title="Pemeliharaan Platform"
+        subtitle="Perawatan tingkat aplikasi: kebersihan indeks vektor knowledge base dan kesehatan layanan pendukung."
+      />
       {/* Make the level explicit: this console governs the whole application. */}
       <div className="scope-banner" role="note" style={{ marginBottom: 0 }}>
         <ShieldCheck size={16} />

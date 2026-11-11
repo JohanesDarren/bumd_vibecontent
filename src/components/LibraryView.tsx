@@ -5,7 +5,9 @@ import {
   DraftStatus, 
   Workspace 
 } from '../types';
+import { PageHeader } from './ui/PageHeader';
 import { 
+  FolderArchive,
   Search, 
   Filter, 
   Eye, 
@@ -64,14 +66,12 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
   return (
     <div>
-      <div className="page-header-row">
-        <div>
-          <h2 className="page-title">Pustaka Konten</h2>
-          <p className="page-subtitle">
-            Kumpulan semua draf resmi, siaran pers, dan naskah video milik <strong>{activeWorkspace.name}</strong>.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow={`${activeWorkspace.code} • Pustaka & Ekspor`}
+        icon={FolderArchive}
+        title="Pustaka Konten"
+        subtitle={<>Kumpulan semua draf resmi, siaran pers, dan naskah video milik <strong>{activeWorkspace.name}</strong>.</>}
+      />
 
       {/* Filter and Search Bar */}
       <div className="card-panel" style={{ padding: '16px', marginBottom: '24px' }}>

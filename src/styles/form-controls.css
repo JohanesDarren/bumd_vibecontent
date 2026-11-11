@@ -1137,3 +1137,26 @@ input[type='radio']:not(.ui-check-input):focus-visible {
   color: var(--text-muted);
   text-align: center;
 }
+
+/* B. `.scheduling-filter-select` is also used on the search <input>s inside
+   filter pills. The chevron and its 20px right padding belong to <select>
+   only — on an input they read as a dropdown and clipped the placeholder. */
+input.scheduling-filter-select {
+  background-image: none;
+  padding-right: 4px;
+  cursor: text;
+  flex: 1 1 auto;
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+.filter-group:has(> input.scheduling-filter-select) {
+  flex: 0 1 340px;
+  min-width: 240px;
+}
+
+/* E. A scope banner inside a card grid is a page-level note, not a cell: it
+   spans the row instead of stretching to the height of its neighbour. */
+.settings-panel-grid > .scope-banner {
+  grid-column: 1 / -1;
+  margin-bottom: 0;
+}

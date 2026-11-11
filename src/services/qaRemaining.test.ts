@@ -73,7 +73,7 @@ test('brief placeholders no longer assume a water or power utility', async () =>
 test('a human request in product-only mode warns the user', async () => {
   const studio = await read('../components/CoreVisualStudio.tsx');
   assert.match(studio, /modeConflict/, 'the conflict must be detected');
-  assert.match(studio, /Product only/, 'the warning must name the offending mode');
+  assert.match(studio, /Produk saja/, 'the warning must name the offending mode');
   assert.match(studio, /Dengan model/, 'the warning must point at the fix');
   const css = await read('../styles/form-controls.css');
   assert.match(css, /\.core-warn/);

@@ -141,7 +141,7 @@ export const CorporateDashboardView: React.FC<Props> = ({ onNavigate, onOpenWork
       </div>
 
       {/* ── KPI Metric Cards Grid ── */}
-      <div className="corporate-kpi-grid">
+      <div className="corporate-kpi-grid corporate-kpi-grid--six">
         <div className="corporate-kpi-card">
           <div className="corporate-kpi-header">
             <span className="corporate-kpi-label">Total Workspace</span>

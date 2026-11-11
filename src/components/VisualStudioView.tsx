@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { CoreVisualStudio } from './CoreVisualStudio';
 import { DraftPicker } from './ui/DraftPicker';
+import { PageHeader } from './ui/PageHeader';
 
 
 import { apiService } from '../services/apiService';
@@ -19,7 +20,8 @@ import {
   Smartphone, 
   Monitor, 
   Square,
-  FileCheck
+  FileCheck,
+  Image as ImageIcon
 } from 'lucide-react';
 
 interface VisualStudioViewProps {
@@ -167,15 +169,12 @@ export const VisualStudioView: React.FC<VisualStudioViewProps> = ({
 
   return (
     <div>
-      <div className="page-header-row">
-        <div>
-          <h2 className="page-title">Studio Grafis & Aset Visual Korporat</h2>
-          <p className="page-subtitle">
-            Buat materi infografis dan banner promosi yang sesuai dengan panduan warna, penempatan logo resmi, dan disclaimer <strong>{activeWorkspace.name}</strong>.
-          </p>
-        </div>
-
-      </div>
+      <PageHeader
+        eyebrow={`${activeWorkspace.code} • Studio Visual`}
+        icon={ImageIcon}
+        title="Studio Grafis & Aset Visual Korporat"
+        subtitle={<>Buat materi infografis dan banner promosi yang sesuai dengan panduan warna, penempatan logo resmi, dan disclaimer <strong>{activeWorkspace.name}</strong>.</>}
+      />
 
       <div className="card-panel" style={{ marginBottom: '20px', padding: '14px' }}>
         {/* Only the brief is a choice here: the version and its copy are picked in

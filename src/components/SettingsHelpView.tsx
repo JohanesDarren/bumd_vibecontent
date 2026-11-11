@@ -25,6 +25,7 @@ import {
   EyeOff
 , Building2 } from 'lucide-react';
 import { ClipLoader } from 'react-spinners';
+import { PageHeader } from './ui/PageHeader';
 import type { Workspace } from '../types';
 import { apiService, RagStatus } from '../services/apiService';
 import {
@@ -238,23 +239,21 @@ export const SettingsHelpView: React.FC<SettingsHelpViewProps> = ({ activeWorksp
 
   return (
     <div>
-      <div className="page-header-row">
-        <div>
-          <h2 className="page-title">Pengaturan &amp; Bantuan</h2>
-          <p className="page-subtitle">
-            Kendali nyata untuk pembuatan konten: skala grounding, privasi data, dan panduan alur kerja.
-            Semua pengaturan di sini langsung memengaruhi generasi berikutnya di Brief &amp; Generasi Konten.
-          </p>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-            <CheckCircle2 size={12} style={{ verticalAlign: '-2px', marginRight: '4px' }} />{savedLabel}
+      <PageHeader
+        eyebrow="Perusahaan • Pengaturan & Bantuan"
+        icon={CircleHelp}
+        title="Pengaturan & Bantuan"
+        subtitle={<>Kendali nyata untuk pembuatan konten: skala grounding, privasi data, dan panduan alur kerja.
+            Semua pengaturan di sini langsung memengaruhi generasi berikutnya di Brief &amp; Generasi Konten.</>}
+        actions={<>
+          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+            <CheckCircle2 size={12} />{savedLabel}
           </span>
           <button type="button" className="btn btn-secondary btn-sm" onClick={handleReset}>
             <RotateCcw size={13} /> Pulihkan Bawaan
           </button>
-        </div>
-      </div>
+        </>}
+      />
 
       {/* Tab bar */}
       <div className="settings-tabs" role="tablist">
@@ -303,6 +302,7 @@ export const SettingsHelpView: React.FC<SettingsHelpViewProps> = ({ activeWorksp
             <p className="settings-hint">
               Bahasa ini mengisi kolom bahasa pada brief hasil generasi. Anda tetap dapat mengganti bahasa per brief.
             </p>
+          </div>
 
           {/* Company-level content policy: corporate decides what its creators may do. */}
           <div className="card-panel">
@@ -351,7 +351,6 @@ export const SettingsHelpView: React.FC<SettingsHelpViewProps> = ({ activeWorksp
                 label="Wajibkan identitas merek"
               />
             </SettingRow>
-          </div>
           </div>
 
           <div className="card-panel">

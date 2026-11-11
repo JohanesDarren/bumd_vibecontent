@@ -47,9 +47,11 @@ import {
   ExternalLink,
   ShieldCheck,
   SlidersHorizontal,
-  Lock
+  Lock,
+  PenTool
 } from 'lucide-react';
 import { ClipLoader } from 'react-spinners';
+import { PageHeader } from './ui/PageHeader';
 
 interface BriefStudioViewProps {
   brandProfile: BrandProfile;
@@ -451,14 +453,13 @@ export const BriefStudioView: React.FC<BriefStudioViewProps> = ({
     <div style={{ display: 'flex', flexDirection: 'column', width: '100%', minWidth: 0 }}>
       {/* Top Header & Settings Strip */}
       <div style={{ padding: '20px 28px 16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-        <div className="page-header-row" style={{ margin: 0 }}>
-          <div>
-            <h2 className="page-title">Brief &amp; Generasi Konten</h2>
-            <p className="page-subtitle">
-              Susun panduan konten yang terstruktur. Sistem hanya menggunakan fakta dari knowledge base resmi <strong>{activeWorkspace.name}</strong>.
-            </p>
-          </div>
-        </div>
+        <PageHeader
+          style={{ margin: 0 }}
+          eyebrow={`${activeWorkspace.code} • Brief & Generasi`}
+          icon={PenTool}
+          title="Brief & Generasi Konten"
+          subtitle={<>Susun panduan konten yang terstruktur. Sistem hanya menggunakan fakta dari knowledge base resmi <strong>{activeWorkspace.name}</strong>.</>}
+        />
 
         {/* Status of the live settings that generation will use */}
         <div className="card-panel" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '12px 18px', margin: 0 }}>

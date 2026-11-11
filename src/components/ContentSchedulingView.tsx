@@ -1363,7 +1363,7 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
             <div className="sidebar-preview-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Bell size={18} style={{ color: 'var(--accent-cyan)' }} />
-                <span className="sidebar-preview-title">Segera Tayang (24 jam)</span>
+                <span className="sidebar-preview-title">Segera Tayang (24 Jam)</span>
               </div>
               <button className={`btn btn-sm ${notifyEnabled ? 'btn-primary' : 'btn-secondary'}`} style={{ fontSize: '0.7rem', padding: '3px 8px' }} onClick={toggleNotifications} title="Notifikasi browser 10 menit sebelum jam tayang, selama halaman ini terbuka">
                 {notifyEnabled ? 'Pengingat aktif' : 'Aktifkan pengingat'}

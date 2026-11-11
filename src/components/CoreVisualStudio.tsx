@@ -6,7 +6,7 @@ import { Switch, Segmented } from './ui/FormControls';
  * Visual generation surface for the core-prompt architecture.
  *
  * Layout follows the strategy document exactly:
- *   Brief Choices  →  References  →  Generated Image
+ *   Pilihan Brief  →  Referensi  →  Hasil Gambar
  *
  * The core prompt is never shown here: the user only supplies choices, optional
  * remarks and reference images. Everything about "how the picture is built" is
@@ -45,11 +45,11 @@ type Reference =
   | { slot: Slot; source: 'kms'; kmsId: string; filename: string; previewUrl: string };
 
 const SLOT_META: Record<Slot, { label: string; hint: string }> = {
-  model: { label: 'Model reference', hint: 'Foto orang/model acuan' },
-  font: { label: 'Font reference', hint: 'Contoh tipografi' },
-  color: { label: 'Color reference', hint: 'Palet warna acuan' },
-  pose: { label: 'Pose reference', hint: 'Contoh pose & framing' },
-  lighting: { label: 'Lighting reference', hint: 'Arah & karakter cahaya' }
+  model: { label: 'Referensi model', hint: 'Foto orang/model acuan' },
+  font: { label: 'Referensi font', hint: 'Contoh tipografi' },
+  color: { label: 'Referensi warna', hint: 'Palet warna acuan' },
+  pose: { label: 'Referensi pose', hint: 'Contoh pose & framing' },
+  lighting: { label: 'Referensi pencahayaan', hint: 'Arah & karakter cahaya' }
 };
 
 const PRODUCT_SLOTS: Slot[] = ['font', 'color', 'lighting'];
@@ -268,11 +268,11 @@ export function CoreVisualStudio({
     <div className="core-visual">
       <div className="core-visual-grid">
         {/* ── Column 1: Brief Choices ── */}
-        <section className="core-col" aria-label="Brief choices">
+        <section className="core-col" aria-label="Pilihan brief">
           <header className="core-col-head">
             <span className="core-step">1</span>
             <div>
-              <h3>Brief Choices</h3>
+              <h3>Pilihan Brief</h3>
               <p>Pilih jenis visual dan orientasi.</p>
             </div>
           </header>
@@ -291,8 +291,8 @@ export function CoreVisualStudio({
               fill
               ariaLabel="Jenis visual"
               options={[
-                { value: 'product', label: 'Product only', note: 'Tanpa model manusia' },
-                { value: 'human', label: 'Human model', note: 'Dengan model & pose' }
+                { value: 'product', label: 'Produk saja', note: 'Tanpa model manusia' },
+                { value: 'human', label: 'Dengan model', note: 'Dengan model & pose' }
               ]}
             />
           </div>
@@ -306,7 +306,7 @@ export function CoreVisualStudio({
               fill
               ariaLabel="Jenis publikasi"
               options={[
-                { value: 'social', label: 'Social media post', note: 'Rapi, teks minimal' },
+                { value: 'social', label: 'Post media sosial', note: 'Rapi, teks minimal' },
                 { value: 'poster', label: 'Poster / banner', note: 'Persuasif, ajakan' }
               ]}
             />
@@ -394,7 +394,7 @@ export function CoreVisualStudio({
               <div className="core-warn" role="status">
                 <AlertCircle size={14} />
                 <span>
-                  Permintaan ini menyebut orang, sedangkan mode <strong>Product only</strong>{' '}
+                  Permintaan ini menyebut orang, sedangkan mode <strong>Produk saja</strong>{' '}
                   melarang manusia di dalam gambar. Pilih <strong>Dengan model</strong> agar
                   permintaan dipakai.
                 </span>
@@ -404,11 +404,11 @@ export function CoreVisualStudio({
         </section>
 
         {/* ── Column 2: References ── */}
-        <section className="core-col" aria-label="References">
+        <section className="core-col" aria-label="Referensi">
           <header className="core-col-head">
             <span className="core-step">2</span>
             <div>
-              <h3>References</h3>
+              <h3>Referensi</h3>
               <p>{mode === 'human' ? 'Semua referensi wajib diisi.' : 'Font, warna, dan cahaya wajib diisi.'}</p>
             </div>
           </header>
@@ -515,11 +515,11 @@ export function CoreVisualStudio({
         </section>
 
         {/* ── Column 3: Generated Image ── */}
-        <section className="core-col" aria-label="Generated image">
+        <section className="core-col" aria-label="Hasil gambar">
           <header className="core-col-head">
             <span className="core-step">3</span>
             <div>
-              <h3>Generated Image</h3>
+              <h3>Hasil Gambar</h3>
               <p>{draftTitle ? draftTitle.slice(0, 60) : 'Hasil visual'}</p>
             </div>
           </header>
@@ -564,7 +564,7 @@ export function CoreVisualStudio({
               {busy ? 'Membuat…' : 'Generate'}
             </button>
             <button type="button" className="btn btn-secondary" onClick={download} disabled={!result}>
-              <Download size={15} /> Export
+              <Download size={15} /> Ekspor
             </button>
             {onSave ? (
               <button type="button" className="btn btn-secondary" onClick={save} disabled={!result || savingImage}>
@@ -577,7 +577,7 @@ export function CoreVisualStudio({
             <dl className="core-meta">
               <div><dt>Model</dt><dd>{result.model}</dd></div>
               <div><dt>Orientasi</dt><dd>{result.dimensions}</dd></div>
-              <div><dt>Publikasi</dt><dd>{result.publication === 'poster' ? 'Poster / banner' : 'Social media'}</dd></div>
+              <div><dt>Publikasi</dt><dd>{result.publication === 'poster' ? 'Poster / banner' : 'Media sosial'}</dd></div>
               <div><dt>Referensi gambar</dt><dd>{result.usedReferenceImage ? `Dipakai langsung (${result.referencesUsed})` : 'Teks saja'}</dd></div>
               <div><dt>Referensi terbaca</dt><dd>{result.referencesAnalyzed.length}/{requiredSlots.length}</dd></div>
               {result.slotsFromHuman.length ? (
