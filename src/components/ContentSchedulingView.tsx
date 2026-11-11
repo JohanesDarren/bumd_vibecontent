@@ -216,7 +216,7 @@ export const ContentSchedulingView: React.FC<ContentSchedulingViewProps> = ({
     if (!isCorporate) return null;
     const workspace = workspaceFor(item);
     const color = workspaceColors.get(workspace.id) || '#475569';
-    return <span className="status-pill" style={{ color, background: `${color}18`, border: `1px solid ${color}66`, fontSize: '0.68rem' }}>{workspace.name}</span>;
+    return <span className="status-pill" title={workspace.name} style={{ color, background: `${color}18`, border: `1px solid ${color}66`, fontSize: '0.68rem' }}>{workspace.name}</span>;
   };
   const today = new Date();
   const todayStr = toDateStr(today);

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { apiService } from '../services/apiService';
+import { auditActionLabel, auditObjectTypeLabel } from '../services/auditLabels';
 import { useRealtimeSignal } from '../services/realtime';
 import { 
   ShieldCheck, 
@@ -51,7 +52,7 @@ export const AdminAuditView: React.FC = () => {
       const matchesType = filterType === 'all' || row.objectType.toLowerCase() === filterType.toLowerCase();
       const q = query.trim().toLowerCase();
       const matchesQuery = !q || [
-        row.action, 
+        row.action, auditActionLabel(row.action),
         row.actorName, 
         row.objectName, 
         row.objectType, 
@@ -245,7 +246,7 @@ export const AdminAuditView: React.FC = () => {
                         fontWeight: 600,
                         color: 'var(--text-primary)' 
                       }}>
-                        {row.action}
+                        {auditActionLabel(row.action)}
                       </span>
                     </td>
                     <td>
@@ -254,7 +255,7 @@ export const AdminAuditView: React.FC = () => {
                           {row.objectName}
                         </span>
                         <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                          {row.objectType}
+                          {auditObjectTypeLabel(row.objectType)}
                         </span>
                       </div>
                     </td>

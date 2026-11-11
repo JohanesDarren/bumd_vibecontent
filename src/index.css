@@ -3635,3 +3635,24 @@ td {
 .library-card-footer-row > .grounding-badge { align-self: flex-start; }
 .library-card-footer-row > .library-card-actions { justify-content: flex-start; }
 .library-card-footer-row > .library-card-actions .btn { flex: 1 1 auto; justify-content: center; }
+
+/* Knowledge Base (live corporate data): the list's implicit grid track sized
+   to its longest filename, pushing rows 130px past the card. */
+.kms-doc-list { grid-template-columns: minmax(0, 1fr); }
+.kms-doc-row { min-width: 0; }
+/* Workspace choices are <button>s: they inherited centred, 1rem button text,
+   so long names wrapped centred next to left-aligned short ones. */
+.kms-workspace-option { text-align: left; font: inherit; font-size: .88rem; color: var(--text-primary); }
+/* Calendar chips: a chip wider than its day cell pushed its icons out of
+   view; it now shrinks and truncates inside the cell. */
+.cal-cell-content, .content-card { min-width: 0; }
+.content-card { overflow: hidden; }
+/* The meta row (time, platform, workspace badge, comments, status) could not
+   shrink, so in a day cell the title was squeezed to 0px and only the time
+   showed. Title takes the first line; meta wraps under it. */
+.content-card-info { flex-wrap: wrap; row-gap: 1px; }
+.content-card-title { flex: 1 1 100%; }
+.content-card-meta { flex-wrap: wrap; flex-shrink: 1; min-width: 0; }
+/* Corporate workspace badge inside a day chip: one truncated line (full name
+   on hover) instead of wrapping word by word into a tall chip. */
+.content-card-meta .status-pill { display: block; max-width: 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 5px; font-size: .58rem !important; }

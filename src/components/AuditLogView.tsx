@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AuditLog, Workspace, User } from '../types';
+import { auditActionLabel, auditObjectTypeLabel } from '../services/auditLabels';
 import { 
   ShieldAlert, 
   Clock, 
@@ -31,6 +32,7 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({
   const filteredLogs = workspaceLogs.filter(log => {
     const matchesSearch = 
       log.action.toLowerCase().includes(search.toLowerCase()) ||
+      auditActionLabel(log.action).toLowerCase().includes(search.toLowerCase()) ||
       log.actorName.toLowerCase().includes(search.toLowerCase()) ||
       log.details.toLowerCase().includes(search.toLowerCase()) ||
       log.objectName.toLowerCase().includes(search.toLowerCase());
@@ -142,7 +144,7 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({
                   </td>
 
                   <td style={{ padding: '12px 14px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                    {log.action}
+                    {auditActionLabel(log.action)}
                   </td>
 
                   <td style={{ padding: '12px 14px' }}>
@@ -150,7 +152,7 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({
                       {log.objectName}
                     </div>
                     <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                      {log.objectType}
+                      {auditObjectTypeLabel(log.objectType)}
                     </span>
                   </td>
 
