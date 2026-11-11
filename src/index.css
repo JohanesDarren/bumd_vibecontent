@@ -3581,6 +3581,14 @@ td {
      line, one on the next). */
   .creator-top-menu { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); flex: 1 1 100%; width: 100%; overflow-x: visible; }
   .creator-top-menu-item { justify-content: center; padding: 7px 4px; }
+  /* .header-left is flex: 1 1 0%, so width:100% never applied and the menu
+     was squeezed into a 179px column beside the profile chip. Flatten it so
+     the header becomes: logo + profile | workspace switcher | menu grid. */
+  .creator-top-header .header-left { display: contents; }
+  .creator-top-header .header-right { order: 1; margin-left: auto; }
+  .creator-top-header .header-left > div { order: 2; flex: 1 1 100%; }
+  .creator-top-header .org-switcher-pill { max-width: 100%; }
+  .creator-top-menu { order: 3; }
 }
 
 /* Editor: draft beside its sources; stacks on narrow screens instead of
